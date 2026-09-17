@@ -1,0 +1,44 @@
+# Palette + font sourced directly from https://prescript.neocities.org/ (the
+# actual "The Prescripts" site) and Images/The_Index_Logo.webp:
+# - style.css confirms the real font is Galmuri14 (Galmuri7 for small text) --
+#   an open-source (OFL-1.1) Korean bitmap font family based on Nintendo DS
+#   fonts, not Comic Sans MS as first (wrongly) guessed from a screenshot.
+# - Colors, measured from style.css directly: pure black background, off-white
+#   body text (#f0f8ff), #96c4ec for buttons/links/input borders (hover turns
+#   these to the off-white text color). #4facff is the logo's own glow color,
+#   used only for the static logo image itself, not page chrome.
+# Sampled/verified 2026-09-16.
+
+[server]
+enableStaticServing = true
+
+[theme]
+font = "Galmuri14, Helvetica, sans-serif"
+
+[[theme.fontFaces]]
+family = "Galmuri14"
+url = "app/static/Galmuri14.woff2"
+weight = "400"
+style = "normal"
+
+[[theme.fontFaces]]
+family = "Galmuri7"
+url = "app/static/Galmuri7.woff2"
+weight = "400"
+style = "normal"
+
+[theme.light]
+primaryColor = "#96c4ec"
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#e5f3ff"
+textColor = "#162a3b"
+linkColor = "#96c4ec"
+
+[theme.dark]
+primaryColor = "#96c4ec"
+backgroundColor = "#000000"
+secondaryBackgroundColor = "#111318"
+textColor = "#f0f8ff"
+borderColor = "#2a2f3a"
+codeBackgroundColor = "#0a0a0d"
+linkColor = "#96c4ec"
