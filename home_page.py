@@ -16,11 +16,35 @@ from prescripts_common import LOGO_PATH, PAGES, theme_colors, typewriter
 # commands directly to whoever's reading -- so these never name "The
 # Prescripts" themselves, the same way a command doesn't refer to its own
 # speaker.
-PROMPTS = [
+FUNCTIONAL_PROMPTS = [
     "What would you like to look up?",
     "Where should we go today?",
     "What's on your mind?",
 ]
+
+# Partial/fragmentary lines only (by design, not just by trimming) from
+# "Children of the City" by Mili feat. Project Moon (album: To Kill a Living
+# Book) -- the song the "Prescript" concept itself comes from in Library of
+# Ruina canon, where a Prescript is exactly this kind of arbitrary decree
+# handed down to a follower. Credited in the footer at the bottom of the
+# page (a blanket credit, not a per-line one -- keeps the quote itself
+# unadorned when it's shown).
+MILI_QUOTES = [
+    "Sleep for a total of 800 hours per day",
+    "Hero on a plastic horse, riding like it's real",
+    "I know now I must be comfortable being who I considered worthless",
+    "If we are always running, we can't behold the sceneries",
+    "No tears, no regrets, no zero-days at our fault",
+    "I am iron; in my blood, it streams roots deep",
+]
+
+# General Japanese phrases, not lyric quotes -- no attribution needed.
+JAPANESE_PROMPTS = [
+    "六根清浄",
+    "勝ちたい",
+]
+
+PROMPTS = FUNCTIONAL_PROMPTS + MILI_QUOTES + JAPANESE_PROMPTS
 
 TEXT_COLOR, ACCENT_COLOR = theme_colors()
 
@@ -101,4 +125,11 @@ typewriter(
     st.session_state["_home_prompt"],
     markdown_wrap=":primary[{}]",
     placeholder=prompt_placeholder,
+)
+
+st.divider()
+st.caption(
+    "Some of the lines above are drawn from \"Children of the City\" by "
+    "Mili feat. Project Moon, from the album *To Kill a Living Book* -- "
+    "the song the Prescript concept itself comes from."
 )
