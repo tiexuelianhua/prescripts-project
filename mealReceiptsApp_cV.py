@@ -5,18 +5,16 @@
 
 import json
 import subprocess
-import time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
 import streamlit as st
 
-SCRIPTS_DIR = Path(__file__).resolve().parent
-LOGO_PATH = SCRIPTS_DIR.parent / "Images" / "The_Index_Logo.webp"
+from prescripts_common import JST, LOGO_PATH, SCRIPTS_DIR, theme_colors, typewriter
+
 MEAL_RECEIPTS_DIR = SCRIPTS_DIR.parent / "Meal Receipts"
 SETTINGS_PATH = MEAL_RECEIPTS_DIR / "settings.json"
-JST = timezone(timedelta(hours=9))
 CSV_COLUMNS = ["timestamp", "store", "item", "cost_yen"]
 JAPANESE_MONTHS = [
     "1月", "2月", "3月", "4月", "5月", "6月",
@@ -122,64 +120,14 @@ def last_price_for_item(item: str) -> int | None:
     return int(matches.sort_values("timestamp").iloc[-1]["cost_yen"])
 
 
-def typewriter(
-    text: str,
-    speed_ms: int = 30,
-    markdown_wrap: str | None = None,
-    placeholder: "st.delta_generator.DeltaGenerator | None" = None,
-) -> None:
-    # Own implementation of the reveal-one-character-at-a-time effect used by
-    # prescript.neocities.org for in-game "Prescript" messages -- same generic
-    # progressive-reveal idea, written from scratch (not their code) to avoid
-    # copying the site itself. Renders as a normal st.markdown element (via a
-    # placeholder re-rendered each tick) rather than an iframe, so it inherits
-    # the page's theme/font/layout exactly and doesn't introduce a separate
-    # document with its own box model.
-    #
-    # Accepts an existing placeholder so a caller can reserve a spot early
-    # (e.g. at the top of the page) but only actually run the animation later
-    # in the script -- Streamlit streams each st.* call's output to the
-    # browser as it happens, so everything written before this call reaches
-    # the page immediately, and only this element visibly trails behind.
-    placeholder = placeholder or st.empty()
-    for i in range(1, len(text) + 1):
-        chunk = text[:i]
-        if markdown_wrap:
-            chunk = markdown_wrap.format(chunk)
-        placeholder.markdown(chunk)
-        time.sleep(speed_ms / 1000)
+TEXT_COLOR, ACCENT_COLOR = theme_colors()
 
-
-st.set_page_config(page_title="Meal Receipts", page_icon=str(LOGO_PATH))
-
-# st.context.theme only exposes "type" ("dark"/"light"), not resolved hex
-# values, so the two palettes below are kept in sync with .streamlit/config.toml
-# by hand. Defaults to the dark palette when type is unset (system default),
-# since dark is this app's primary intended look.
-IS_LIGHT_THEME = st.context.theme.get("type") == "light"
-TEXT_COLOR = "#162a3b" if IS_LIGHT_THEME else "#f0f8ff"
-ACCENT_COLOR = "#96c4ec"  # buttons/links/input borders, measured from style.css
-
-# Matches Images/Reference 1.png and prescript.neocities.org/style.css: buttons
-# there are outlined (transparent fill, accent border+text) and turn to the
-# body text color on hover, not Streamlit's default solid-filled style.
-# `stBaseButton-*` covers every button kind (regular, form submit, download,
-# link) across Streamlit versions via the prefix match.
+# Page config and the shared button style are handled once, in app.py, since
+# this script now runs as one page of the multi-page app rather than its own
+# entry point. Only the animation below is specific to this page.
 st.markdown(
     f"""
     <style>
-    [data-testid^="stBaseButton"] {{
-        background-color: transparent;
-        border: 2px solid {ACCENT_COLOR};
-        color: {ACCENT_COLOR};
-        font-family: inherit;
-    }}
-    [data-testid^="stBaseButton"]:hover,
-    [data-testid^="stBaseButton"]:active,
-    [data-testid^="stBaseButton"]:focus:not(:focus-visible) {{
-        border-color: {TEXT_COLOR};
-        color: {TEXT_COLOR};
-    }}
     /* Fades in everything below the typed "Logging to" line, so it doesn't
        pop in abruptly right after that animation finishes. Scoped to the
        "main_body" container (via its st-key-* class) so the typed lines

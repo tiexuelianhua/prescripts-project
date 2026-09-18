@@ -1,0 +1,97 @@
+# Shared constants and helpers for every Prescripts page -- the logo path,
+# JST clock, color/typewriter helpers, and the page registry all live here so
+# every page (present and future) stays visually and behaviorally consistent
+# without each one redefining its own copy.
+
+import time
+from datetime import timedelta, timezone
+from pathlib import Path
+
+import streamlit as st
+
+SCRIPTS_DIR = Path(__file__).resolve().parent
+LOGO_PATH = SCRIPTS_DIR.parent / "Images" / "The_Index_Logo.webp"
+JST = timezone(timedelta(hours=9))
+
+ACCENT_COLOR = "#96c4ec"  # buttons/links/input borders, measured from style.css
+
+# Every non-home page in the app, in one place -- app.py's st.navigation()
+# and the Home page's tile grid / search both read this, so adding a page
+# means adding one entry here rather than touching multiple files.
+PAGES = [
+    {
+        "title": "Meal Receipts",
+        "icon": "🧾",
+        "path": "mealReceiptsApp_cV.py",
+        "keywords": ["meal", "receipt", "receipts", "food", "budget"],
+    },
+]
+
+
+def theme_colors() -> tuple[str, str]:
+    # st.context.theme only exposes "type" ("dark"/"light"), not resolved hex
+    # values, so the two palettes below are kept in sync with
+    # .streamlit/config.toml by hand. Defaults to the dark palette when type
+    # is unset (system default), since dark is this app's primary intended
+    # look.
+    is_light = st.context.theme.get("type") == "light"
+    text_color = "#162a3b" if is_light else "#f0f8ff"
+    return text_color, ACCENT_COLOR
+
+
+def inject_button_style() -> None:
+    # Matches Images/Reference 1.png and prescript.neocities.org/style.css:
+    # buttons there are outlined (transparent fill, accent border+text) and
+    # turn to the body text color on hover, not Streamlit's default
+    # solid-filled style. `stBaseButton-*` covers every button kind (regular,
+    # form submit, download, link) across Streamlit versions via the prefix
+    # match. Called once from app.py, which reruns on every navigation, so
+    # every page picks this up without injecting it again itself.
+    text_color, accent_color = theme_colors()
+    st.markdown(
+        f"""
+        <style>
+        [data-testid^="stBaseButton"] {{
+            background-color: transparent;
+            border: 2px solid {accent_color};
+            color: {accent_color};
+            font-family: inherit;
+        }}
+        [data-testid^="stBaseButton"]:hover,
+        [data-testid^="stBaseButton"]:active,
+        [data-testid^="stBaseButton"]:focus:not(:focus-visible) {{
+            border-color: {text_color};
+            color: {text_color};
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def typewriter(
+    text: str,
+    speed_ms: int = 30,
+    markdown_wrap: str | None = None,
+    placeholder: "st.delta_generator.DeltaGenerator | None" = None,
+) -> None:
+    # Own implementation of the reveal-one-character-at-a-time effect used by
+    # prescript.neocities.org for in-game "Prescript" messages -- same generic
+    # progressive-reveal idea, written from scratch (not their code) to avoid
+    # copying the site itself. Renders as a normal st.markdown element (via a
+    # placeholder re-rendered each tick) rather than an iframe, so it inherits
+    # the page's theme/font/layout exactly and doesn't introduce a separate
+    # document with its own box model.
+    #
+    # Accepts an existing placeholder so a caller can reserve a spot early
+    # (e.g. at the top of the page) but only actually run the animation later
+    # in the script -- Streamlit streams each st.* call's output to the
+    # browser as it happens, so everything written before this call reaches
+    # the page immediately, and only this element visibly trails behind.
+    placeholder = placeholder or st.empty()
+    for i in range(1, len(text) + 1):
+        chunk = text[:i]
+        if markdown_wrap:
+            chunk = markdown_wrap.format(chunk)
+        placeholder.markdown(chunk)
+        time.sleep(speed_ms / 1000)
