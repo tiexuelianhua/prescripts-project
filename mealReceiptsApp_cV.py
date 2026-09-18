@@ -105,8 +105,11 @@ def all_entries() -> pd.DataFrame:
     return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=CSV_COLUMNS)
 
 
-def known_values(column: str) -> list[str]:
-    return sorted(all_entries()[column].dropna().unique())
+def known_values(column: str, exclude: set[str] | None = None) -> list[str]:
+    values = set(all_entries()[column].dropna().unique())
+    if exclude:
+        values -= exclude
+    return sorted(values)
 
 
 def last_price_for_item(item: str) -> int | None:
@@ -195,6 +198,9 @@ st.markdown(
 )
 
 settings = load_settings()
+excluded_stores = set(settings.get("excluded_stores", []))
+excluded_items = set(settings.get("excluded_items", []))
+
 with st.sidebar:
     st.header("Settings")
     daily_budget = st.number_input(
@@ -203,6 +209,55 @@ with st.sidebar:
     if daily_budget != settings.get("daily_budget", 0):
         settings["daily_budget"] = daily_budget
         save_settings(settings)
+
+    with st.expander("Manage suggestions"):
+        # Hides a store/item name from the dropdown suggestions below without
+        # touching any already-logged receipts -- useful for one-time store
+        # names or typos that would otherwise clutter the autocomplete forever.
+        # The exclusion list itself lives in settings.json, so removals are
+        # reversible via the "Restore" pickers rather than a hard delete.
+        st.caption("Hide a store/item from the dropdowns above. Past receipts aren't affected.")
+
+        hide_stores = st.multiselect(
+            "Hide store suggestions",
+            options=known_values("store", exclude=excluded_stores),
+            key="hide_stores",
+        )
+        if st.button("Hide selected stores", disabled=not hide_stores):
+            settings["excluded_stores"] = sorted(excluded_stores | set(hide_stores))
+            save_settings(settings)
+            st.rerun()
+
+        hide_items = st.multiselect(
+            "Hide item suggestions",
+            options=known_values("item", exclude=excluded_items),
+            key="hide_items",
+        )
+        if st.button("Hide selected items", disabled=not hide_items):
+            settings["excluded_items"] = sorted(excluded_items | set(hide_items))
+            save_settings(settings)
+            st.rerun()
+
+        if excluded_stores or excluded_items:
+            st.divider()
+
+        if excluded_stores:
+            restore_stores = st.multiselect(
+                "Restore store suggestions", options=sorted(excluded_stores), key="restore_stores"
+            )
+            if st.button("Restore selected stores", disabled=not restore_stores):
+                settings["excluded_stores"] = sorted(excluded_stores - set(restore_stores))
+                save_settings(settings)
+                st.rerun()
+
+        if excluded_items:
+            restore_items = st.multiselect(
+                "Restore item suggestions", options=sorted(excluded_items), key="restore_items"
+            )
+            if st.button("Restore selected items", disabled=not restore_items):
+                settings["excluded_items"] = sorted(excluded_items - set(restore_items))
+                save_settings(settings)
+                st.rerun()
 
 header_logo, header_title = st.columns([1, 4], vertical_alignment="center")
 with header_logo:
@@ -253,7 +308,7 @@ with st.container(key="main_body"):
         "Day", value=today_date, max_value=today_date, key="add_entry_day"
     )
     item = st.selectbox(
-        "Item", options=known_values("item"), index=None,
+        "Item", options=known_values("item", exclude=excluded_items), index=None,
         accept_new_options=True, placeholder="Type or pick an item",
         key="add_entry_item",
     )
@@ -265,7 +320,7 @@ with st.container(key="main_body"):
 
     col1, col2 = st.columns(2)
     store = col1.selectbox(
-        "Store", options=known_values("store"), index=None,
+        "Store", options=known_values("store", exclude=excluded_stores), index=None,
         accept_new_options=True, placeholder="Type or pick a store",
         key="add_entry_store",
     )
