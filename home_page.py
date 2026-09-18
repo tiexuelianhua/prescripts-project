@@ -22,20 +22,25 @@ FUNCTIONAL_PROMPTS = [
     "What's on your mind?",
 ]
 
-# Partial/fragmentary lines only (by design, not just by trimming) from
-# "Children of the City" by Mili feat. Project Moon (album: To Kill a Living
-# Book) -- the song the "Prescript" concept itself comes from in Library of
-# Ruina canon, where a Prescript is exactly this kind of arbitrary decree
-# handed down to a follower. Credited in the footer at the bottom of the
-# page (a blanket credit, not a per-line one -- keeps the quote itself
-# unadorned when it's shown).
+# Partial/fragmentary lines only (by design, not just by trimming), each
+# from a different Mili song -- not all from "Children of the City" despite
+# that being the one that matters most: it's the song the "Prescript"
+# concept itself comes from in Library of Ruina canon (a Project Moon game),
+# where a Prescript is exactly this kind of arbitrary decree handed down to
+# a follower. Every song is credited in the footer at the bottom of the page
+# (a blanket credit, not inline per-line -- keeps the quote itself unadorned
+# when it's shown), built from the song names below so it can't drift out of
+# sync with this list.
 MILI_QUOTES = [
-    "Sleep for a total of 800 hours per day",
-    "Hero on a plastic horse, riding like it's real",
-    "I know now I must be comfortable being who I considered worthless",
-    "If we are always running, we can't behold the sceneries",
-    "No tears, no regrets, no zero-days at our fault",
-    "I am iron; in my blood, it streams roots deep",
+    ("Sleep for a total of 800 hours per day.", "Children of the City"),
+    ("Hero on a plastic horse, riding like it's real.", "Hero"),
+    (
+        "I know now I must be comfortable being who I considered worthless.",
+        "Children of the City",
+    ),
+    ("If we are always running, we can't behold the sceneries.", "TIAN TIAN"),
+    ("No tears, no regrets, no zero-days at our fault.", "sustain++"),
+    ("I am iron; in my blood, it streams roots deep.", "Iron Lotus"),
 ]
 
 # General Japanese phrases, not lyric quotes -- no attribution needed.
@@ -44,7 +49,20 @@ JAPANESE_PROMPTS = [
     "勝ちたい",
 ]
 
-PROMPTS = FUNCTIONAL_PROMPTS + MILI_QUOTES + JAPANESE_PROMPTS
+PROMPTS = FUNCTIONAL_PROMPTS + [text for text, _ in MILI_QUOTES] + JAPANESE_PROMPTS
+
+
+def _oxford_quoted_list(items: list[str]) -> str:
+    quoted = [f'"{item}"' for item in items]
+    if len(quoted) == 1:
+        return quoted[0]
+    return ", ".join(quoted[:-1]) + ", and " + quoted[-1]
+
+
+# Order of first appearance in MILI_QUOTES, de-duplicated -- dict.fromkeys
+# preserves insertion order and drops repeats (Children of the City appears
+# twice above).
+_MILI_SONGS = list(dict.fromkeys(song for _, song in MILI_QUOTES))
 
 TEXT_COLOR, ACCENT_COLOR = theme_colors()
 
@@ -127,9 +145,37 @@ typewriter(
     placeholder=prompt_placeholder,
 )
 
-st.divider()
-st.caption(
-    "Some of the lines above are drawn from \"Children of the City\" by "
-    "Mili feat. Project Moon, from the album *To Kill a Living Book* -- "
-    "the song the Prescript concept itself comes from."
+# Pinned to the corner via CSS rather than st.caption's normal inline flow,
+# so it reads as a page-level footer note instead of sitting right under the
+# search box. Fades in on load (matches the typewriter's gradual-reveal feel
+# elsewhere on this page, rather than popping in suddenly); the animation's
+# end opacity matches the div's base opacity, so it settles there once the
+# animation finishes rather than needing animation-fill-mode.
+st.markdown(
+    f"""
+    <style>
+    @keyframes footer-fade-in {{
+        from {{ opacity: 0; }}
+        to {{ opacity: 0.6; }}
+    }}
+    </style>
+    <div style="
+        position: fixed;
+        bottom: 12px;
+        right: 16px;
+        max-width: 320px;
+        font-size: 0.8rem;
+        color: {TEXT_COLOR};
+        opacity: 0.6;
+        animation: footer-fade-in 1.5s ease-in;
+        text-align: right;
+        z-index: 100;
+    ">
+        Some of the lines above are drawn from Mili songs -- {_oxford_quoted_list(_MILI_SONGS)}.
+        "Children of the City" (feat. Project Moon, from the album
+        <i>To Kill a Living Book</i>) is the song the Prescript concept
+        itself comes from.
+    </div>
+    """,
+    unsafe_allow_html=True,
 )
