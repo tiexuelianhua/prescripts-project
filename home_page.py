@@ -44,9 +44,27 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-_, logo_col, _ = st.columns([1, 2, 1])
-with logo_col:
-    st.image(str(LOGO_PATH), width=240)
+# Centered via flexbox on stFullScreenFrame -- the wrapper Streamlit adds
+# around every image for its hover-to-expand button. That wrapper always
+# spans the full column width itself (so the expand button can sit flush
+# right), while the fixed-width image inside it just block-flows to the
+# left with no auto-centering -- hence the logo reading as "slightly left"
+# instead of centered. stElementContainer/stImage aren't the right target:
+# stElementContainer's child already fills 100% of it regardless of
+# justify-content, and stImage's own box is sized to fit the image exactly
+# (nothing left to center within).
+st.markdown(
+    """
+    <style>
+    div[data-testid="stFullScreenFrame"] {
+        display: flex;
+        justify-content: center;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+st.image(str(LOGO_PATH), width=240)
 
 # Reserved here, in reading order (logo, then question, then the input
 # below), but only actually animated at the very end of the script via the
