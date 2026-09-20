@@ -321,18 +321,25 @@ with st.container(key="main_body"):
             # above ever painted, wiping it before it's seen.
             st.session_state["_reset_add_entry_form"] = True
 
-    with st.expander("Entries", expanded=True):
+    # A day-folder's receipts.csv can exist but be empty -- e.g. right after
+    # relocate_edited_entries() above writes an edited-out day back with zero
+    # rows left -- so today having logged entries is judged by row count, not
+    # just file existence. Only affects the expander's *initial* state; once
+    # a viewer un-collapses (or Streamlit remembers a prior collapse) it's
+    # left alone on reruns.
+    today_has_entries = not load_entries(today_folder / "receipts.csv").empty
+    with st.expander("Entries", expanded=today_has_entries):
         selected_date = st.date_input(
             "Day", value=today_date, max_value=today_date, key="view_day"
         )
         selected_csv = day_folder_for(selected_date) / "receipts.csv"
         is_today = selected_date == today_date
+        day_entries = load_entries(selected_csv)
 
-        if not selected_csv.exists():
+        if day_entries.empty:
             st.write("No entries for this day.")
             day_total = 0
         else:
-            day_entries = load_entries(selected_csv)
             edited_entries = st.data_editor(
                 day_entries,
                 num_rows="dynamic",
@@ -374,7 +381,7 @@ with st.container(key="main_body"):
         # reads as if you tracked and spent nothing, rather than didn't log
         # that day -- so the total/budget metric only appears for today
         # (where ¥0 so far is meaningful) or a day that actually has entries.
-        if is_today or selected_csv.exists():
+        if is_today or not day_entries.empty:
             total_label = "Today's total" if is_today else f"Total for {selected_date.strftime('%d-%m-%Y')}"
             if daily_budget > 0:
                 diff = day_total - daily_budget
