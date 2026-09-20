@@ -85,6 +85,25 @@ def append_entry(csv_path: Path, timestamp: str, store: str, item: str, cost_yen
     entry.to_csv(csv_path, mode="a", header=header, index=False, encoding="utf-8")
 
 
+def rename_value(column: str, old_value: str, new_value: str) -> int:
+    # Unlike the "hide" exclusion list in settings.json, this edits every
+    # past receipts.csv in place -- for fixing an actual typo at the source
+    # (so it stops showing up under the wrong name in month summaries too),
+    # not just tidying the autocomplete going forward.
+    renamed = 0
+    for csv_file in MEAL_RECEIPTS_DIR.glob("*/*/*/receipts.csv"):
+        try:
+            df = pd.read_csv(csv_file)
+        except pd.errors.EmptyDataError:
+            continue
+        matches = df[column] == old_value
+        if matches.any():
+            df.loc[matches, column] = new_value
+            save_entries(csv_file, df)
+            renamed += int(matches.sum())
+    return renamed
+
+
 def load_settings() -> dict:
     if SETTINGS_PATH.exists():
         return json.loads(SETTINGS_PATH.read_text(encoding="utf-8"))
@@ -225,6 +244,60 @@ with st.sidebar:
                 save_settings(settings)
                 st.rerun()
 
+        st.divider()
+        st.caption(
+            "Rename a store/item everywhere it appears in past receipts -- "
+            "fixes a typo at the source, not just in the dropdowns above."
+        )
+
+        # Widgets below are reset via this flag rather than directly, since
+        # Streamlit forbids writing a widget's session_state after that
+        # widget's already been instantiated in the same run -- see the
+        # matching "_reset_add_entry_form" pattern below for the add-entry
+        # form. Run before the widgets it targets are created this run.
+        if st.session_state.get("_reset_rename_item"):
+            st.session_state["rename_item_old"] = None
+            st.session_state["rename_item_new"] = ""
+            st.session_state["_reset_rename_item"] = False
+        if st.session_state.get("_reset_rename_store"):
+            st.session_state["rename_store_old"] = None
+            st.session_state["rename_store_new"] = ""
+            st.session_state["_reset_rename_store"] = False
+
+        # Full item/store lists here (no exclude=), unlike the hide pickers
+        # above -- a mistyped name worth fixing might already be hidden.
+        rename_item_old = st.selectbox(
+            "Item to rename", options=known_values("item"), index=None, key="rename_item_old"
+        )
+        rename_item_new = st.text_input("Rename to", key="rename_item_new")
+        if st.button(
+            "Rename item",
+            disabled=not (rename_item_old and rename_item_new.strip()),
+        ):
+            renamed = rename_value("item", rename_item_old, rename_item_new.strip())
+            all_entries.clear()
+            st.session_state["_reset_rename_item"] = True
+            # st.toast(), not st.success(): a message shown right before
+            # st.rerun() is otherwise discarded with the rest of this
+            # interrupted run before ever reaching the browser -- toast is
+            # the one message type Streamlit carries across that rerun.
+            st.toast(f"Renamed {renamed} receipt(s): '{rename_item_old}' → '{rename_item_new.strip()}'.")
+            st.rerun()
+
+        rename_store_old = st.selectbox(
+            "Store to rename", options=known_values("store"), index=None, key="rename_store_old"
+        )
+        rename_store_new = st.text_input("Rename to", key="rename_store_new")
+        if st.button(
+            "Rename store",
+            disabled=not (rename_store_old and rename_store_new.strip()),
+        ):
+            renamed = rename_value("store", rename_store_old, rename_store_new.strip())
+            all_entries.clear()
+            st.session_state["_reset_rename_store"] = True
+            st.toast(f"Renamed {renamed} receipt(s): '{rename_store_old}' → '{rename_store_new.strip()}'.")
+            st.rerun()
+
 header_logo, header_title = st.columns([1, 4], vertical_alignment="center")
 with header_logo:
     st.image(str(LOGO_PATH), width=120)
@@ -359,11 +432,15 @@ with st.container(key="main_body"):
                 moved_count = len(edited_entries) - len(same_day_entries)
                 save_entries(selected_csv, same_day_entries)
                 all_entries.clear()
+                # st.toast(), not st.success(): a message shown right before
+                # st.rerun() is otherwise discarded with the rest of this
+                # interrupted run before ever reaching the browser -- toast is
+                # the one message type Streamlit carries across that rerun.
                 if moved_count:
                     entry_word = "entry" if moved_count == 1 else "entries"
-                    st.success(f"Saved. Moved {moved_count} {entry_word} to the day matching its edited date.")
+                    st.toast(f"Saved. Moved {moved_count} {entry_word} to the day matching its edited date.")
                 else:
-                    st.success("Saved.")
+                    st.toast("Saved.")
                 # A data_editor's own widget state (its accumulated cell
                 # edits/added/deleted rows) persists across reruns under its
                 # key regardless of what's passed as its value -- so without
