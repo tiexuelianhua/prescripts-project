@@ -56,6 +56,24 @@ def save_entries(csv_path: Path, entries: pd.DataFrame) -> None:
     entries.to_csv(csv_path, index=False, encoding="utf-8")
 
 
+def relocate_edited_entries(entries: pd.DataFrame, viewed_date) -> pd.DataFrame:
+    # Entries live one receipts.csv per day-folder, keyed by the *folder*
+    # they're saved into -- not by their own timestamp text. So editing a
+    # row's date in the table only rewrites that string in place unless the
+    # row is actually moved to the folder matching its new date; otherwise
+    # the edit silently has no visible effect (the row stays filed under the
+    # old day, and the new day still shows nothing there).
+    entry_dates = pd.to_datetime(entries["timestamp"]).dt.date
+    moved = entries[entry_dates != viewed_date]
+    for target_date, rows in moved.groupby(entry_dates[entry_dates != viewed_date]):
+        target_csv = day_folder_for(target_date) / "receipts.csv"
+        target_csv.parent.mkdir(parents=True, exist_ok=True)
+        combined = pd.concat([load_entries(target_csv), rows], ignore_index=True)
+        combined = combined.sort_values("timestamp").reset_index(drop=True)
+        save_entries(target_csv, combined)
+    return entries[entry_dates == viewed_date]
+
+
 def append_entry(csv_path: Path, timestamp: str, store: str, item: str, cost_yen: int) -> None:
     entry = pd.DataFrame([{
         "timestamp": timestamp,
@@ -330,8 +348,24 @@ with st.container(key="main_body"):
             # them to disk. The total/budget below still reflects the live
             # unsaved edit, since that's a harmless preview either way.
             if st.button("💾 Save changes", key=f"save_{selected_date}"):
-                save_entries(selected_csv, edited_entries)
-                st.success("Saved.")
+                same_day_entries = relocate_edited_entries(edited_entries, selected_date)
+                moved_count = len(edited_entries) - len(same_day_entries)
+                save_entries(selected_csv, same_day_entries)
+                all_entries.clear()
+                if moved_count:
+                    entry_word = "entry" if moved_count == 1 else "entries"
+                    st.success(f"Saved. Moved {moved_count} {entry_word} to the day matching its edited date.")
+                else:
+                    st.success("Saved.")
+                # A data_editor's own widget state (its accumulated cell
+                # edits/added/deleted rows) persists across reruns under its
+                # key regardless of what's passed as its value -- so without
+                # clearing it here, a row just moved out to another day's
+                # file would keep reappearing in this table (replayed from
+                # that stale state) until some unrelated widget interaction
+                # happened to reset it.
+                del st.session_state[f"editor_{selected_date}"]
+                st.rerun()
             else:
                 st.caption("Edits above aren't saved until you click **Save changes**.")
             day_total = edited_entries["cost_yen"].sum() if not edited_entries.empty else 0
