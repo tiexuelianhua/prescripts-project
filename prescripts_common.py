@@ -37,6 +37,12 @@ PAGES = [
         "path": "weather_page.py",
         "keywords": ["weather", "forecast", "typhoon", "rain", "temperature", "advisory"],
     },
+    {
+        "title": "Spotify",
+        "icon": "🎧",
+        "path": "spotify_page.py",
+        "keywords": ["spotify", "music", "playlist", "song", "playback"],
+    },
 ]
 
 
