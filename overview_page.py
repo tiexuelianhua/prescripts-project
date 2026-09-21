@@ -14,6 +14,13 @@ import streamlit as st
 
 from meal_receipts_data import today_summary as meal_receipts_today_summary
 from prescripts_common import LOGO_PATH, inject_body_fade_in, render_page_title, theme_colors
+from spotify_data import (
+    current_playback as spotify_current_playback,
+    describe_item as spotify_describe_item,
+    is_configured as spotify_is_configured,
+    is_connected as spotify_is_connected,
+)
+from spotify_widgets import inject_seek_slider_styles, render_seek_slider, render_transport_controls
 from weather_data import (
     CATEGORY_EMOJI,
     format_condition,
@@ -38,6 +45,8 @@ with header_title:
 
 if is_first_load:
     st.session_state["_overview_title_played"] = True
+
+inject_seek_slider_styles("overview_spotify_seek")
 
 
 def render_meal_receipts_tile() -> None:
@@ -121,9 +130,114 @@ def render_weather_tile() -> None:
     st.page_link("weather_page.py", label="Open Weather", icon="🌤️")
 
 
+# Its own fragment so just this tile ticks every second (the position slider
+# moves, a track change shows up) without re-running the other tiles.
+@st.fragment(run_every=1)
+def render_spotify_player() -> None:
+    try:
+        playback = spotify_current_playback()
+    except (urllib.error.URLError, TimeoutError):
+        st.error("Couldn't reach Spotify's player right now.")
+        return
+
+    if not playback or not playback.get("item"):
+        st.caption("Nothing playing right now.")
+        return
+
+    track = spotify_describe_item(playback["item"])
+    track_columns = st.columns([1, 3])
+    with track_columns[0]:
+        if track["image_url"]:
+            st.image(track["image_url"], width=80)
+    with track_columns[1]:
+        st.markdown(f"**{track['name']}**")
+        st.caption(track["artists"])
+    render_seek_slider(playback, "overview_spotify_seek")
+    render_transport_controls(playback, "overview_spotify", icons_only=True)
+
+
+def render_spotify_tile() -> None:
+    st.subheader("🎵 Spotify")
+    if not spotify_is_configured() or not spotify_is_connected():
+        st.caption("Not connected yet -- connect your account on the Spotify page.")
+    else:
+        render_spotify_player()
+    st.page_link("spotify_page.py", label="Open Spotify", icon="🎵")
+
+
+# Two columns, each tile placed in whichever is currently shorter -- so a
+# short tile (Meal Receipts) gets the next one stacked under it instead of
+# leaving a gap beside a tall one (Weather). Weights are rough relative
+# heights, not measurements: Streamlit can't see rendered heights, and tiles
+# vary (e.g. a weather warning adds a line), so this only has to be close.
+# A new page's tile = one more (render function, weight, live) entry.
+#
+# "live" marks a tile showing something that moves in real time (the Spotify
+# position slider). Those are filled in LAST: the page loads over the
+# network (weather, etc.), and a live tile drawn early sits frozen at its
+# starting value for however long the rest of the load takes, then visibly
+# jumps once the next refresh lands. Drawn last, it's current the moment the
+# load finishes. Each tile's spot is reserved (container) in layout order
+# first, so filling them in a different order doesn't change where they show.
+TILES = [
+    (render_meal_receipts_tile, 3, False),
+    (render_weather_tile, 4, False),
+    (render_spotify_tile, 4, True),
+]
+
+# Each tile is outlined in the theme's accent blue (the same blue as the
+# buttons' outlines) so the tiles read as separate widgets. Styled directly
+# on the keyed container rather than via st.container(border=True), whose
+# border color comes from the theme's generic borderColor instead.
+#
+# The tiles share edges, like cells of one grid: no gap between columns or
+# between stacked tiles, and a -1px margin pulls each tile's border onto its
+# neighbor's (bottom margin for stacked tiles, left margin for the right-hand
+# column) so two 1px borders read as one line.
+# Columns are already stretched to equal height by Streamlit; the last tile
+# in each column grows to fill what's left, so both columns end on the same
+# line instead of one sticking out past the other.
+st.markdown(
+    f"""
+    <style>
+    [class*="st-key-overview_tile_"] {{
+        border: 1px solid {ACCENT_COLOR};
+        border-radius: 0;
+        margin: 0 0 -1px 0;
+        /* The subheading brings its own top padding on top of this
+           container's, so the bottom needs more than the top to make the
+           gap under the last element match the gap above the title.
+           (1.5rem still read slightly short.) */
+        padding: 1rem 1rem 1.75rem;
+    }}
+    /* Tiles are as wide as their column, so a right margin can't pull the
+       neighbor over; instead the right-hand column's tiles shift 1px left
+       onto the left column's border. */
+    [data-testid="stColumn"] + [data-testid="stColumn"] [class*="st-key-overview_tile_"] {{
+        margin-left: -1px;
+    }}
+    [data-testid="stColumn"]:has([class*="st-key-overview_tile_"]) > [data-testid="stVerticalBlock"] {{
+        gap: 0;
+    }}
+    [data-testid="stColumn"]:has([class*="st-key-overview_tile_"]) > [data-testid="stVerticalBlock"] > [data-testid="stLayoutWrapper"]:last-child {{
+        flex-grow: 1;
+    }}
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 with st.container(key="main_body"):
-    TILES = [render_meal_receipts_tile, render_weather_tile]
-    tile_columns = st.columns(len(TILES))
-    for render_tile, column in zip(TILES, tile_columns):
-        with column:
+    columns = st.columns(2, gap=0)
+    column_heights = [0, 0]
+    placements = []
+    for tile_number, (render_tile, weight, live) in enumerate(TILES):
+        shorter = 0 if column_heights[0] <= column_heights[1] else 1
+        column_heights[shorter] += weight
+        spot = columns[shorter].container(key=f"overview_tile_{tile_number}")
+        placements.append((render_tile, spot, live))
+
+    # sorted() is stable, so non-live tiles keep their order among themselves.
+    for render_tile, spot, _ in sorted(placements, key=lambda placement: placement[2]):
+        with spot:
             render_tile()
