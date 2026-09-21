@@ -8,6 +8,7 @@
 # render_..._tile() function below, and add it to TILES. No registry beyond
 # that list -- with only a handful of pages, a heavier plugin mechanism
 # would be solving a problem this doesn't have yet.
+import time
 import urllib.error
 
 import streamlit as st
@@ -20,6 +21,7 @@ from spotify_data import (
     is_configured as spotify_is_configured,
     is_connected as spotify_is_connected,
 )
+from spotify_log import log_event, log_slow
 from spotify_widgets import inject_seek_slider_styles, render_seek_slider, render_transport_controls
 from weather_data import (
     CATEGORY_EMOJI,
@@ -31,6 +33,7 @@ from weather_data import (
     weather_codes,
 )
 
+run_started = time.time()
 TEXT_COLOR, ACCENT_COLOR = theme_colors()
 PAGE_TITLE = "Overview"
 
@@ -133,6 +136,7 @@ def render_weather_tile() -> None:
 # Its own fragment so just this tile ticks every second (the position slider
 # moves, a track change shows up) without re-running the other tiles.
 @st.fragment(run_every=1)
+@log_slow("Overview Spotify tile refresh")
 def render_spotify_player() -> None:
     try:
         playback = spotify_current_playback()
@@ -241,3 +245,6 @@ with st.container(key="main_body"):
     for render_tile, spot, _ in sorted(placements, key=lambda placement: placement[2]):
         with spot:
             render_tile()
+
+if time.time() - run_started > 2.0:
+    log_event(f"slow: Overview page full run took {time.time() - run_started:.2f}s")
