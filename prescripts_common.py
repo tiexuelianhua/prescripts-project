@@ -25,6 +25,12 @@ PAGES = [
         "path": "mealReceiptsApp_cV.py",
         "keywords": ["meal", "receipt", "receipts", "food", "budget"],
     },
+    {
+        "title": "Weather",
+        "icon": "🌤️",
+        "path": "weather_page.py",
+        "keywords": ["weather", "forecast", "typhoon", "rain", "temperature", "advisory"],
+    },
 ]
 
 
@@ -96,6 +102,47 @@ def inject_toast_style() -> None:
         """,
         unsafe_allow_html=True,
     )
+
+
+def inject_body_fade_in(container_key: str) -> None:
+    # Fades in every element inside st.container(key=container_key) --
+    # scoped there (not the whole page) so a page's title isn't
+    # double-animated by this rule too. Always immediate: render_page_title()
+    # below blocks on its own (the typewriter reveal runs before anything
+    # else in the script, title included, ever gets sent to the browser),
+    # so by the time this container's contents are generated the title's
+    # already done -- no need to also delay this fade-in to line up with it.
+    st.markdown(
+        f"""
+        <style>
+        @keyframes fadeIn {{
+            from {{ opacity: 0; }}
+            to {{ opacity: 1; }}
+        }}
+        .st-key-{container_key} [data-testid="stElementContainer"] {{
+            animation: fadeIn 0.4s ease-out;
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_page_title(title: str, is_first_load: bool) -> None:
+    # Every page but Home types its title in once per session, blocking
+    # (via typewriter()'s own time.sleep loop) so nothing else on the page
+    # is even generated -- let alone sent to the browser -- until the title
+    # has finished, for a genuinely sequential "title, then everything
+    # else" load rather than an approximation timed to match. Paints the
+    # title instantly on every later rerun instead (callers compute
+    # is_first_load themselves, typically `session_key not in
+    # st.session_state` with a page-specific session_key: session_state is
+    # shared across every page in this app, so reusing one key would make
+    # visiting one page silently skip another's first-time reveal).
+    if is_first_load:
+        typewriter(title, markdown_wrap="# {}")
+    else:
+        st.markdown(f"# {title}")
 
 
 def typewriter(

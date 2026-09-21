@@ -1,0 +1,710 @@
+{
+  "100": {
+    "category": "100",
+    "en": "CLEAR",
+    "icon": "100.svg",
+    "ja": "晴"
+  },
+  "101": {
+    "category": "100",
+    "en": "PARTLY CLOUDY",
+    "icon": "101.svg",
+    "ja": "晴時々曇"
+  },
+  "102": {
+    "category": "300",
+    "en": "CLEAR, OCCASIONAL SCATTERED SHOWERS",
+    "icon": "102.svg",
+    "ja": "晴一時雨"
+  },
+  "103": {
+    "category": "300",
+    "en": "CLEAR, FREQUENT SCATTERED SHOWERS",
+    "icon": "102.svg",
+    "ja": "晴時々雨"
+  },
+  "104": {
+    "category": "400",
+    "en": "CLEAR, SNOW FLURRIES",
+    "icon": "104.svg",
+    "ja": "晴一時雪"
+  },
+  "105": {
+    "category": "400",
+    "en": "CLEAR, FREQUENT SNOW FLURRIES",
+    "icon": "104.svg",
+    "ja": "晴時々雪"
+  },
+  "106": {
+    "category": "300",
+    "en": "CLEAR, OCCASIONAL SCATTERED SHOWERS OR SNOW FLURRIES",
+    "icon": "102.svg",
+    "ja": "晴一時雨か雪"
+  },
+  "107": {
+    "category": "300",
+    "en": "CLEAR, FREQUENT SCATTERED SHOWERS OR SNOW FLURRIES",
+    "icon": "102.svg",
+    "ja": "晴時々雨か雪"
+  },
+  "108": {
+    "category": "300",
+    "en": "CLEAR, OCCASIONAL SCATTERED SHOWERS AND/OR THUNDER",
+    "icon": "102.svg",
+    "ja": "晴一時雨か雷雨"
+  },
+  "110": {
+    "category": "100",
+    "en": "CLEAR, PARTLY CLOUDY LATER",
+    "icon": "110.svg",
+    "ja": "晴後時々曇"
+  },
+  "111": {
+    "category": "100",
+    "en": "CLEAR, CLOUDY LATER",
+    "icon": "110.svg",
+    "ja": "晴後曇"
+  },
+  "112": {
+    "category": "300",
+    "en": "CLEAR, OCCASIONAL SCATTERED SHOWERS LATER",
+    "icon": "112.svg",
+    "ja": "晴後一時雨"
+  },
+  "113": {
+    "category": "300",
+    "en": "CLEAR, FREQUENT SCATTERED SHOWERS LATER",
+    "icon": "112.svg",
+    "ja": "晴後時々雨"
+  },
+  "114": {
+    "category": "300",
+    "en": "CLEAR,RAIN LATER",
+    "icon": "112.svg",
+    "ja": "晴後雨"
+  },
+  "115": {
+    "category": "400",
+    "en": "CLEAR, OCCASIONAL SNOW FLURRIES LATER",
+    "icon": "115.svg",
+    "ja": "晴後一時雪"
+  },
+  "116": {
+    "category": "400",
+    "en": "CLEAR, FREQUENT SNOW FLURRIES LATER",
+    "icon": "115.svg",
+    "ja": "晴後時々雪"
+  },
+  "117": {
+    "category": "400",
+    "en": "CLEAR,SNOW LATER",
+    "icon": "115.svg",
+    "ja": "晴後雪"
+  },
+  "118": {
+    "category": "300",
+    "en": "CLEAR, RAIN OR SNOW LATER",
+    "icon": "112.svg",
+    "ja": "晴後雨か雪"
+  },
+  "119": {
+    "category": "300",
+    "en": "CLEAR, RAIN AND/OR THUNDER LATER",
+    "icon": "112.svg",
+    "ja": "晴後雨か雷雨"
+  },
+  "120": {
+    "category": "300",
+    "en": "OCCASIONAL SCATTERED SHOWERS IN THE MORNING AND EVENING, CLEAR DURING THE DAY",
+    "icon": "102.svg",
+    "ja": "晴朝夕一時雨"
+  },
+  "121": {
+    "category": "300",
+    "en": "OCCASIONAL SCATTERED SHOWERS IN THE MORNING, CLEAR DURING THE DAY",
+    "icon": "102.svg",
+    "ja": "晴朝の内一時雨"
+  },
+  "122": {
+    "category": "300",
+    "en": "CLEAR, OCCASIONAL SCATTERED SHOWERS IN THE EVENING",
+    "icon": "112.svg",
+    "ja": "晴夕方一時雨"
+  },
+  "123": {
+    "category": "100",
+    "en": "CLEAR IN THE PLAINS, RAIN AND THUNDER NEAR MOUTAINOUS AREAS",
+    "icon": "100.svg",
+    "ja": "晴山沿い雷雨"
+  },
+  "124": {
+    "category": "100",
+    "en": "CLEAR IN THE PLAINS, SNOW NEAR MOUTAINOUS AREAS",
+    "icon": "100.svg",
+    "ja": "晴山沿い雪"
+  },
+  "125": {
+    "category": "300",
+    "en": "CLEAR, RAIN AND THUNDER IN THE AFTERNOON",
+    "icon": "112.svg",
+    "ja": "晴午後は雷雨"
+  },
+  "126": {
+    "category": "300",
+    "en": "CLEAR, RAIN IN THE AFTERNOON",
+    "icon": "112.svg",
+    "ja": "晴昼頃から雨"
+  },
+  "127": {
+    "category": "300",
+    "en": "CLEAR, RAIN IN THE EVENING",
+    "icon": "112.svg",
+    "ja": "晴夕方から雨"
+  },
+  "128": {
+    "category": "300",
+    "en": "CLEAR, RAIN IN THE NIGHT",
+    "icon": "112.svg",
+    "ja": "晴夜は雨"
+  },
+  "130": {
+    "category": "100",
+    "en": "FOG IN THE MORNING, CLEAR LATER",
+    "icon": "100.svg",
+    "ja": "朝の内霧後晴"
+  },
+  "131": {
+    "category": "100",
+    "en": "FOG AROUND DAWN, CLEAR LATER",
+    "icon": "100.svg",
+    "ja": "晴明け方霧"
+  },
+  "132": {
+    "category": "100",
+    "en": "CLOUDY IN THE MORNING AND EVENING, CLEAR DURING THE DAY",
+    "icon": "101.svg",
+    "ja": "晴朝夕曇"
+  },
+  "140": {
+    "category": "300",
+    "en": "CLEAR, FREQUENT SCATTERED SHOWERS AND THUNDER",
+    "icon": "102.svg",
+    "ja": "晴時々雨で雷を伴う"
+  },
+  "160": {
+    "category": "400",
+    "en": "CLEAR, SNOW FLURRIES OR OCCASIONAL SCATTERED SHOWERS",
+    "icon": "104.svg",
+    "ja": "晴一時雪か雨"
+  },
+  "170": {
+    "category": "400",
+    "en": "CLEAR, FREQUENT SNOW FLURRIES OR SCATTERED SHOWERS",
+    "icon": "104.svg",
+    "ja": "晴時々雪か雨"
+  },
+  "181": {
+    "category": "400",
+    "en": "CLEAR, SNOW OR RAIN LATER",
+    "icon": "115.svg",
+    "ja": "晴後雪か雨"
+  },
+  "200": {
+    "category": "200",
+    "en": "CLOUDY",
+    "icon": "200.svg",
+    "ja": "曇"
+  },
+  "201": {
+    "category": "200",
+    "en": "MOSTLY CLOUDY",
+    "icon": "201.svg",
+    "ja": "曇時々晴"
+  },
+  "202": {
+    "category": "300",
+    "en": "CLOUDY, OCCASIONAL SCATTERED SHOWERS",
+    "icon": "202.svg",
+    "ja": "曇一時雨"
+  },
+  "203": {
+    "category": "300",
+    "en": "CLOUDY, FREQUENT SCATTERED SHOWERS",
+    "icon": "202.svg",
+    "ja": "曇時々雨"
+  },
+  "204": {
+    "category": "400",
+    "en": "CLOUDY, OCCASIONAL SNOW FLURRIES",
+    "icon": "204.svg",
+    "ja": "曇一時雪"
+  },
+  "205": {
+    "category": "400",
+    "en": "CLOUDY FREQUENT SNOW FLURRIES",
+    "icon": "204.svg",
+    "ja": "曇時々雪"
+  },
+  "206": {
+    "category": "300",
+    "en": "CLOUDY, OCCASIONAL SCATTERED SHOWERS OR SNOW FLURRIES",
+    "icon": "202.svg",
+    "ja": "曇一時雨か雪"
+  },
+  "207": {
+    "category": "300",
+    "en": "CLOUDY, FREQUENT SCCATERED SHOWERS OR SNOW FLURRIES",
+    "icon": "202.svg",
+    "ja": "曇時々雨か雪"
+  },
+  "208": {
+    "category": "300",
+    "en": "CLOUDY, OCCASIONAL SCATTERED SHOWERS AND/OR THUNDER",
+    "icon": "202.svg",
+    "ja": "曇一時雨か雷雨"
+  },
+  "209": {
+    "category": "200",
+    "en": "FOG",
+    "icon": "200.svg",
+    "ja": "霧"
+  },
+  "210": {
+    "category": "200",
+    "en": "CLOUDY, PARTLY CLOUDY LATER",
+    "icon": "210.svg",
+    "ja": "曇後時々晴"
+  },
+  "211": {
+    "category": "200",
+    "en": "CLOUDY, CLEAR LATER",
+    "icon": "210.svg",
+    "ja": "曇後晴"
+  },
+  "212": {
+    "category": "300",
+    "en": "CLOUDY, OCCASIONAL SCATTERED SHOWERS LATER",
+    "icon": "212.svg",
+    "ja": "曇後一時雨"
+  },
+  "213": {
+    "category": "300",
+    "en": "CLOUDY, FREQUENT SCATTERED SHOWERS LATER",
+    "icon": "212.svg",
+    "ja": "曇後時々雨"
+  },
+  "214": {
+    "category": "300",
+    "en": "CLOUDY, RAIN LATER",
+    "icon": "212.svg",
+    "ja": "曇後雨"
+  },
+  "215": {
+    "category": "400",
+    "en": "CLOUDY, SNOW FLURRIES LATER",
+    "icon": "215.svg",
+    "ja": "曇後一時雪"
+  },
+  "216": {
+    "category": "400",
+    "en": "CLOUDY, FREQUENT SNOW FLURRIES LATER",
+    "icon": "215.svg",
+    "ja": "曇後時々雪"
+  },
+  "217": {
+    "category": "400",
+    "en": "CLOUDY, SNOW LATER",
+    "icon": "215.svg",
+    "ja": "曇後雪"
+  },
+  "218": {
+    "category": "300",
+    "en": "CLOUDY, RAIN OR SNOW LATER",
+    "icon": "212.svg",
+    "ja": "曇後雨か雪"
+  },
+  "219": {
+    "category": "300",
+    "en": "CLOUDY, RAIN AND/OR THUNDER LATER",
+    "icon": "212.svg",
+    "ja": "曇後雨か雷雨"
+  },
+  "220": {
+    "category": "300",
+    "en": "OCCASIONAL SCCATERED SHOWERS IN THE MORNING AND EVENING, CLOUDY DURING THE DAY",
+    "icon": "202.svg",
+    "ja": "曇朝夕一時雨"
+  },
+  "221": {
+    "category": "300",
+    "en": "CLOUDY OCCASIONAL SCCATERED SHOWERS IN THE MORNING",
+    "icon": "202.svg",
+    "ja": "曇朝の内一時雨"
+  },
+  "222": {
+    "category": "300",
+    "en": "CLOUDY, OCCASIONAL SCCATERED SHOWERS IN THE EVENING",
+    "icon": "212.svg",
+    "ja": "曇夕方一時雨"
+  },
+  "223": {
+    "category": "200",
+    "en": "CLOUDY IN THE MORNING AND EVENING, PARTLY CLOUDY DURING THE DAY,",
+    "icon": "201.svg",
+    "ja": "曇日中時々晴"
+  },
+  "224": {
+    "category": "300",
+    "en": "CLOUDY, RAIN IN THE AFTERNOON",
+    "icon": "212.svg",
+    "ja": "曇昼頃から雨"
+  },
+  "225": {
+    "category": "300",
+    "en": "CLOUDY, RAIN IN THE EVENING",
+    "icon": "212.svg",
+    "ja": "曇夕方から雨"
+  },
+  "226": {
+    "category": "300",
+    "en": "CLOUDY, RAIN IN THE NIGHT",
+    "icon": "212.svg",
+    "ja": "曇夜は雨"
+  },
+  "228": {
+    "category": "400",
+    "en": "CLOUDY, SNOW IN THE AFTERNOON",
+    "icon": "215.svg",
+    "ja": "曇昼頃から雪"
+  },
+  "229": {
+    "category": "400",
+    "en": "CLOUDY, SNOW IN THE EVENING",
+    "icon": "215.svg",
+    "ja": "曇夕方から雪"
+  },
+  "230": {
+    "category": "400",
+    "en": "CLOUDY, SNOW IN THE NIGHT",
+    "icon": "215.svg",
+    "ja": "曇夜は雪"
+  },
+  "231": {
+    "category": "200",
+    "en": "CLOUDY, FOG OR DRIZZLING ON THE SEA AND NEAR SEASHORE",
+    "icon": "200.svg",
+    "ja": "曇海上海岸は霧か霧雨"
+  },
+  "240": {
+    "category": "300",
+    "en": "CLOUDY, FREQUENT SCCATERED SHOWERS AND THUNDER",
+    "icon": "202.svg",
+    "ja": "曇時々雨で雷を伴う"
+  },
+  "250": {
+    "category": "400",
+    "en": "CLOUDY, FREQUENT SNOW AND THUNDER",
+    "icon": "204.svg",
+    "ja": "曇時々雪で雷を伴う"
+  },
+  "260": {
+    "category": "400",
+    "en": "CLOUDY, SNOW FLURRIES OR OCCASIONAL SCATTERED SHOWERS",
+    "icon": "204.svg",
+    "ja": "曇一時雪か雨"
+  },
+  "270": {
+    "category": "400",
+    "en": "CLOUDY, FREQUENT SNOW FLURRIES OR SCATTERED SHOWERS",
+    "icon": "204.svg",
+    "ja": "曇時々雪か雨"
+  },
+  "281": {
+    "category": "400",
+    "en": "CLOUDY, SNOW OR RAIN LATER",
+    "icon": "215.svg",
+    "ja": "曇後雪か雨"
+  },
+  "300": {
+    "category": "300",
+    "en": "RAIN",
+    "icon": "300.svg",
+    "ja": "雨"
+  },
+  "301": {
+    "category": "300",
+    "en": "RAIN, PARTLY CLOUDY",
+    "icon": "301.svg",
+    "ja": "雨時々晴"
+  },
+  "302": {
+    "category": "300",
+    "en": "SHOWERS THROUGHOUT THE DAY",
+    "icon": "302.svg",
+    "ja": "雨時々止む"
+  },
+  "303": {
+    "category": "400",
+    "en": "RAIN,FREQUENT SNOW FLURRIES",
+    "icon": "303.svg",
+    "ja": "雨時々雪"
+  },
+  "304": {
+    "category": "300",
+    "en": "RAINORSNOW",
+    "icon": "300.svg",
+    "ja": "雨か雪"
+  },
+  "306": {
+    "category": "300",
+    "en": "HEAVYRAIN",
+    "icon": "300.svg",
+    "ja": "大雨"
+  },
+  "308": {
+    "category": "300",
+    "en": "RAINSTORM",
+    "icon": "308.svg",
+    "ja": "雨で暴風を伴う"
+  },
+  "309": {
+    "category": "400",
+    "en": "RAIN,OCCASIONAL SNOW",
+    "icon": "303.svg",
+    "ja": "雨一時雪"
+  },
+  "311": {
+    "category": "300",
+    "en": "RAIN,CLEAR LATER",
+    "icon": "311.svg",
+    "ja": "雨後晴"
+  },
+  "313": {
+    "category": "300",
+    "en": "RAIN,CLOUDY LATER",
+    "icon": "313.svg",
+    "ja": "雨後曇"
+  },
+  "314": {
+    "category": "400",
+    "en": "RAIN, FREQUENT SNOW FLURRIES LATER",
+    "icon": "314.svg",
+    "ja": "雨後時々雪"
+  },
+  "315": {
+    "category": "400",
+    "en": "RAIN,SNOW LATER",
+    "icon": "314.svg",
+    "ja": "雨後雪"
+  },
+  "316": {
+    "category": "300",
+    "en": "RAIN OR SNOW, CLEAR LATER",
+    "icon": "311.svg",
+    "ja": "雨か雪後晴"
+  },
+  "317": {
+    "category": "300",
+    "en": "RAIN OR SNOW, CLOUDY LATER",
+    "icon": "313.svg",
+    "ja": "雨か雪後曇"
+  },
+  "320": {
+    "category": "300",
+    "en": "RAIN IN THE MORNING, CLEAR LATER",
+    "icon": "311.svg",
+    "ja": "朝の内雨後晴"
+  },
+  "321": {
+    "category": "300",
+    "en": "RAIN IN THE MORNING, CLOUDY LATER",
+    "icon": "313.svg",
+    "ja": "朝の内雨後曇"
+  },
+  "322": {
+    "category": "400",
+    "en": "OCCASIONAL SNOW IN THE MORNING AND EVENING, RAIN DURING THE DAY",
+    "icon": "303.svg",
+    "ja": "雨朝晩一時雪"
+  },
+  "323": {
+    "category": "300",
+    "en": "RAIN, CLEAR IN THE AFTERNOON",
+    "icon": "311.svg",
+    "ja": "雨昼頃から晴"
+  },
+  "324": {
+    "category": "300",
+    "en": "RAIN, CLEAR IN THE EVENING",
+    "icon": "311.svg",
+    "ja": "雨夕方から晴"
+  },
+  "325": {
+    "category": "300",
+    "en": "RAIN, CLEAR IN THE NIGHT",
+    "icon": "311.svg",
+    "ja": "雨夜は晴"
+  },
+  "326": {
+    "category": "400",
+    "en": "RAIN, SNOW IN THE EVENING",
+    "icon": "314.svg",
+    "ja": "雨夕方から雪"
+  },
+  "327": {
+    "category": "400",
+    "en": "RAIN,SNOW IN THE NIGHT",
+    "icon": "314.svg",
+    "ja": "雨夜は雪"
+  },
+  "328": {
+    "category": "300",
+    "en": "RAIN, EXPECT OCCASIONAL HEAVY RAINFALL",
+    "icon": "300.svg",
+    "ja": "雨一時強く降る"
+  },
+  "329": {
+    "category": "300",
+    "en": "RAIN, OCCASIONAL SLEET",
+    "icon": "300.svg",
+    "ja": "雨一時みぞれ"
+  },
+  "340": {
+    "category": "400",
+    "en": "SNOWORRAIN",
+    "icon": "400.svg",
+    "ja": "雪か雨"
+  },
+  "350": {
+    "category": "300",
+    "en": "RAIN AND THUNDER",
+    "icon": "300.svg",
+    "ja": "雨で雷を伴う"
+  },
+  "361": {
+    "category": "400",
+    "en": "SNOW OR RAIN, CLEAR LATER",
+    "icon": "411.svg",
+    "ja": "雪か雨後晴"
+  },
+  "371": {
+    "category": "400",
+    "en": "SNOW OR RAIN, CLOUDY LATER",
+    "icon": "413.svg",
+    "ja": "雪か雨後曇"
+  },
+  "400": {
+    "category": "400",
+    "en": "SNOW",
+    "icon": "400.svg",
+    "ja": "雪"
+  },
+  "401": {
+    "category": "400",
+    "en": "SNOW, FREQUENT CLEAR",
+    "icon": "401.svg",
+    "ja": "雪時々晴"
+  },
+  "402": {
+    "category": "400",
+    "en": "SNOWTHROUGHOUT THE DAY",
+    "icon": "402.svg",
+    "ja": "雪時々止む"
+  },
+  "403": {
+    "category": "400",
+    "en": "SNOW,FREQUENT SCCATERED SHOWERS",
+    "icon": "403.svg",
+    "ja": "雪時々雨"
+  },
+  "405": {
+    "category": "400",
+    "en": "HEAVYSNOW",
+    "icon": "400.svg",
+    "ja": "大雪"
+  },
+  "406": {
+    "category": "400",
+    "en": "SNOWSTORM",
+    "icon": "406.svg",
+    "ja": "風雪強い"
+  },
+  "407": {
+    "category": "400",
+    "en": "HEAVYSNOWSTORM",
+    "icon": "406.svg",
+    "ja": "暴風雪"
+  },
+  "409": {
+    "category": "400",
+    "en": "SNOW, OCCASIONAL SCCATERED SHOWERS",
+    "icon": "403.svg",
+    "ja": "雪一時雨"
+  },
+  "411": {
+    "category": "400",
+    "en": "SNOW,CLEAR LATER",
+    "icon": "411.svg",
+    "ja": "雪後晴"
+  },
+  "413": {
+    "category": "400",
+    "en": "SNOW,CLOUDY LATER",
+    "icon": "413.svg",
+    "ja": "雪後曇"
+  },
+  "414": {
+    "category": "400",
+    "en": "SNOW,RAIN LATER",
+    "icon": "414.svg",
+    "ja": "雪後雨"
+  },
+  "420": {
+    "category": "400",
+    "en": "SNOW IN THE MORNING, CLEAR LATER",
+    "icon": "411.svg",
+    "ja": "朝の内雪後晴"
+  },
+  "421": {
+    "category": "400",
+    "en": "SNOW IN THE MORNING, CLOUDY LATER",
+    "icon": "413.svg",
+    "ja": "朝の内雪後曇"
+  },
+  "422": {
+    "category": "400",
+    "en": "SNOW, RAIN IN THE AFTERNOON",
+    "icon": "414.svg",
+    "ja": "雪昼頃から雨"
+  },
+  "423": {
+    "category": "400",
+    "en": "SNOW, RAIN IN THE EVENING",
+    "icon": "414.svg",
+    "ja": "雪夕方から雨"
+  },
+  "425": {
+    "category": "400",
+    "en": "SNOW, EXPECT OCCASIONAL HEAVY SNOWFALL",
+    "icon": "400.svg",
+    "ja": "雪一時強く降る"
+  },
+  "426": {
+    "category": "400",
+    "en": "SNOW, SLEET LATER",
+    "icon": "400.svg",
+    "ja": "雪後みぞれ"
+  },
+  "427": {
+    "category": "400",
+    "en": "SNOW, OCCASIONAL SLEET",
+    "icon": "400.svg",
+    "ja": "雪一時みぞれ"
+  },
+  "450": {
+    "category": "400",
+    "en": "SNOW AND THUNDER",
+    "icon": "400.svg",
+    "ja": "雪で雷を伴う"
+  }
+}

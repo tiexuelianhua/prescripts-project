@@ -11,7 +11,15 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
-from prescripts_common import JST, LOGO_PATH, SCRIPTS_DIR, theme_colors, typewriter
+from prescripts_common import (
+    JST,
+    LOGO_PATH,
+    SCRIPTS_DIR,
+    inject_body_fade_in,
+    render_page_title,
+    theme_colors,
+    typewriter,
+)
 
 MEAL_RECEIPTS_DIR = SCRIPTS_DIR.parent / "Meal Receipts"
 SETTINGS_PATH = MEAL_RECEIPTS_DIR / "settings.json"
@@ -160,29 +168,29 @@ def last_entry_for_item(item: str) -> pd.Series | None:
 
 
 TEXT_COLOR, ACCENT_COLOR = theme_colors()
+PAGE_TITLE = "Meal Receipts"
 
 # Page config and the shared button style are handled once, in app.py, since
 # this script now runs as one page of the multi-page app rather than its own
-# entry point. Only the animation below is specific to this page.
-st.markdown(
-    f"""
-    <style>
-    /* Fades in everything below the typed "Logging to" line, so it doesn't
-       pop in abruptly right after that animation finishes. Scoped to the
-       "main_body" container (via its st-key-* class) so the typed lines
-       above -- which already have their own reveal -- aren't double
-       animated. */
-    @keyframes fadeIn {{
-        from {{ opacity: 0; }}
-        to {{ opacity: 1; }}
-    }}
-    .st-key-main_body [data-testid="stElementContainer"] {{
-        animation: fadeIn 0.4s ease-out;
-    }}
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+# entry point.
+#
+# Both this page's first-load animations (the title below, and the
+# "Logging to" line further down) share this one flag -- they're not
+# independent events, they're both "first time this session has opened this
+# page," so a single check computed once, up top, drives both.
+is_first_load = "_typewriter_intro_played" not in st.session_state
+inject_body_fade_in("main_body")
+
+# Rendered here, before the sidebar or anything else, since render_page_title
+# blocks (via typewriter()'s time.sleep loop) on a session's first load --
+# nothing else on the page is generated, let alone sent to the browser,
+# until the title's done typing, for a genuinely sequential "title, then
+# everything else" load.
+header_logo, header_title = st.columns([1, 4], vertical_alignment="center")
+with header_logo:
+    st.image(str(LOGO_PATH), width=120)
+with header_title:
+    render_page_title(PAGE_TITLE, is_first_load)
 
 settings = load_settings()
 excluded_stores = set(settings.get("excluded_stores", []))
@@ -300,26 +308,18 @@ with st.sidebar:
             st.toast(f"Renamed {renamed} receipt(s): '{rename_store_old}' → '{rename_store_new.strip()}'.")
             st.rerun()
 
-header_logo, header_title = st.columns([1, 4], vertical_alignment="center")
-with header_logo:
-    st.image(str(LOGO_PATH), width=120)
-with header_title:
-    st.title("Meal Receipts")
-
 today_folder = get_today_folder()
 today_date = datetime.now(JST).date()
 logging_text = f"[Logging to: {today_folder}]"
 
-# Only the very first load of a session gets the typewriter reveal (a nice
-# one-time intro), and it's deferred to the bottom of the script -- reserved
-# here at the top but not animated until after everything else below is
-# built, so the form/table/chart all stream in immediately rather than
-# waiting on it. Every later rerun (typing in a field, adding an entry,
-# anything) instead paints the finished line right here, immediately: that
-# used to be deferred to the bottom too, which left this line sitting
-# visibly blank while the rest of the page rendered below it -- showing up
-# as the line disappearing and reappearing on every interaction.
-is_first_load = "_typewriter_intro_played" not in st.session_state
+# Deferred to the bottom of the script -- reserved here at the top but not
+# animated until after everything else below is built, so the form/table/
+# chart all stream in immediately rather than waiting on it. Every later
+# rerun (typing in a field, adding an entry, anything) instead paints the
+# finished line right here, immediately: that used to be deferred to the
+# bottom too, which left this line sitting visibly blank while the rest of
+# the page rendered below it -- showing up as the line disappearing and
+# reappearing on every interaction.
 if is_first_load:
     logging_placeholder = st.empty()
 else:
