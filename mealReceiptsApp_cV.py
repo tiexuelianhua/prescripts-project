@@ -10,6 +10,7 @@ import streamlit as st
 from meal_receipts_data import (
     all_entries,
     append_entry,
+    budget_settings,
     day_folder_for,
     get_today_folder,
     known_values,
@@ -21,6 +22,8 @@ from meal_receipts_data import (
     rename_value,
     save_entries,
     save_settings,
+    week_bounds,
+    week_total_so_far,
 )
 from prescripts_common import (
     JST,
@@ -63,11 +66,22 @@ excluded_items = set(settings.get("excluded_items", []))
 
 with st.sidebar:
     st.header("Settings")
-    daily_budget = st.number_input(
-        "Daily budget (¥)", min_value=0, step=100, value=settings.get("daily_budget", 0)
+    stored_amount, stored_period = budget_settings(settings)
+    period_options = ["Daily", "Weekly"]
+    budget_period_choice = st.selectbox(
+        "Budget period", options=period_options,
+        index=period_options.index(stored_period.capitalize())
+        if stored_period.capitalize() in period_options else 0,
     )
-    if daily_budget != settings.get("daily_budget", 0):
-        settings["daily_budget"] = daily_budget
+    budget_period = budget_period_choice.lower()
+    budget_label = "Daily budget (¥)" if budget_period == "daily" else "Weekly allowance (¥)"
+    budget_amount = st.number_input(budget_label, min_value=0, step=100, value=stored_amount)
+    if budget_amount != stored_amount or budget_period != stored_period:
+        settings["budget_amount"] = budget_amount
+        settings["budget_period"] = budget_period
+        # Only ever read from here on (see budget_settings()) -- dropped
+        # now that the new keys have taken over, rather than left stale.
+        settings.pop("daily_budget", None)
         save_settings(settings)
 
     with st.expander("Manage suggestions"):
@@ -339,8 +353,12 @@ with st.container(key="main_body"):
         # (where ¥0 so far is meaningful) or a day that actually has entries.
         if is_today or not day_entries.empty:
             total_label = "Today's total" if is_today else f"Total for {selected_date.strftime('%d-%m-%Y')}"
-            if daily_budget > 0:
-                diff = day_total - daily_budget
+            # A single day's total only gets compared against the budget
+            # when that budget is itself daily -- comparing one day's spend
+            # to a weekly allowance would be misleading (see the separate
+            # "This week's total" metric below for that case instead).
+            if budget_period == "daily" and budget_amount > 0:
+                diff = day_total - budget_amount
                 # st.metric only reads a leading "-" to decide the arrow/color
                 # for a string delta, so the sign has to be the very first
                 # character -- "¥-500" (sign after the yen mark) gets
@@ -349,12 +367,25 @@ with st.container(key="main_body"):
                 st.metric(
                     total_label,
                     f"¥{day_total:,.0f}",
-                    delta=f"{diff_str} vs ¥{daily_budget:,.0f} budget",
+                    delta=f"{diff_str} vs ¥{budget_amount:,.0f} budget",
                     delta_color="inverse",
                 )
-                st.progress(min(day_total / daily_budget, 1.0))
+                st.progress(min(day_total / budget_amount, 1.0))
             else:
                 st.metric(total_label, f"¥{day_total:,.0f}")
+
+            if budget_period == "weekly" and budget_amount > 0 and is_today:
+                week_start, week_end = week_bounds(today_date)
+                week_total = week_total_so_far(today_date)
+                diff = week_total - budget_amount
+                diff_str = f"-¥{abs(diff):,.0f}" if diff < 0 else f"¥{diff:,.0f}"
+                st.metric(
+                    f"This week's total ({week_start.strftime('%d-%m')}–{week_end.strftime('%d-%m')})",
+                    f"¥{week_total:,.0f}",
+                    delta=f"{diff_str} vs ¥{budget_amount:,.0f} allowance",
+                    delta_color="inverse",
+                )
+                st.progress(min(week_total / budget_amount, 1.0))
 
     with st.expander("This month", expanded=True):
         summary = month_summary(today_folder)

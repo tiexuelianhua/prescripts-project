@@ -43,18 +43,30 @@ if is_first_load:
 def render_meal_receipts_tile() -> None:
     st.subheader("🧾 Meal Receipts")
     data = meal_receipts_today_summary()
-    if data["daily_budget"] > 0:
-        diff = data["total_yen"] - data["daily_budget"]
-        # st.metric only reads a leading "-" to decide the arrow/color for a
-        # string delta, so the sign has to be the very first character.
+    # st.metric only reads a leading "-" to decide the arrow/color for a
+    # string delta, so the sign has to be the very first character.
+    if data["budget_period"] == "weekly" and data["budget_amount"] > 0:
+        week_total = data["week_total_yen"]
+        diff = week_total - data["budget_amount"]
+        diff_str = f"-¥{abs(diff):,.0f}" if diff < 0 else f"¥{diff:,.0f}"
+        st.metric(
+            "This week's total",
+            f"¥{week_total:,.0f}",
+            delta=f"{diff_str} vs ¥{data['budget_amount']:,.0f} allowance",
+            delta_color="inverse",
+        )
+        st.progress(min(week_total / data["budget_amount"], 1.0))
+        st.caption(f"Today so far: ¥{data['total_yen']:,.0f}")
+    elif data["budget_amount"] > 0:
+        diff = data["total_yen"] - data["budget_amount"]
         diff_str = f"-¥{abs(diff):,.0f}" if diff < 0 else f"¥{diff:,.0f}"
         st.metric(
             "Today's total",
             f"¥{data['total_yen']:,.0f}",
-            delta=f"{diff_str} vs ¥{data['daily_budget']:,.0f} budget",
+            delta=f"{diff_str} vs ¥{data['budget_amount']:,.0f} budget",
             delta_color="inverse",
         )
-        st.progress(min(data["total_yen"] / data["daily_budget"], 1.0))
+        st.progress(min(data["total_yen"] / data["budget_amount"], 1.0))
     else:
         st.metric("Today's total", f"¥{data['total_yen']:,.0f}")
     st.page_link("mealReceiptsApp_cV.py", label="Open Meal Receipts", icon="🧾")

@@ -6,12 +6,13 @@
 # mealReceiptsApp_cV.py's own UI as a side effect of the import.
 import json
 import subprocess
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import pandas as pd
 import streamlit as st
 
-from prescripts_common import SCRIPTS_DIR
+from prescripts_common import JST, SCRIPTS_DIR
 
 MEAL_RECEIPTS_DIR = SCRIPTS_DIR.parent / "Meal Receipts"
 SETTINGS_PATH = MEAL_RECEIPTS_DIR / "settings.json"
@@ -159,14 +160,53 @@ def last_entry_for_item(item: str) -> pd.Series | None:
     return matches.sort_values("timestamp").iloc[-1]
 
 
+def budget_settings(settings: dict) -> tuple[int, str]:
+    # "daily_budget" is the pre-2026-09-21 key -- a flat number, always
+    # treated as a daily figure. Read as a fallback (never written back
+    # under its own name) so an existing settings.json keeps working
+    # untouched until the sidebar's budget control is actually touched
+    # again, at which point it's resaved under the new keys.
+    amount = settings.get("budget_amount", settings.get("daily_budget", 0))
+    period = settings.get("budget_period", "daily")
+    return amount, period
+
+
+def week_bounds(reference_date: date) -> tuple[date, date]:
+    # Monday-start (ISO convention) week containing reference_date.
+    week_start = reference_date - timedelta(days=reference_date.weekday())
+    return week_start, week_start + timedelta(days=6)
+
+
+def week_total_so_far(reference_date: date) -> int:
+    # Sum of cost_yen from the Monday of reference_date's week through
+    # reference_date itself (not through the week's end -- there's usually
+    # no point reading ahead into days that haven't happened yet).
+    week_start, _ = week_bounds(reference_date)
+    total = 0
+    day = week_start
+    while day <= reference_date:
+        entries = load_entries(day_folder_for(day) / "receipts.csv")
+        if not entries.empty:
+            total += int(entries["cost_yen"].sum())
+        day += timedelta(days=1)
+    return total
+
+
 def today_summary() -> dict:
     # For pages other than this one (e.g. Overview) that just want today's
     # numbers without pulling in CSV/settings plumbing themselves.
     today_folder = get_today_folder()
     entries = load_entries(today_folder / "receipts.csv")
     settings = load_settings()
-    return {
+    budget_amount, budget_period = budget_settings(settings)
+    result = {
         "total_yen": int(entries["cost_yen"].sum()) if not entries.empty else 0,
-        "daily_budget": settings.get("daily_budget", 0),
+        "budget_amount": budget_amount,
+        "budget_period": budget_period,
         "has_entries": not entries.empty,
     }
+    if budget_period == "weekly" and budget_amount > 0:
+        today_date = datetime.now(JST).date()
+        result["week_total_yen"] = week_total_so_far(today_date)
+        result["week_start"], result["week_end"] = week_bounds(today_date)
+    return result
