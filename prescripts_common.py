@@ -20,6 +20,12 @@ ACCENT_COLOR = "#96c4ec"  # buttons/links/input borders, measured from style.css
 # means adding one entry here rather than touching multiple files.
 PAGES = [
     {
+        "title": "Overview",
+        "icon": "🎛️",
+        "path": "overview_page.py",
+        "keywords": ["overview", "summary", "today", "control center", "dashboard"],
+    },
+    {
         "title": "Meal Receipts",
         "icon": "🧾",
         "path": "mealReceiptsApp_cV.py",
