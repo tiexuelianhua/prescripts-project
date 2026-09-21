@@ -21,7 +21,9 @@ import urllib.request
 
 import streamlit as st
 
+from play_history import record_observation
 from prescripts_common import SCRIPTS_DIR
+from spotify_log import SLOW_THRESHOLD_S, log_event
 
 SPOTIFY_DIR = SCRIPTS_DIR.parent / "Spotify"
 SETTINGS_PATH = SPOTIFY_DIR / "settings.json"
@@ -153,20 +155,36 @@ def _api_request(method: str, path: str, params: dict | None = None, body: dict 
     request.add_header("Authorization", f"Bearer {token}")
     if data is not None:
         request.add_header("Content-Type", "application/json")
-    with urllib.request.urlopen(request, timeout=10) as response:
-        # A 204 (no active playback session, or a control action that
-        # succeeded with nothing to return) is meant to have an empty body,
-        # but in practice control endpoints (observed: pause) can come back
-        # with whitespace or a non-JSON body even on success. So only parse
-        # when the response says it's JSON, and treat an unparseable body as
-        # "nothing to return" rather than failing an action that worked.
-        raw = response.read().strip()
-        if not raw or "json" not in response.headers.get("Content-Type", ""):
-            return None
-        try:
-            return json.loads(raw)
-        except json.JSONDecodeError:
-            return None
+    started = time.time()
+    try:
+        with urllib.request.urlopen(request, timeout=10) as response:
+            # A 204 (no active playback session, or a control action that
+            # succeeded with nothing to return) is meant to have an empty
+            # body, but in practice control endpoints (observed: pause) can
+            # come back with whitespace or a non-JSON body even on success.
+            # So only parse when the response says it's JSON, and treat an
+            # unparseable body as "nothing to return" rather than failing an
+            # action that worked.
+            raw = response.read().strip()
+            result = None
+            if raw and "json" in response.headers.get("Content-Type", ""):
+                try:
+                    result = json.loads(raw)
+                except json.JSONDecodeError:
+                    result = None
+    except urllib.error.HTTPError as error:
+        log_event(f"Spotify API error: {method} {path} -> HTTP {error.code} after {time.time() - started:.2f}s")
+        raise
+    except (urllib.error.URLError, TimeoutError) as error:
+        log_event(
+            f"Spotify API unreachable: {method} {path} ({type(error).__name__}) "
+            f"after {time.time() - started:.2f}s"
+        )
+        raise
+    elapsed = time.time() - started
+    if elapsed > SLOW_THRESHOLD_S:
+        log_event(f"slow: Spotify API {method} {path} took {elapsed:.2f}s")
+    return result
 
 
 @st.cache_data(ttl=5)
@@ -178,6 +196,9 @@ def current_playback() -> dict | None:
         # progress_ms -- live_progress_ms() below needs to know how old the
         # reported position is, and a cache hit shouldn't reset that clock.
         playback["fetched_at"] = time.time()
+        # Runs once per real fetch (this function is cached), so plays are
+        # captured whichever page is open. See play_history.py.
+        record_observation(playback)
     return playback
 
 
