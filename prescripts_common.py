@@ -69,6 +69,35 @@ def inject_button_style() -> None:
     )
 
 
+def inject_toast_style() -> None:
+    # st.toast() pops in and vanishes abruptly with no transition of its own
+    # (verified in Streamlit's bundled frontend: [data-testid="stToast"]
+    # carries no animation/transition). Faked here with one continuous
+    # keyframe animation spanning its whole visible lifetime -- reveal fast,
+    # hold, then fade out right before Streamlit unmounts it -- since a pure
+    # CSS injection can't hook into the moment a React-managed node actually
+    # gets removed. The 4s duration matches "short", the default (and only
+    # one used anywhere in this app); a toast ever passed duration="long" or
+    # an explicit number of seconds would need a separate animation timed to
+    # match, or its fade-out tail won't line up with the real dismissal.
+    st.markdown(
+        """
+        <style>
+        @keyframes toastFade {
+            0% { opacity: 0; transform: translateY(8px); }
+            8% { opacity: 1; transform: translateY(0); }
+            92% { opacity: 1; transform: translateY(0); }
+            100% { opacity: 0; transform: translateY(8px); }
+        }
+        [data-testid="stToast"] {
+            animation: toastFade 4s ease-in-out forwards;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def typewriter(
     text: str,
     speed_ms: int = 30,

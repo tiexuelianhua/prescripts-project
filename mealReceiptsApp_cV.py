@@ -147,14 +147,16 @@ def known_values(column: str, exclude: set[str] | None = None) -> list[str]:
     return sorted(values)
 
 
-def last_price_for_item(item: str) -> int | None:
+def last_entry_for_item(item: str) -> pd.Series | None:
     # Timestamps are "YYYY-MM-DD HH:MM:SS" strings, which sort correctly as
     # plain text -- no need to parse them as datetimes to find the latest.
+    # Returns the whole row (not just cost) so the caller can also suggest
+    # the store it was last bought from.
     matches = all_entries()
     matches = matches[matches["item"] == item]
     if matches.empty:
         return None
-    return int(matches.sort_values("timestamp").iloc[-1]["cost_yen"])
+    return matches.sort_values("timestamp").iloc[-1]
 
 
 TEXT_COLOR, ACCENT_COLOR = theme_colors()
@@ -306,13 +308,22 @@ with header_title:
 
 today_folder = get_today_folder()
 today_date = datetime.now(JST).date()
+logging_text = f"[Logging to: {today_folder}]"
 
-# Reserved here (top of the page) but not animated until after everything
-# else below is built -- Streamlit streams each st.* call to the browser as
-# it runs, so the form/table/chart all arrive immediately, and only this one
-# element visibly finishes typing a moment later on each interaction,
-# instead of the whole page waiting on it first.
-logging_placeholder = st.empty()
+# Only the very first load of a session gets the typewriter reveal (a nice
+# one-time intro), and it's deferred to the bottom of the script -- reserved
+# here at the top but not animated until after everything else below is
+# built, so the form/table/chart all stream in immediately rather than
+# waiting on it. Every later rerun (typing in a field, adding an entry,
+# anything) instead paints the finished line right here, immediately: that
+# used to be deferred to the bottom too, which left this line sitting
+# visibly blank while the rest of the page rendered below it -- showing up
+# as the line disappearing and reappearing on every interaction.
+is_first_load = "_typewriter_intro_played" not in st.session_state
+if is_first_load:
+    logging_placeholder = st.empty()
+else:
+    st.markdown(f":primary[{logging_text}]")
 
 with st.container(key="main_body"):
     # Streamlit raises StreamlitWidgetAlreadyInstantiatedError if you set
@@ -323,7 +334,7 @@ with st.container(key="main_body"):
     # any of these widgets exist yet in that run.
     if st.session_state.get("_reset_add_entry_form"):
         st.session_state["add_entry_item"] = None
-        st.session_state["_last_priced_item"] = None
+        st.session_state["_last_autofilled_item"] = None
         st.session_state["add_entry_day"] = today_date
         st.session_state["add_entry_store"] = None
         st.session_state["add_entry_cost"] = 0
@@ -340,9 +351,9 @@ with st.container(key="main_body"):
     # Day is positioned before Item here purely for a more natural reading
     # order ("when" before "what") -- it doesn't participate in the price
     # suggestion below, so its position relative to Item is otherwise free.
-    # The one real ordering constraint is Item before Cost: the suggestion
-    # writes to Cost's session_state in between, and Cost has to be created
-    # after that write to pick it up within the same run.
+    # The one real ordering constraint is Item before Store/Cost: the
+    # suggestion writes to their session_state in between, and both have to
+    # be created after that write to pick it up within the same run.
     entry_date = st.date_input(
         "Day", value=today_date, max_value=today_date, key="add_entry_day"
     )
@@ -351,11 +362,14 @@ with st.container(key="main_body"):
         accept_new_options=True, placeholder="Type or pick an item",
         key="add_entry_item",
     )
-    if item and st.session_state.get("_last_priced_item") != item:
-        last_price = last_price_for_item(item)
-        if last_price is not None:
-            st.session_state["add_entry_cost"] = last_price
-        st.session_state["_last_priced_item"] = item
+    if item and st.session_state.get("_last_autofilled_item") != item:
+        last_entry = last_entry_for_item(item)
+        if last_entry is not None:
+            st.session_state["add_entry_cost"] = int(last_entry["cost_yen"])
+            # Just a suggestion -- still an ordinary editable selectbox, so
+            # it can be confirmed or changed before submitting.
+            st.session_state["add_entry_store"] = str(last_entry["store"])
+        st.session_state["_last_autofilled_item"] = item
 
     col1, col2 = st.columns(2)
     store = col1.selectbox(
@@ -493,8 +507,12 @@ with st.container(key="main_body"):
         "[Galmuri](https://github.com/quiple/galmuri) by quiple, OFL-1.1 licensed."
     )
 
-typewriter(
-    f"[Logging to: {today_folder}]",
-    markdown_wrap=":primary[{}]",
-    placeholder=logging_placeholder,
-)
+# Streamlit reruns this whole script on every widget interaction (picking an
+# item, typing a store, nudging the cost), and typewriter() blocks for
+# speed_ms per character -- animating this line on every one of those runs
+# turned every field edit into a multi-second stall. The top of the script
+# already handled every run except this one by painting the line directly
+# in place; this is only reached on the first load of a session.
+if is_first_load:
+    typewriter(logging_text, markdown_wrap=":primary[{}]", placeholder=logging_placeholder)
+    st.session_state["_typewriter_intro_played"] = True
