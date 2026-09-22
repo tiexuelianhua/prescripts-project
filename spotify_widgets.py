@@ -18,6 +18,7 @@ from spotify_data import (
     previous_track,
     seek,
 )
+from spotify_log import log_event
 
 
 def run_control(action, *, success=None, rerun=True, rerun_scope="app", **kwargs) -> bool:
@@ -86,9 +87,32 @@ def _to_ms(value: datetime.time) -> int:
 # lag between the server moving the slider and the browser having caught up.
 _RECENT_POSITION_WINDOW_S = 12
 
+# The fragment ticks about once a second (see spotify_page.py's now_playing);
+# a gap much wider than that means it didn't run for a while -- most likely
+# the tab was backgrounded (switched away to another app), since Streamlit
+# pauses a fragment's auto-rerun while its page isn't the active one (see
+# spotify_page.py's "Leaving the page stops the timer" note). Coming back
+# from a gap like that, the browser's next reported slider value can be an
+# echo of wherever it was frozen before the gap -- the same "stale echo read
+# as a real seek" failure _on_seek already guards against below, just stale
+# by longer than _RECENT_POSITION_WINDOW_S covers. See _on_seek's resume
+# guard for how this is used.
+_RESUME_GAP_THRESHOLD_S = 2.5
+
 
 def _on_seek(key: str) -> None:
     position_ms = _to_ms(st.session_state[key])
+    now = time.time()
+
+    # A gap wider than a normal tick was just detected in render_seek_slider
+    # (below), which re-armed this guard for one more window's worth of time.
+    # Ignore outright, regardless of what position it claims: right after a
+    # resume the report can't be trusted the way an in-page echo can, since
+    # we don't know how long the browser was actually frozen for.
+    if now < st.session_state.get(f"{key}_resume_guard_until", 0):
+        log_event(f"seek ignored (post-resume echo): {key} reported {position_ms // 1000}s")
+        return
+
     # This fires whenever the value the browser reports differs from the one
     # the server last set -- and the server moves the slider every second, so
     # a click on ANY other widget can report a position from a few ticks ago
@@ -100,7 +124,6 @@ def _on_seek(key: str) -> None:
     # A stale echo is always a second the slider was recently *placed* at;
     # a real drag to somewhere new almost never is. (Cost: a deliberate
     # backwards seek of less than the window is ignored -- forwards is fine.)
-    now = time.time()
     recent_seconds = {
         second for second, placed_at in st.session_state.get(f"{key}_placed", [])
         if now - placed_at <= _RECENT_POSITION_WINDOW_S
@@ -109,6 +132,7 @@ def _on_seek(key: str) -> None:
     if ignored:
         return
     if run_control(seek, rerun=False, position_ms=position_ms):
+        log_event(f"seek: {key} -> {position_ms // 1000}s")
         st.session_state[f"{key}_seeked"] = (position_ms, time.time())
 
 
@@ -184,6 +208,16 @@ def render_seek_slider(playback: dict, key: str) -> None:
     # timer move it -- the widget's own state would otherwise win.
     placed_ms = min(_displayed_progress_ms(playback, key), duration_ms)
     now = time.time()
+
+    # Detect a gap since this slider's last tick (see _RESUME_GAP_THRESHOLD_S)
+    # and arm _on_seek's resume guard if so, before anything below prunes or
+    # extends the "placed" history -- the guard is what actually matters once
+    # a gap like that has happened, not what's left in that history.
+    last_render_at = st.session_state.get(f"{key}_last_render_at")
+    if last_render_at is not None and now - last_render_at > _RESUME_GAP_THRESHOLD_S:
+        st.session_state[f"{key}_resume_guard_until"] = now + _RECENT_POSITION_WINDOW_S
+    st.session_state[f"{key}_last_render_at"] = now
+
     st.session_state[f"{key}_placed"] = [
         (second, placed_at) for second, placed_at in st.session_state.get(f"{key}_placed", [])
         if now - placed_at <= _RECENT_POSITION_WINDOW_S
