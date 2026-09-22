@@ -23,6 +23,54 @@ PORT = 8501
 URL = f"http://127.0.0.1:{PORT}"
 # Not committed (see .gitignore) -- purely local runtime state.
 PID_FILE = SCRIPTS_DIR / ".desktop_app.pid"
+# Sibling of the repo, like Spotify/Weather/Meal Receipts's own data --
+# generated from Images/The_Index_Logo.webp (padded to square; webview.start's
+# icon= wants a real .ico on Windows, not the webp app.py uses for the
+# browser-tab favicon).
+ICON_PATH = SCRIPTS_DIR.parent / "Images" / "The_Index_Logo.ico"
+
+# Toggled with F11, like any browser/app -- not on by default at launch,
+# since that's a bigger behavior change than just "make it possible".
+_FULLSCREEN_TOGGLE_JS = """
+document.addEventListener("keydown", (event) => {
+    if (event.key === "F11") {
+        event.preventDefault();
+        window.pywebview.api.toggle_fullscreen();
+    }
+});
+"""
+
+
+class _Api:
+    # pywebview only picks up js_api if it's passed to create_window() itself
+    # (stored as a private attribute there) -- window doesn't exist yet at
+    # that point, so it's wired in afterwards instead of at construction.
+    #
+    # Must stay named with a leading underscore: pywebview exposes every
+    # *public* attribute of a js_api object to JS, not just methods, and
+    # confirmed live that a public `window` attribute here (holding the
+    # whole Window object) hangs the window before it ever finishes loading
+    # -- no exception, just silence forever after "_pywebviewready event
+    # fired". Isolated with a minimal repro outside the app before touching
+    # this file again: renaming to `_window` alone was the entire fix.
+    _window: "webview.Window | None" = None
+
+    def toggle_fullscreen(self) -> None:
+        self._window.toggle_fullscreen()
+
+
+def _inject_fullscreen_toggle(window: "webview.Window") -> None:
+    # Runs in the dedicated background thread webview.start(func=...) spins
+    # up once the GUI loop is ready -- deliberately not wired via
+    # `window.events.loaded += ...` instead: that fires the callback
+    # synchronously on the GUI thread itself, and run_js() blocks waiting on
+    # another of that same window's lifecycle events -- calling it from
+    # there deadlocked the whole window (confirmed live: "(Not Responding)"
+    # that never recovered). A plain wait() here, off the GUI thread, is the
+    # pattern pywebview's own docs use for anything that needs to touch the
+    # window after it's up.
+    window.events.loaded.wait()
+    window.run_js(_FULLSCREEN_TOGGLE_JS)
 
 
 def _kill_previous_instance() -> None:
@@ -78,11 +126,17 @@ def main() -> None:
     )
     try:
         _wait_for_server()
-        webview.create_window("The Prescripts", URL, width=1200, height=850, min_size=(800, 600))
+        api = _Api()
+        window = webview.create_window(
+            "The Prescripts", URL, width=1200, height=850, min_size=(800, 600), js_api=api
+        )
+        api._window = window
         # Blocks until the window is closed -- that's the signal to tear the
         # server down too, in the `finally` below, rather than leaving it
         # running invisibly until the next launch's port-based cleanup.
-        webview.start()
+        webview.start(
+            _inject_fullscreen_toggle, window, icon=str(ICON_PATH) if ICON_PATH.exists() else None
+        )
     finally:
         server.terminate()
         try:

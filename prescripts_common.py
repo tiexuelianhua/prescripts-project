@@ -116,6 +116,29 @@ def inject_toast_style() -> None:
     )
 
 
+def inject_input_style() -> None:
+    # Streamlit positions the "Press Enter to apply" hint under a text/number
+    # input (data-testid="InputInstructions") absolutely, anchored to the
+    # bottom of the *un*edited input's box -- assuming a normal font's line
+    # height. Galmuri14 (this app's pixel font, see the module docstring)
+    # renders noticeably taller, so the typed value's own glyphs reach down
+    # into that same space and the hint overlaps it instead of sitting
+    # below it (worst on narrow fields, like the sidebar's budget amount,
+    # confirmed live via headless Chrome). Nudged below the input's border
+    # instead -- verified this leaves a normal-looking gap above whatever
+    # comes next, not just fixing the overlap by creating a new one.
+    st.markdown(
+        """
+        <style>
+        [data-testid="InputInstructions"] {
+            bottom: -20px !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def inject_body_fade_in(container_key: str) -> None:
     # Fades in every element inside st.container(key=container_key) --
     # scoped there (not the whole page) so a page's title isn't

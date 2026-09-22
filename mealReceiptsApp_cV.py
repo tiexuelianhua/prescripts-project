@@ -276,16 +276,28 @@ with st.container(key="main_body"):
             target_csv = target_folder / "receipts.csv"
             timestamp = datetime.combine(entry_date, datetime.now(JST).time())
             append_entry(target_csv, timestamp.strftime("%Y-%m-%d %H:%M:%S"), store, item, cost_yen)
-            typewriter(f"[Logged {item} at {store} for ¥{cost_yen:,.0f}]")
             # No st.form here, so nothing clears itself automatically -- but
             # the actual field reset can't happen right here (Streamlit
             # forbids changing a widget's session_state after that widget's
-            # already been instantiated in this run). This flag is picked up
-            # at the top of the block on whatever run comes next instead.
-            # Not forcing an immediate st.rerun() to apply it sooner: that
-            # would interrupt this run before the "[Logged ...]" message
-            # above ever painted, wiping it before it's seen.
+            # already been instantiated in this run). Both this flag and the
+            # confirmation message below are instead picked up on the very
+            # next run, forced immediately (st.rerun()) rather than waiting
+            # on whatever the user happens to interact with next -- fields
+            # should read as cleared the moment "Add entry" is clicked, not
+            # one click later. Stashing the message for that next run (rather
+            # than calling typewriter() right here) is what makes that safe:
+            # this run ends at the rerun below without ever painting it, so
+            # showing it here would just mean it's never seen at all.
             st.session_state["_reset_add_entry_form"] = True
+            st.session_state["_add_entry_confirmation"] = f"[Logged {item} at {store} for ¥{cost_yen:,.0f}]"
+            st.rerun()
+    else:
+        # The message from a successful add on the run just before this one
+        # (forced via that st.rerun() above) -- popped so it only ever
+        # displays once, not on every later rerun too.
+        pending_confirmation = st.session_state.pop("_add_entry_confirmation", None)
+        if pending_confirmation:
+            typewriter(pending_confirmation)
 
     # A day-folder's receipts.csv can exist but be empty -- e.g. right after
     # relocate_edited_entries() above writes an edited-out day back with zero
