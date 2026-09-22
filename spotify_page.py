@@ -22,6 +22,7 @@ from spotify_data import (
     exchange_code_for_tokens,
     is_configured,
     is_connected,
+    is_read_only,
     is_saved,
     live_progress_ms,
     play_track,
@@ -29,6 +30,7 @@ from spotify_data import (
     recently_played,
     save_item,
     saved_flags,
+    set_read_only,
     set_shuffle,
     set_volume,
     unsave_item,
@@ -36,6 +38,7 @@ from spotify_data import (
 from spotify_log import log_event, log_slow
 from spotify_widgets import (
     inject_seek_slider_styles,
+    page_is_locked,
     render_seek_slider,
     render_transport_controls,
     run_control,
@@ -96,6 +99,19 @@ with st.container(key="main_body"):
     else:
         with st.sidebar:
             st.header("Settings")
+            read_only = st.toggle(
+                "Read-only mode",
+                value=is_read_only(),
+                help=(
+                    "Turns every control here and on the Overview tile into a plain display -- "
+                    "no seek slider, buttons, volume, or shuffle -- so nothing here can ever send "
+                    "a command to your Spotify playback. Useful if you're going to leave this open "
+                    "and unattended for a while. Persists across restarts."
+                ),
+            )
+            if read_only != is_read_only():
+                set_read_only(read_only)
+                st.rerun()
             if st.button("Disconnect Spotify"):
                 disconnect()
                 st.rerun()
@@ -139,6 +155,10 @@ with st.container(key="main_body"):
             if not playback or not playback.get("item"):
                 st.caption("Nothing playing right now -- open Spotify on a device (phone, desktop app, etc.) first.")
                 return
+
+            # Once per fragment run, before anything below that could act on
+            # playback -- see page_is_locked for what this covers and why.
+            locked = page_is_locked("spotify_page")
 
             track = describe_item(playback["item"])
             item_uri = playback["item"].get("uri")
@@ -188,17 +208,22 @@ with st.container(key="main_body"):
                     st.caption(track["artists"])
                 if like_checked and item_uri and saved is not None:
                     with like_column:
-                        if saved:
+                        if locked:
+                            st.caption("💚" if saved else "🤍")
+                        elif saved:
                             if st.button("💚", key="spotify_page_unlike", help="Liked -- click to remove"):
                                 run_control(unsave_item, uri=item_uri)
                         else:
                             if st.button("🤍", key="spotify_page_like", help="Add to Liked Songs"):
                                 run_control(save_item, uri=item_uri)
                 # Real elapsed/total time (00:00 .. track length) rather than
-                # a bare percentage bar, and draggable to seek.
-                render_seek_slider(playback, "spotify_page_seek")
+                # a bare percentage bar, and draggable to seek (unless locked).
+                render_seek_slider(playback, "spotify_page_seek", locked=locked)
 
-            render_transport_controls(playback, "spotify_page")
+            if locked:
+                st.caption("🔒 Read-only right now -- controls are hidden (see the sidebar).")
+
+            render_transport_controls(playback, "spotify_page", locked=locked)
 
             device = playback.get("device") or {}
             current_volume = device.get("volume_percent")
@@ -208,13 +233,19 @@ with st.container(key="main_body"):
             # rerun (any button click anywhere on the page), so the control
             # just doesn't render rather than guessing a default to push.
             if current_volume is not None:
-                volume = st.slider("Volume", min_value=0, max_value=100, value=current_volume)
-                if volume != current_volume:
-                    run_control(set_volume, percent=volume)
+                if locked:
+                    st.caption(f"🔊 Volume: {current_volume}%")
+                else:
+                    volume = st.slider("Volume", min_value=0, max_value=100, value=current_volume)
+                    if volume != current_volume:
+                        run_control(set_volume, percent=volume)
 
-            shuffle_on = st.toggle("Shuffle", value=bool(playback.get("shuffle_state")))
-            if shuffle_on != bool(playback.get("shuffle_state")):
-                run_control(set_shuffle, state=shuffle_on)
+            if locked:
+                st.caption(f"🔀 Shuffle: {'On' if playback.get('shuffle_state') else 'Off'}")
+            else:
+                shuffle_on = st.toggle("Shuffle", value=bool(playback.get("shuffle_state")))
+                if shuffle_on != bool(playback.get("shuffle_state")):
+                    run_control(set_shuffle, state=shuffle_on)
 
             if saved is None:
                 st.caption(
@@ -241,6 +272,10 @@ with st.container(key="main_body"):
             if not queue_items:
                 st.caption("Nothing queued up.")
                 return
+            # Own tick cadence (run_every=3), so its own page_is_locked()
+            # call -- shares "spotify_page" with now_playing, since a
+            # background-tab gap affects every fragment on this page at once.
+            locked = page_is_locked("spotify_page")
             shown = queue_items[:15]
             uris = tuple(queued["uri"] for queued in shown)
             try:
@@ -250,7 +285,7 @@ with st.container(key="main_body"):
             # None = token lacks the library scopes (see now_playing's
             # reconnect note); a length mismatch = Spotify returned
             # something unexpected. Either way, skip the buttons.
-            can_like = flags is not None and len(flags) == len(shown)
+            can_like = not locked and flags is not None and len(flags) == len(shown)
 
             with st.container(height=QUEUE_BOX_HEIGHT):
                 for position, queued in enumerate(shown, start=1):
@@ -391,6 +426,9 @@ with st.container(key="main_body"):
                     elif not recent_items:
                         st.caption("No recent listening history yet.")
                     else:
+                        # Own tick cadence (run_every=5), so its own
+                        # page_is_locked() call -- see queue_view's note.
+                        locked = page_is_locked("spotify_page")
                         # The same song can appear more than once in recent
                         # history -- ask about each uri once. Same fallbacks as
                         # the queue: no buttons if Spotify refuses (403 = needs
@@ -400,7 +438,7 @@ with st.container(key="main_body"):
                             recent_flags = saved_flags(unique_uris)
                         except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError):
                             recent_flags = None
-                        can_like_recent = recent_flags is not None and len(recent_flags) == len(unique_uris)
+                        can_like_recent = not locked and recent_flags is not None and len(recent_flags) == len(unique_uris)
                         recent_saved = dict(zip(unique_uris, recent_flags)) if can_like_recent else {}
 
                         for index, played in enumerate(recent_items):
@@ -419,12 +457,13 @@ with st.container(key="main_body"):
                                 if played.get("skipped_at"):
                                     label += f" *(skipped at {played['skipped_at']})*"
                                 st.write(label)
-                            with row_play:
-                                if st.button("▶", key=f"recent_play_{index}_{track['uri']}", help="Play again"):
-                                    run_control(play_track, uri=track["uri"])
-                            with row_queue:
-                                if st.button("＋", key=f"recent_queue_{index}_{track['uri']}", help="Add to queue"):
-                                    run_control(add_to_queue, success=f"Queued {track['name']}", uri=track["uri"])
+                            if not locked:
+                                with row_play:
+                                    if st.button("▶", key=f"recent_play_{index}_{track['uri']}", help="Play again"):
+                                        run_control(play_track, uri=track["uri"])
+                                with row_queue:
+                                    if st.button("＋", key=f"recent_queue_{index}_{track['uri']}", help="Add to queue"):
+                                        run_control(add_to_queue, success=f"Queued {track['name']}", uri=track["uri"])
                             if can_like_recent:
                                 with row_like:
                                     if recent_saved[track["uri"]]:

@@ -10,6 +10,7 @@ import urllib.error
 import streamlit as st
 
 from spotify_data import (
+    is_read_only,
     live_progress_ms,
     next_track,
     no_active_device,
@@ -37,6 +38,15 @@ def run_control(action, *, success=None, rerun=True, rerun_scope="app", **kwargs
     # e.g. a track skip with no button click behind it in the log points at
     # a spurious call here rather than something on Spotify's own side.
     call = f"{action.__name__}({', '.join(f'{k}={v}' for k, v in kwargs.items())})"
+    # Belt-and-suspenders backstop for Read-only mode: every call site that
+    # can act on playback also checks page_is_locked() before even rendering
+    # itself as clickable (so this shouldn't normally be reachable while
+    # locked), but this catches it regardless of whether a call site forgot,
+    # rather than depending on every one of them getting it right.
+    if is_read_only():
+        log_event(f"control blocked (read-only mode): {call}")
+        st.toast("Read-only mode is on -- turn it off on the Spotify page to control playback.", icon="🔒")
+        return False
     try:
         action(**kwargs)
     except urllib.error.HTTPError as error:
@@ -59,7 +69,44 @@ def run_control(action, *, success=None, rerun=True, rerun_scope="app", **kwargs
     return True
 
 
-def render_transport_controls(playback: dict, key_prefix: str, icons_only: bool = False) -> None:
+def page_is_locked(key_prefix: str) -> bool:
+    # Call once per fragment run, before rendering any of that fragment's
+    # controls -- render_transport_controls/render_seek_slider/etc. take the
+    # result rather than each computing their own, so a page's worth of
+    # controls agree on whether this particular render is trustworthy.
+    #
+    # Two ways in: the user's own Read-only mode toggle (persisted, not just
+    # session state -- survives a restart, which is exactly the situation it
+    # exists for), or the same auto-detected "this render followed a gap
+    # since the last confirmed tick" signal _on_seek uses for the seek
+    # slider specifically (see its docstring for the full reasoning) --
+    # generalized here to cover every other control too (Play/Pause/Next/
+    # Previous, Like, volume, shuffle). None of those have their own proven
+    # vulnerability the way the slider's persisted-value-plus-callback design
+    # did, but they can all act on the same live Spotify stream, so the same
+    # "don't trust a render that just woke up from a gap" caution applies --
+    # simplest to enforce by not rendering them as interactive at all for a
+    # short cooldown after such a gap, same as the slider does.
+    if is_read_only():
+        return True
+    now = time.time()
+    last_tick_at = st.session_state.get(f"{key_prefix}_last_tick_at")
+    gap = now - last_tick_at if last_tick_at is not None else None
+    st.session_state[f"{key_prefix}_last_tick_at"] = now
+    locked_until = st.session_state.get(f"{key_prefix}_locked_until", 0)
+    if gap is not None and gap > _RESUME_GAP_THRESHOLD_S:
+        locked_until = max(locked_until, now + _RECENT_POSITION_WINDOW_S)
+        st.session_state[f"{key_prefix}_locked_until"] = locked_until
+    return now < locked_until
+
+
+def render_transport_controls(
+    playback: dict, key_prefix: str, icons_only: bool = False, locked: bool = False
+) -> None:
+    if locked:
+        st.caption("▶ Playing" if playback.get("is_playing") else "⏸ Paused")
+        return
+
     # icons_only drops the text labels (tooltips keep the names) for narrow
     # spots like the Overview tile, where "Previous" got cut off as "Prev...".
     def label(icon: str, text: str) -> str:
@@ -233,13 +280,28 @@ def inject_seek_slider_styles(*keys: str) -> None:
     )
 
 
-def render_seek_slider(playback: dict, key: str) -> None:
+def _format_elapsed(ms: float, duration_ms: float) -> str:
+    fmt = "%H:%M:%S" if duration_ms >= 3_600_000 else "%M:%S"
+    return _to_time(ms).strftime(fmt)
+
+
+def render_seek_slider(playback: dict, key: str, locked: bool = False) -> None:
     duration_ms = (playback.get("item") or {}).get("duration_ms") or 0
     if not duration_ms:
         return
     # Written before the widget exists on this run, which is what lets the
     # timer move it -- the widget's own state would otherwise win.
     placed_ms = min(_displayed_progress_ms(playback, key), duration_ms)
+
+    if locked:
+        # A plain progress bar and caption, not st.slider -- while locked
+        # there's no interactive widget here at all, not just a disabled-
+        # looking one, so there's nothing left for a stale echo to even be
+        # read against (see page_is_locked).
+        st.progress(placed_ms / duration_ms)
+        st.caption(f"{_format_elapsed(placed_ms, duration_ms)} / {_format_elapsed(duration_ms, duration_ms)}")
+        return
+
     now = time.time()
     # The slider's own "last confirmed tick" clock -- _on_seek reads this
     # directly to catch a stale echo the moment it arrives, rather than

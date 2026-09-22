@@ -75,6 +75,19 @@ def is_connected() -> bool:
     return bool(load_settings().get("refresh_token"))
 
 
+# Persisted (not just session state) on purpose: this is meant to survive an
+# app restart/reload, which is exactly the situation it exists to guard --
+# see spotify_widgets.py's read-only rendering.
+def is_read_only() -> bool:
+    return bool(load_settings().get("read_only"))
+
+
+def set_read_only(value: bool) -> None:
+    settings = load_settings()
+    settings["read_only"] = value
+    save_settings(settings)
+
+
 def authorize_url() -> str:
     settings = load_settings()
     params = {

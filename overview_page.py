@@ -22,7 +22,7 @@ from spotify_data import (
     is_connected as spotify_is_connected,
 )
 from spotify_log import log_event, log_slow
-from spotify_widgets import inject_seek_slider_styles, render_seek_slider, render_transport_controls
+from spotify_widgets import inject_seek_slider_styles, page_is_locked, render_seek_slider, render_transport_controls
 from weather_data import (
     CATEGORY_EMOJI,
     format_condition,
@@ -148,6 +148,10 @@ def render_spotify_player() -> None:
         st.caption("Nothing playing right now.")
         return
 
+    # Read-only mode is set on the Spotify page but shared (persisted in
+    # Spotify/settings.json) -- flipping it there also locks this tile.
+    locked = page_is_locked("overview_spotify")
+
     track = spotify_describe_item(playback["item"])
     track_columns = st.columns([1, 3])
     with track_columns[0]:
@@ -156,8 +160,8 @@ def render_spotify_player() -> None:
     with track_columns[1]:
         st.markdown(f"**{track['name']}**")
         st.caption(track["artists"])
-    render_seek_slider(playback, "overview_spotify_seek")
-    render_transport_controls(playback, "overview_spotify", icons_only=True)
+    render_seek_slider(playback, "overview_spotify_seek", locked=locked)
+    render_transport_controls(playback, "overview_spotify", icons_only=True, locked=locked)
 
 
 def render_spotify_tile() -> None:
