@@ -10,11 +10,12 @@
 # would be solving a problem this doesn't have yet.
 import time
 import urllib.error
+from datetime import datetime
 
 import streamlit as st
 
 from meal_receipts_data import today_summary as meal_receipts_today_summary
-from prescripts_common import LOGO_PATH, inject_body_fade_in, render_page_title, theme_colors
+from prescripts_common import JST, LOGO_PATH, inject_body_fade_in, render_page_title, theme_colors
 from spotify_data import (
     current_playback as spotify_current_playback,
     describe_item as spotify_describe_item,
@@ -40,7 +41,7 @@ PAGE_TITLE = "Overview"
 is_first_load = "_overview_title_played" not in st.session_state
 inject_body_fade_in("main_body")
 
-header_logo, header_title = st.columns([1, 4], vertical_alignment="center")
+header_logo, header_title, header_clock = st.columns([1, 3, 1.2], vertical_alignment="center")
 with header_logo:
     st.image(str(LOGO_PATH), width=120)
 with header_title:
@@ -48,6 +49,28 @@ with header_title:
 
 if is_first_load:
     st.session_state["_overview_title_played"] = True
+
+
+# Own fragment so just the clock ticks every second, same reasoning as the
+# Spotify tile below: everything else on the page is left untouched by its
+# reruns.
+@st.fragment(run_every=1)
+def render_jst_clock() -> None:
+    now = datetime.now(JST)
+    japanese_date = f"{now.year}年{now.month}月{now.day}日"
+    st.markdown(
+        f"""
+        <div style="text-align: right; font-variant-numeric: tabular-nums;">
+            <div style="font-size: 1.4rem; font-weight: bold; color: {ACCENT_COLOR};">{now:%H:%M:%S}</div>
+            <div style="font-size: 0.8rem; color: {TEXT_COLOR}; opacity: 0.7;">{japanese_date} JST</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+with header_clock:
+    render_jst_clock()
 
 inject_seek_slider_styles("overview_spotify_seek")
 
