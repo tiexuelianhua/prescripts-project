@@ -1,5 +1,6 @@
-// Launches the Prescripts app (app.py, its multi-page entry point) with no
-// visible window.
+// Launches the Prescripts app (app.py, its multi-page entry point) in a
+// plain native window (desktop_app.py -- a pywebview window around the same
+// local Streamlit server) rather than a browser tab.
 //
 // Compiled to a real .exe (rather than wrapping the .vbs in wscript.exe or
 // packaging it with iexpress) because Windows won't offer "Pin to taskbar"
@@ -10,12 +11,15 @@
 // triggers neither problem.
 //
 // Every launch first stops whatever is already serving on Port, then starts
-// a fresh server there. The server runs hidden, so there's no window to
-// close -- without this, each click left another server running on the next
-// free port (8502, 8503, ... ended up at 20 of them), old code kept being
-// served from stale ones, and Spotify's OAuth redirect (fixed at 8501)
-// landed on the wrong server. The port is passed explicitly for the same
-// reason: Streamlit otherwise silently falls back to the next free port.
+// desktop_app.py, which starts its own fresh server there (and separately
+// closes any previous *window* left over from an earlier launch -- see its
+// own _kill_previous_instance). This process itself runs hidden (pythonw.exe,
+// no console) -- without the port cleanup below, each click left another
+// server running on the next free port (8502, 8503, ... ended up at 20 of
+// them), old code kept being served from stale ones, and Spotify's OAuth
+// redirect (fixed at 8501) landed on the wrong server. The port is passed
+// explicitly (inside desktop_app.py) for the same reason: Streamlit
+// otherwise silently falls back to the next free port.
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -33,8 +37,13 @@ class MealReceiptsLauncher
 
         var psi = new ProcessStartInfo
         {
-            FileName = @"C:\Users\echoj\The Prescripts\Scripts\.venv\Scripts\python.exe",
-            Arguments = "-m streamlit run \"C:\\Users\\echoj\\The Prescripts\\Scripts\\app.py\" --server.port " + Port,
+            // pythonw.exe, not python.exe: this process holds the actual
+            // window open until the user closes it (desktop_app.py's
+            // webview.start() blocks), so it's not just something whose
+            // startup console needs hiding -- it should never have a
+            // console at all.
+            FileName = @"C:\Users\echoj\The Prescripts\Scripts\.venv\Scripts\pythonw.exe",
+            Arguments = "\"C:\\Users\\echoj\\The Prescripts\\Scripts\\desktop_app.py\"",
             WorkingDirectory = @"C:\Users\echoj\The Prescripts\Scripts",
             UseShellExecute = false,
             CreateNoWindow = true,
