@@ -34,6 +34,13 @@ def get_today_folder() -> Path:
         capture_output=True,
         encoding="utf-8",
         check=True,
+        # Without this, Windows pops a real console window for PowerShell
+        # every time this runs -- and this is called on every rerun of the
+        # Meal Receipts page (mealReceiptsApp_cV.py's module-level call), so
+        # that's most widget interactions on that page. capture_output above
+        # already redirects stdout/stderr through pipes regardless, so this
+        # doesn't change what the call returns, only whether a window shows.
+        creationflags=subprocess.CREATE_NO_WINDOW,
     )
     folder = result.stdout.strip().splitlines()[-1]
     return Path(folder)
