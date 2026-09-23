@@ -14,10 +14,12 @@ from meal_receipts_data import (
     counted_total,
     day_folder_for,
     get_today_folder,
+    known_exclusion_reasons,
     known_values,
     last_entry_for_item,
     load_entries,
     load_settings,
+    month_excluded_by_reason,
     month_summary,
     relocate_edited_entries,
     rename_value,
@@ -219,6 +221,7 @@ with st.container(key="main_body"):
         st.session_state["add_entry_store"] = None
         st.session_state["add_entry_cost"] = 0
         st.session_state["add_entry_excluded"] = False
+        st.session_state["add_entry_excluded_reason"] = None
         st.session_state["_reset_add_entry_form"] = False
 
     # Not an st.form: Item needs to live-react to selection (to suggest a
@@ -266,6 +269,16 @@ with st.container(key="main_body"):
         "from the **Excluded** column in Entries.",
         key="add_entry_excluded",
     )
+    # Only asked once the box is ticked -- optional even then, since the
+    # entry's still excluded without one (it just files under "No reason
+    # given" in the month breakdown).
+    excluded_reason = None
+    if excluded:
+        excluded_reason = st.selectbox(
+            "Reason", options=known_exclusion_reasons(), index=None,
+            accept_new_options=True, placeholder="Optional -- pick or type a reason",
+            key="add_entry_excluded_reason",
+        )
     st.caption("Click **Add entry** to submit")
     submitted = st.button("Add entry")
     if submitted:
@@ -285,7 +298,8 @@ with st.container(key="main_body"):
             target_csv = target_folder / "receipts.csv"
             timestamp = datetime.combine(entry_date, datetime.now(JST).time())
             append_entry(
-                target_csv, timestamp.strftime("%Y-%m-%d %H:%M:%S"), store, item, cost_yen, excluded
+                target_csv, timestamp.strftime("%Y-%m-%d %H:%M:%S"), store, item, cost_yen,
+                excluded, excluded_reason,
             )
             # No st.form here, so nothing clears itself automatically -- but
             # the actual field reset can't happen right here (Streamlit
@@ -300,7 +314,9 @@ with st.container(key="main_body"):
             # this run ends at the rerun below without ever painting it, so
             # showing it here would just mean it's never seen at all.
             st.session_state["_reset_add_entry_form"] = True
-            excluded_note = " (not counted toward totals)" if excluded else ""
+            excluded_note = ""
+            if excluded:
+                excluded_note = f" (not counted: {excluded_reason})" if excluded_reason else " (not counted toward totals)"
             st.session_state["_add_entry_confirmation"] = (
                 f"[Logged {item} at {store} for ¥{cost_yen:,.0f}{excluded_note}]"
             )
@@ -346,6 +362,14 @@ with st.container(key="main_body"):
                         help="Left out of totals/budget (e.g. paid in cash, covered by someone else)",
                         default=False,
                     ),
+                    # A fixed dropdown (the table can't take free text for new
+                    # options) -- a reason not listed yet can be typed once
+                    # on the add form, and shows up here from then on.
+                    # Picking one here also ticks Excluded on save.
+                    "excluded_reason": st.column_config.SelectboxColumn(
+                        "Reason",
+                        options=known_exclusion_reasons(),
+                    ),
                 },
             )
             # Drops fully-blank rows left over from clicking the editor's "+"
@@ -353,7 +377,7 @@ with st.container(key="main_body"):
             # saved as-is. The Excluded checkbox is left out of that check,
             # since its default=False means it's never blank on a new row.
             edited_entries = edited_entries.dropna(
-                how="all", subset=[c for c in edited_entries.columns if c != "excluded"]
+                how="all", subset=[c for c in edited_entries.columns if c not in ("excluded", "excluded_reason")]
             )
             # Saving only on a click (rather than after every cell edit) means
             # you can make several changes to a row before committing any of
@@ -432,6 +456,10 @@ with st.container(key="main_body"):
             st.write("No entries logged yet this month.")
         else:
             st.metric("This month's total", f"¥{summary['total_yen'].sum():,.0f}")
+            excluded_by_reason = month_excluded_by_reason(today_folder)
+            if not excluded_by_reason.empty:
+                breakdown = " · ".join(f"{reason} ¥{yen:,.0f}" for reason, yen in excluded_by_reason.items())
+                st.caption(f"Not counted: ¥{excluded_by_reason.sum():,.0f} ({breakdown})")
             st.bar_chart(summary.set_index("day")["total_yen"])
 
     st.divider()

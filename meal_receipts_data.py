@@ -20,7 +20,12 @@ SETTINGS_PATH = MEAL_RECEIPTS_DIR / "settings.json"
 # e.g. paid in cash, or covered by a friend/coworker. Added 2026-09-23;
 # receipts.csv files from before then don't have the column at all, which
 # load_entries() reads as "not excluded" rather than rewriting them up front.
-CSV_COLUMNS = ["timestamp", "store", "item", "cost_yen", "excluded"]
+# "excluded_reason" (why it's excluded) was added the same day, same
+# handling: missing column = no reason given.
+CSV_COLUMNS = ["timestamp", "store", "item", "cost_yen", "excluded", "excluded_reason"]
+# Offered first in the reason pickers; any other reason typed on the add form
+# is kept too and offered from then on (see known_exclusion_reasons()).
+DEFAULT_EXCLUSION_REASONS = ["Paid with cash", "Covered by friend/coworker"]
 JAPANESE_MONTHS = [
     "1月", "2月", "3月", "4月", "5月", "6月",
     "7月", "8月", "9月", "10月", "11月", "12月",
@@ -73,7 +78,14 @@ def with_excluded_column(entries: pd.DataFrame) -> pd.DataFrame:
     entries = entries.copy()
     if "excluded" not in entries.columns:
         entries["excluded"] = False
-    entries["excluded"] = entries["excluded"].fillna(False).astype(bool)
+    if "excluded_reason" not in entries.columns:
+        entries["excluded_reason"] = None
+    reason = entries["excluded_reason"].astype("string").str.strip()
+    has_reason = reason.notna() & (reason != "")
+    entries["excluded_reason"] = reason.where(has_reason, None).astype(object)
+    # Giving a reason implies excluding the entry -- picking one in the
+    # Entries table shouldn't also need the checkbox ticked separately.
+    entries["excluded"] = entries["excluded"].fillna(False).astype(bool) | has_reason
     return entries
 
 
@@ -88,7 +100,9 @@ def counted_total(entries: pd.DataFrame) -> int:
 
 
 def save_entries(csv_path: Path, entries: pd.DataFrame) -> None:
-    entries.to_csv(csv_path, index=False, encoding="utf-8")
+    # Normalized on the way out too, so a reason picked in the Entries table
+    # is written with its implied excluded=True, not just read back that way.
+    with_excluded_column(entries).to_csv(csv_path, index=False, encoding="utf-8")
 
 
 def relocate_edited_entries(entries: pd.DataFrame, viewed_date) -> pd.DataFrame:
@@ -110,7 +124,13 @@ def relocate_edited_entries(entries: pd.DataFrame, viewed_date) -> pd.DataFrame:
 
 
 def append_entry(
-    csv_path: Path, timestamp: str, store: str, item: str, cost_yen: int, excluded: bool = False
+    csv_path: Path,
+    timestamp: str,
+    store: str,
+    item: str,
+    cost_yen: int,
+    excluded: bool = False,
+    excluded_reason: str | None = None,
 ) -> None:
     # Rewrites the whole file rather than appending one line: a pre-"excluded"
     # receipts.csv has a 4-column header, and a 5-field row appended under
@@ -121,6 +141,7 @@ def append_entry(
         "item": item,
         "cost_yen": cost_yen,
         "excluded": excluded,
+        "excluded_reason": excluded_reason,
     }])
     save_entries(csv_path, pd.concat([load_entries(csv_path), entry], ignore_index=True))
 
@@ -161,6 +182,27 @@ def month_summary(day_folder: Path) -> pd.DataFrame:
         if csv_path.exists():
             rows.append({"day": day_dir.name, "total_yen": counted_total(load_entries(csv_path))})
     return pd.DataFrame(rows)
+
+
+def month_excluded_by_reason(day_folder: Path) -> pd.Series:
+    # Yen left out of the month's total, per reason -- "No reason given" for
+    # entries excluded without one. Largest first.
+    frames = [
+        load_entries(day_dir / "receipts.csv")
+        for day_dir in sorted(day_folder.parent.iterdir())
+        if (day_dir / "receipts.csv").exists()
+    ]
+    if not frames:
+        return pd.Series(dtype=int)
+    entries = pd.concat(frames, ignore_index=True)
+    excluded = entries[entries["excluded"]]
+    reasons = excluded["excluded_reason"].fillna("No reason given")
+    return excluded["cost_yen"].groupby(reasons).sum().astype(int).sort_values(ascending=False)
+
+
+def known_exclusion_reasons() -> list[str]:
+    used = with_excluded_column(all_entries())["excluded_reason"].dropna().unique()
+    return DEFAULT_EXCLUSION_REASONS + sorted(set(used) - set(DEFAULT_EXCLUSION_REASONS))
 
 
 @st.cache_data(ttl=60)
