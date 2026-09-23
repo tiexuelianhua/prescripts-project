@@ -7,6 +7,7 @@
 #
 # ThePrescriptsLauncher.exe launches this (via pythonw.exe, hidden) in place
 # of running Streamlit directly.
+import ctypes
 import os
 import socket
 import subprocess
@@ -28,6 +29,11 @@ PID_FILE = SCRIPTS_DIR / ".desktop_app.pid"
 # icon= wants a real .ico on Windows, not the webp app.py uses for the
 # browser-tab favicon).
 ICON_PATH = SCRIPTS_DIR.parent / "Images" / "The_Index_Logo.ico"
+# Title bar only (the window's small icon) -- the plain transparent logo reads
+# fine there against the title bar, and the user prefers it without the black
+# square. The black-backdrop ICON_PATH stays the big icon, which is what the
+# taskbar and Alt-Tab show.
+TITLE_BAR_ICON_PATH = SCRIPTS_DIR.parent / "Images" / "The_Index_Logo_plain.ico"
 
 # Toggled with F11, like any browser/app -- not on by default at launch,
 # since that's a bigger behavior change than just "make it possible".
@@ -71,6 +77,39 @@ def _inject_fullscreen_toggle(window: "webview.Window") -> None:
     # window after it's up.
     window.events.loaded.wait()
     window.run_js(_FULLSCREEN_TOGGLE_JS)
+    _set_title_bar_icon()
+
+
+def _set_title_bar_icon() -> None:
+    # pywebview's icon= sets both of the window's icons from the one file, so
+    # the small one gets swapped afterwards via plain Win32 calls. Found by
+    # owning process rather than by title, since an Explorer window open on
+    # the "The Prescripts" folder would share it.
+    if not TITLE_BAR_ICON_PATH.exists():
+        return
+    user32 = ctypes.windll.user32
+    our_pid = os.getpid()
+    hwnds = []
+
+    @ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+    def collect(hwnd, _):
+        pid = ctypes.c_ulong()
+        user32.GetWindowThreadProcessId(ctypes.c_void_p(hwnd), ctypes.byref(pid))
+        if pid.value == our_pid and user32.IsWindowVisible(ctypes.c_void_p(hwnd)):
+            hwnds.append(hwnd)
+        return True
+
+    user32.EnumWindows(collect, None)
+    user32.LoadImageW.restype = ctypes.c_void_p
+    size = user32.GetSystemMetrics(49)  # SM_CXSMICON
+    hicon = user32.LoadImageW(
+        None, str(TITLE_BAR_ICON_PATH), 1, size, size, 0x10  # IMAGE_ICON, LR_LOADFROMFILE
+    )
+    if not hicon:
+        return
+    for hwnd in hwnds:
+        # WM_SETICON, ICON_SMALL
+        user32.SendMessageW(ctypes.c_void_p(hwnd), 0x0080, 0, ctypes.c_void_p(hicon))
 
 
 def _kill_previous_instance() -> None:
