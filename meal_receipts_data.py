@@ -16,7 +16,11 @@ from prescripts_common import JST, SCRIPTS_DIR
 
 MEAL_RECEIPTS_DIR = SCRIPTS_DIR.parent / "Meal Receipts"
 SETTINGS_PATH = MEAL_RECEIPTS_DIR / "settings.json"
-CSV_COLUMNS = ["timestamp", "store", "item", "cost_yen"]
+# "excluded": logged for the record but left out of every total/budget --
+# e.g. paid in cash, or covered by a friend/coworker. Added 2026-09-23;
+# receipts.csv files from before then don't have the column at all, which
+# load_entries() reads as "not excluded" rather than rewriting them up front.
+CSV_COLUMNS = ["timestamp", "store", "item", "cost_yen", "excluded"]
 JAPANESE_MONTHS = [
     "1月", "2月", "3月", "4月", "5月", "6月",
     "7月", "8月", "9月", "10月", "11月", "12月",
@@ -56,8 +60,31 @@ def day_folder_for(date) -> Path:
 
 def load_entries(csv_path: Path) -> pd.DataFrame:
     if csv_path.exists():
-        return pd.read_csv(csv_path)
-    return pd.DataFrame(columns=CSV_COLUMNS)
+        try:
+            return with_excluded_column(pd.read_csv(csv_path))
+        except pd.errors.EmptyDataError:
+            pass
+    return with_excluded_column(pd.DataFrame(columns=CSV_COLUMNS))
+
+
+def with_excluded_column(entries: pd.DataFrame) -> pd.DataFrame:
+    # Also covers rows added through the Entries table's "+" button, which
+    # leave the checkbox as None rather than False.
+    entries = entries.copy()
+    if "excluded" not in entries.columns:
+        entries["excluded"] = False
+    entries["excluded"] = entries["excluded"].fillna(False).astype(bool)
+    return entries
+
+
+def counted_total(entries: pd.DataFrame) -> int:
+    # The one place "what counts toward a total" is decided -- every day/
+    # week/month total goes through here, so excluded entries drop out of
+    # all of them alike.
+    if entries.empty:
+        return 0
+    entries = with_excluded_column(entries)
+    return int(entries.loc[~entries["excluded"], "cost_yen"].fillna(0).sum())
 
 
 def save_entries(csv_path: Path, entries: pd.DataFrame) -> None:
@@ -76,21 +103,26 @@ def relocate_edited_entries(entries: pd.DataFrame, viewed_date) -> pd.DataFrame:
     for target_date, rows in moved.groupby(entry_dates[entry_dates != viewed_date]):
         target_csv = day_folder_for(target_date) / "receipts.csv"
         target_csv.parent.mkdir(parents=True, exist_ok=True)
-        combined = pd.concat([load_entries(target_csv), rows], ignore_index=True)
+        combined = pd.concat([load_entries(target_csv), with_excluded_column(rows)], ignore_index=True)
         combined = combined.sort_values("timestamp").reset_index(drop=True)
         save_entries(target_csv, combined)
     return entries[entry_dates == viewed_date]
 
 
-def append_entry(csv_path: Path, timestamp: str, store: str, item: str, cost_yen: int) -> None:
+def append_entry(
+    csv_path: Path, timestamp: str, store: str, item: str, cost_yen: int, excluded: bool = False
+) -> None:
+    # Rewrites the whole file rather than appending one line: a pre-"excluded"
+    # receipts.csv has a 4-column header, and a 5-field row appended under
+    # it would misalign.
     entry = pd.DataFrame([{
         "timestamp": timestamp,
         "store": store,
         "item": item,
         "cost_yen": cost_yen,
+        "excluded": excluded,
     }])
-    header = not csv_path.exists()
-    entry.to_csv(csv_path, mode="a", header=header, index=False, encoding="utf-8")
+    save_entries(csv_path, pd.concat([load_entries(csv_path), entry], ignore_index=True))
 
 
 def rename_value(column: str, old_value: str, new_value: str) -> int:
@@ -127,8 +159,7 @@ def month_summary(day_folder: Path) -> pd.DataFrame:
     for day_dir in sorted(day_folder.parent.iterdir()):
         csv_path = day_dir / "receipts.csv"
         if csv_path.exists():
-            df = pd.read_csv(csv_path)
-            rows.append({"day": day_dir.name, "total_yen": df["cost_yen"].sum()})
+            rows.append({"day": day_dir.name, "total_yen": counted_total(load_entries(csv_path))})
     return pd.DataFrame(rows)
 
 
@@ -185,16 +216,14 @@ def week_bounds(reference_date: date) -> tuple[date, date]:
 
 
 def week_total_so_far(reference_date: date) -> int:
-    # Sum of cost_yen from the Monday of reference_date's week through
+    # Sum of counted (non-excluded) cost_yen from the Monday of reference_date's week through
     # reference_date itself (not through the week's end -- there's usually
     # no point reading ahead into days that haven't happened yet).
     week_start, _ = week_bounds(reference_date)
     total = 0
     day = week_start
     while day <= reference_date:
-        entries = load_entries(day_folder_for(day) / "receipts.csv")
-        if not entries.empty:
-            total += int(entries["cost_yen"].sum())
+        total += counted_total(load_entries(day_folder_for(day) / "receipts.csv"))
         day += timedelta(days=1)
     return total
 
@@ -207,7 +236,7 @@ def today_summary() -> dict:
     settings = load_settings()
     budget_amount, budget_period = budget_settings(settings)
     result = {
-        "total_yen": int(entries["cost_yen"].sum()) if not entries.empty else 0,
+        "total_yen": counted_total(entries),
         "budget_amount": budget_amount,
         "budget_period": budget_period,
         "has_entries": not entries.empty,

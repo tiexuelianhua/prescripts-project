@@ -11,6 +11,7 @@ from meal_receipts_data import (
     all_entries,
     append_entry,
     budget_settings,
+    counted_total,
     day_folder_for,
     get_today_folder,
     known_values,
@@ -217,6 +218,7 @@ with st.container(key="main_body"):
         st.session_state["add_entry_day"] = today_date
         st.session_state["add_entry_store"] = None
         st.session_state["add_entry_cost"] = 0
+        st.session_state["add_entry_excluded"] = False
         st.session_state["_reset_add_entry_form"] = False
 
     # Not an st.form: Item needs to live-react to selection (to suggest a
@@ -257,6 +259,13 @@ with st.container(key="main_body"):
         key="add_entry_store",
     )
     cost_yen = col2.number_input("Cost (¥)", min_value=0, step=1, key="add_entry_cost")
+    excluded = st.checkbox(
+        "Don't count toward totals",
+        help="Still logged, but left out of the day/week/month totals and budget -- "
+        "e.g. paid in cash, or covered by a friend/coworker. Can be changed later "
+        "from the **Excluded** column in Entries.",
+        key="add_entry_excluded",
+    )
     st.caption("Click **Add entry** to submit")
     submitted = st.button("Add entry")
     if submitted:
@@ -275,7 +284,9 @@ with st.container(key="main_body"):
                 target_folder.mkdir(parents=True, exist_ok=True)
             target_csv = target_folder / "receipts.csv"
             timestamp = datetime.combine(entry_date, datetime.now(JST).time())
-            append_entry(target_csv, timestamp.strftime("%Y-%m-%d %H:%M:%S"), store, item, cost_yen)
+            append_entry(
+                target_csv, timestamp.strftime("%Y-%m-%d %H:%M:%S"), store, item, cost_yen, excluded
+            )
             # No st.form here, so nothing clears itself automatically -- but
             # the actual field reset can't happen right here (Streamlit
             # forbids changing a widget's session_state after that widget's
@@ -289,7 +300,10 @@ with st.container(key="main_body"):
             # this run ends at the rerun below without ever painting it, so
             # showing it here would just mean it's never seen at all.
             st.session_state["_reset_add_entry_form"] = True
-            st.session_state["_add_entry_confirmation"] = f"[Logged {item} at {store} for ¥{cost_yen:,.0f}]"
+            excluded_note = " (not counted toward totals)" if excluded else ""
+            st.session_state["_add_entry_confirmation"] = (
+                f"[Logged {item} at {store} for ¥{cost_yen:,.0f}{excluded_note}]"
+            )
             st.rerun()
     else:
         # The message from a successful add on the run just before this one
@@ -323,11 +337,24 @@ with st.container(key="main_body"):
                 num_rows="dynamic",
                 width="stretch",
                 key=f"editor_{selected_date}",
+                # Editable like any other column, so entries logged before
+                # this option existed (or before realizing a friend covered
+                # it) can be excluded retroactively, then saved as usual.
+                column_config={
+                    "excluded": st.column_config.CheckboxColumn(
+                        "Excluded",
+                        help="Left out of totals/budget (e.g. paid in cash, covered by someone else)",
+                        default=False,
+                    ),
+                },
             )
             # Drops fully-blank rows left over from clicking the editor's "+"
             # add-row button without filling anything in, so they don't get
-            # saved as-is.
-            edited_entries = edited_entries.dropna(how="all")
+            # saved as-is. The Excluded checkbox is left out of that check,
+            # since its default=False means it's never blank on a new row.
+            edited_entries = edited_entries.dropna(
+                how="all", subset=[c for c in edited_entries.columns if c != "excluded"]
+            )
             # Saving only on a click (rather than after every cell edit) means
             # you can make several changes to a row before committing any of
             # them to disk. The total/budget below still reflects the live
@@ -357,7 +384,7 @@ with st.container(key="main_body"):
                 st.rerun()
             else:
                 st.caption("Edits above aren't saved until you click **Save changes**.")
-            day_total = edited_entries["cost_yen"].sum() if not edited_entries.empty else 0
+            day_total = counted_total(edited_entries)
 
         # Showing "¥0 vs budget" for a past day with no logged entries at all
         # reads as if you tracked and spent nothing, rather than didn't log
