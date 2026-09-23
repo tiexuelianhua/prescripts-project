@@ -1,11 +1,11 @@
 # Native-feeling window for the Prescripts app. Displays the exact same
-# Streamlit server MealReceiptsLauncher.exe has always run, but in a plain
+# Streamlit server ThePrescriptsLauncher.exe has always run, but in a plain
 # pywebview window (Windows' built-in WebView2 -- no separate runtime to
 # install) instead of the user's actual browser: no address bar, no tabs, its
 # own icon in the taskbar/Alt-Tab. No change to any page code anywhere else
 # -- this only changes how the same server gets displayed.
 #
-# MealReceiptsLauncher.exe launches this (via pythonw.exe, hidden) in place
+# ThePrescriptsLauncher.exe launches this (via pythonw.exe, hidden) in place
 # of running Streamlit directly.
 import os
 import socket
@@ -18,7 +18,7 @@ import webview
 
 SCRIPTS_DIR = Path(__file__).resolve().parent
 # Must match REDIRECT_URI in spotify_data.py and Port in
-# LauncherSrc/MealReceiptsLauncher.cs.
+# LauncherSrc/ThePrescriptsLauncher.cs.
 PORT = 8501
 URL = f"http://127.0.0.1:{PORT}"
 # Not committed (see .gitignore) -- purely local runtime state.
@@ -74,7 +74,7 @@ def _inject_fullscreen_toggle(window: "webview.Window") -> None:
 
 
 def _kill_previous_instance() -> None:
-    # MealReceiptsLauncher.exe's own StopExistingServer() already clears
+    # ThePrescriptsLauncher.exe's own StopExistingServer() already clears
     # whatever's bound to Port before starting this script -- that stays in
     # place as a fallback for a stray server with no pidfile of its own (e.g.
     # one left over from before this existed). This handles the other half:

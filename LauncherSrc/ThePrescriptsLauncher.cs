@@ -26,7 +26,7 @@ using System.Diagnostics;
 using System.Text.RegularExpressions;
 using System.Threading;
 
-class MealReceiptsLauncher
+class ThePrescriptsLauncher
 {
     // Must match REDIRECT_URI in spotify_data.py.
     const int Port = 8501;
