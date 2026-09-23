@@ -4,11 +4,17 @@
 # prescripts_common.PAGES plus dropping in its script file.
 import streamlit as st
 
-from prescripts_common import LOGO_PATH, PAGES, inject_button_style, inject_input_style, inject_toast_style
+from prescripts_common import PAGES, SCRIPTS_DIR, inject_button_style, inject_input_style, inject_toast_style
+
+# Black backdrop so the thin, pale-blue linework logo reads against a light
+# browser-tab background too -- LOGO_PATH itself stays untouched since every
+# page also uses it for its own in-page header, on backgrounds that already
+# give it contrast.
+FAVICON_PATH = SCRIPTS_DIR.parent / "Images" / "The_Index_Logo_favicon.png"
 
 st.set_page_config(
     page_title="The Prescripts",
-    page_icon=str(LOGO_PATH),
+    page_icon=str(FAVICON_PATH),
     # Applies once, on initial load -- which lands on Home (default=True
     # below), the one page with nothing sidebar-worthy on it (Meal Receipts'
     # actual settings live in its own sidebar). Manually expanding it from
