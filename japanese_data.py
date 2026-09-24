@@ -399,9 +399,20 @@ def meaning_parts(text: str) -> set[str]:
     return parts
 
 
+def has_distinct_reading(card: dict) -> bool:
+    # False for kana-only words even if their reading was filled in (e.g.
+    # これ / これ): the reading just repeats the front, so it's neither worth
+    # showing again on the back nor asking for in typed mode.
+    return (
+        card["kind"] == "vocab"
+        and bool(card["reading"])
+        and normalize_kana(card["reading"]) != normalize_kana(card["front"])
+    )
+
+
 def answer_prompt(card: dict) -> str:
     # What a typed answer should be for this card: "reading" or "meaning".
-    return "reading" if card["kind"] == "vocab" and card["reading"] else "meaning"
+    return "reading" if has_distinct_reading(card) else "meaning"
 
 
 def check_answer(card: dict, typed: str) -> bool:

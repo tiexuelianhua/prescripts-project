@@ -22,6 +22,7 @@ from japanese_data import (
     due_cards,
     find_duplicate,
     format_interval,
+    has_distinct_reading,
     jisho_lookup,
     kanji_lookup,
     load_deck,
@@ -95,7 +96,7 @@ st.markdown(
 def render_flashcard(card: dict, show_back: bool) -> None:
     back = ""
     if show_back:
-        if card["kind"] == "vocab" and card["reading"]:
+        if has_distinct_reading(card):
             back += f'<div class="flashcard-reading">{html.escape(card["reading"])}</div>'
         back += f'<div class="flashcard-meaning">{html.escape(card["meaning"])}</div>'
     st.markdown(
@@ -141,7 +142,8 @@ with st.container(key="main_body"):
     last_result = st.session_state.get("japanese_last_result")
     if typed_mode and last_result:
         answered = last_result["card"]
-        answer = " · ".join(part for part in (answered["reading"], answered["meaning"]) if part)
+        answered_reading = answered["reading"] if has_distinct_reading(answered) else ""
+        answer = " · ".join(part for part in (answered_reading, answered["meaning"]) if part)
         verdict_column, override_column = st.columns([4, 1], vertical_alignment="center")
         with verdict_column:
             if last_result["correct"]:
@@ -286,7 +288,15 @@ with st.container(key="main_body"):
                 st.session_state["_japanese_filled_from"] = filled_from
 
         front = st.text_input("Word" if is_vocab else "Kanji", key="japanese_add_front")
-        reading = st.text_input("Reading (hiragana)", key="japanese_add_reading") if is_vocab else ""
+        reading = (
+            st.text_input(
+                "Reading (hiragana)",
+                key="japanese_add_reading",
+                help="Can be left blank for words written in kana -- they're quizzed on their meaning instead.",
+            )
+            if is_vocab
+            else ""
+        )
         meaning = st.text_input("Meaning", key="japanese_add_meaning")
         if st.button("Add card", key="japanese_add_button"):
             if not front.strip() or not meaning.strip():
@@ -300,7 +310,7 @@ with st.container(key="main_body"):
                 # Typed out under the button on the next run, like Meal
                 # Receipts' "[Logged ...]" line -- stashed rather than typed
                 # here, since st.rerun() below would discard it unseen.
-                reading_note = f" ({card['reading']})" if card["reading"] else ""
+                reading_note = f" ({card['reading']})" if has_distinct_reading(card) else ""
                 st.session_state["_japanese_add_confirmation"] = (
                     f"[Added {card['front']}{reading_note}: {card['meaning']}]"
                 )
