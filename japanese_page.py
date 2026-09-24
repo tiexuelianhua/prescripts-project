@@ -19,6 +19,7 @@ from japanese_data import (
     STEP_LABELS,
     add_card,
     answer_steps,
+    check_new_card,
     check_step,
     delete_cards,
     display_readings,
@@ -141,6 +142,27 @@ def step_answer(card: dict, step: str) -> str:
 
 
 STEP_NAMES = {"reading": "Reading", "meaning": "Meaning", "onyomi": "On'yomi", "kunyomi": "Kun'yomi"}
+
+
+ADD_FIELD_KEYS = {
+    "front": "japanese_add_front",
+    "reading": "japanese_add_reading",
+    "onyomi": "japanese_add_onyomi",
+    "kunyomi": "japanese_add_kunyomi",
+}
+
+
+def apply_add_fix(index: int) -> None:
+    # "Use ..." button on a spelling-check warning: puts the suggestion in
+    # its field (a callback, so it lands before the field is drawn again)
+    # and drops just that warning, keeping any others. Once none are left,
+    # the next "Add card" re-checks and adds.
+    pending = st.session_state["_japanese_add_issues"]
+    issue = pending["issues"].pop(index)
+    st.session_state[ADD_FIELD_KEYS[issue["field"]]] = issue["fix"]
+    pending["values"][issue["field"]] = issue["fix"]
+    if not pending["issues"]:
+        st.session_state.pop("_japanese_add_issues", None)
 
 
 def practice_card(deck: dict, kinds: list[str], filter_name: str) -> tuple[dict | None, int, int]:
@@ -452,14 +474,61 @@ with st.container(key="main_body"):
                 key="japanese_add_kunyomi",
                 help=reading_help + " A dot marks where the okurigana starts (つよ.い).",
             )
-        if st.button("Add card", key="japanese_add_button"):
+        # Possible typos found by the spelling check on the last "Add card"
+        # click -- only kept while the fields still hold what was checked;
+        # editing any of them by hand drops the warnings (the next "Add
+        # card" checks again).
+        current_values = {
+            "kind": add_kind,
+            "front": front.strip(),
+            "reading": reading.strip(),
+            "meaning": meaning.strip(),
+            "onyomi": onyomi.strip(),
+            "kunyomi": kunyomi.strip(),
+        }
+        pending = st.session_state.get("_japanese_add_issues")
+        if pending and pending["values"] != current_values:
+            st.session_state.pop("_japanese_add_issues", None)
+            pending = None
+
+        add_clicked = st.button("Add card", key="japanese_add_button")
+        add_anyway = False
+        if pending:
+            for index, issue in enumerate(pending["issues"]):
+                warning_column, fix_column = st.columns([4, 1], vertical_alignment="center")
+                with warning_column:
+                    st.markdown(f"⚠️ {html.escape(issue['message'], quote=False)}")
+                if issue["fix"]:
+                    with fix_column:
+                        st.button(
+                            f"Use {issue['fix']}",
+                            key=f"japanese_fix_{index}",
+                            on_click=apply_add_fix,
+                            args=(index,),
+                            width="stretch",
+                        )
+            add_anyway = st.button("Add anyway", key="japanese_add_anyway", help="Add the card exactly as typed")
+
+        if add_clicked or add_anyway:
             if not front.strip() or not meaning.strip():
                 st.toast(f"A card needs both the {'word' if is_vocab else 'kanji'} and its meaning.", icon="⚠️")
             elif find_duplicate(deck, add_kind, front):
                 st.toast(f"{front.strip()} is already in your {KIND_LABELS[add_kind].lower()} cards.", icon="⚠️")
             else:
+                issues = []
+                if add_clicked:
+                    # Checked against Jisho / KANJIDIC for typos first; if
+                    # neither can be reached, the card's just added as usual.
+                    try:
+                        issues = check_new_card(add_kind, front, reading, onyomi, kunyomi)
+                    except (urllib.error.URLError, TimeoutError, ValueError, KeyError):
+                        issues = []
+                if issues:
+                    st.session_state["_japanese_add_issues"] = {"values": current_values, "issues": issues}
+                    st.rerun()
                 card = add_card(deck, add_kind, front, reading, meaning, onyomi, kunyomi)
                 save_deck(deck)
+                st.session_state.pop("_japanese_add_issues", None)
                 st.session_state["_reset_japanese_add"] = True
                 # Typed out under the button on the next run, like Meal
                 # Receipts' "[Logged ...]" line -- stashed rather than typed
