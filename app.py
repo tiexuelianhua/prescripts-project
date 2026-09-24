@@ -4,7 +4,14 @@
 # prescripts_common.PAGES plus dropping in its script file.
 import streamlit as st
 
-from prescripts_common import LOGO_PATH, PAGES, inject_button_style, inject_input_style, inject_toast_style
+from prescripts_common import (
+    LOGO_PATH,
+    PAGES,
+    inject_button_style,
+    inject_input_style,
+    inject_toast_style,
+    render_zoom_controls,
+)
 
 st.set_page_config(
     page_title="The Prescripts",
@@ -29,4 +36,8 @@ current_page = st.navigation([home_page, *other_pages])
 # through this script, so they don't count as leaving.
 st.session_state["_previous_page"] = st.session_state.get("_current_page")
 st.session_state["_current_page"] = current_page.url_path
+# Every page but Home gets zoom controls -- Home stays the plain Prescripts
+# front door.
+if current_page.url_path:
+    render_zoom_controls()
 current_page.run()

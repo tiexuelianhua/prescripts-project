@@ -3,6 +3,7 @@
 # every page (present and future) stays visually and behaviorally consistent
 # without each one redefining its own copy.
 
+import json
 import time
 from datetime import timedelta, timezone
 from pathlib import Path
@@ -50,6 +51,85 @@ PAGES = [
         "keywords": ["japanese", "vocab", "vocabulary", "kanji", "flashcard", "flashcards", "srs", "study", "日本語"],
     },
 ]
+
+
+# App-wide preferences that don't belong to any one page (currently just the
+# zoom level), kept outside the repo like every page's own settings.
+APP_SETTINGS_PATH = SCRIPTS_DIR.parent / "app_settings.json"
+
+# Zoom steps offered by the page zoom controls (see render_zoom_controls).
+ZOOM_LEVELS = [0.8, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75]
+
+
+def load_app_settings() -> dict:
+    try:
+        with open(APP_SETTINGS_PATH, encoding="utf-8") as file:
+            return json.load(file)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+
+def save_app_settings(settings: dict) -> None:
+    with open(APP_SETTINGS_PATH, "w", encoding="utf-8") as file:
+        json.dump(settings, file, indent=2)
+
+
+def _step_zoom(step: int) -> None:
+    # Button callback: runs before the rerun draws anything, so the page
+    # comes back already at the new zoom.
+    settings = load_app_settings()
+    current = settings.get("zoom", 1.0)
+    index = min(range(len(ZOOM_LEVELS)), key=lambda i: abs(ZOOM_LEVELS[i] - current))
+    if step == 0:
+        settings["zoom"] = 1.0
+    else:
+        settings["zoom"] = ZOOM_LEVELS[max(0, min(len(ZOOM_LEVELS) - 1, index + step))]
+    save_app_settings(settings)
+
+
+def render_zoom_controls() -> None:
+    # Page zoom for every page but Home (called from app.py): small
+    # "−  100%  +" buttons pinned in the top bar, scaling the page's content
+    # with CSS zoom. One level shared by all pages, remembered across
+    # restarts. The whole main column is zoomed (so it widens like real
+    # browser zoom, rather than just bigger text in the same width); the
+    # controls live inside it -- Streamlit has no other place to put
+    # widgets -- so they're zoomed back by the inverse to stay put.
+    zoom = load_app_settings().get("zoom", 1.0)
+    st.markdown(
+        f"""
+        <style>
+        [data-testid="stMainBlockContainer"] {{
+            zoom: {zoom};
+        }}
+        /* Out of the page's flow, into the top bar beside Streamlit's own
+           menu -- the wrapper otherwise leaves a gap above the page. */
+        [data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"] > *:has(.st-key-zoom_controls) {{
+            position: absolute;
+        }}
+        .st-key-zoom_controls {{
+            position: fixed;
+            top: 0.55rem;
+            left: 3.5rem;
+            z-index: 999991;
+            zoom: {1 / zoom};
+            width: auto;
+            gap: 0.25rem;
+            align-items: center;
+        }}
+        .st-key-zoom_controls button {{
+            min-height: 0;
+            padding: 0 0.6rem;
+            line-height: 1.6;
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+    with st.container(key="zoom_controls", horizontal=True):
+        st.button("−", key="zoom_out", help="Zoom out", on_click=_step_zoom, args=(-1,), disabled=zoom <= ZOOM_LEVELS[0])
+        st.button(f"{zoom:.0%}", key="zoom_reset", help="Reset zoom to 100%", on_click=_step_zoom, args=(0,))
+        st.button("+", key="zoom_in", help="Zoom in", on_click=_step_zoom, args=(1,), disabled=zoom >= ZOOM_LEVELS[-1])
 
 
 def theme_colors() -> tuple[str, str]:
