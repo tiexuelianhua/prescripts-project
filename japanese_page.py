@@ -1,8 +1,9 @@
 # Japanese page: flashcards for vocab and kanji the user already knows,
 # reviewed on a spaced-repetition (SRS) schedule -- either revealed and
 # self-graded, or typed and checked (realkana-style) -- plus a lookup of the
-# whole deck. New cards can be filled in from Jisho / kanjiapi.dev. Grammar is planned for later. All data/scheduling lives in
-# japanese_data.py (no UI there), so the Overview tile can read it too.
+# whole deck. New cards can be filled in from Jisho / kanjiapi.dev. Grammar
+# is planned for later. All data/scheduling lives in japanese_data.py (no UI
+# there), so the Overview tile can read it too.
 import html
 import urllib.error
 
@@ -89,7 +90,6 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
-
 
 
 def render_flashcard(card: dict, show_back: bool) -> None:
@@ -349,9 +349,11 @@ with st.container(key="main_body"):
                 },
             )
             st.caption(f"{len(matches)} card(s)")
-            # Same as Meal Receipts' Entries: nothing is written until Save,
-            # so several cells can be edited before committing any of them.
-            if st.button("💾 Save changes", key="japanese_save_cards"):
+            st.caption("Changes save as you make them. Select rows and press Delete to remove cards.")
+            # Same as Meal Receipts' Entries: saved as soon as anything in
+            # the table changes, no Save button.
+            editor_changes = st.session_state.get(editor_key, {})
+            if any(editor_changes.get(part) for part in ("edited_rows", "deleted_rows")):
                 deleted = set(table.index) - set(edited.index)
                 delete_cards(deck, deleted)
                 clashes = []
@@ -377,5 +379,3 @@ with st.container(key="main_body"):
                     message += f" Skipped renaming to {', '.join(clashes)} (already in your cards)."
                 st.toast(message)
                 st.rerun()
-            else:
-                st.caption("Edits above aren't saved until you click **Save changes**. Select rows and press Delete to remove cards.")

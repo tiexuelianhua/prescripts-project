@@ -5,6 +5,7 @@
 
 from datetime import datetime
 
+import pandas as pd
 import streamlit as st
 
 from meal_receipts_data import (
@@ -379,11 +380,28 @@ with st.container(key="main_body"):
             edited_entries = edited_entries.dropna(
                 how="all", subset=[c for c in edited_entries.columns if c not in ("excluded", "excluded_reason")]
             )
-            # Saving only on a click (rather than after every cell edit) means
-            # you can make several changes to a row before committing any of
-            # them to disk. The total/budget below still reflects the live
-            # unsaved edit, since that's a harmless preview either way.
-            if st.button("💾 Save changes", key=f"save_{selected_date}"):
+            # Saved as soon as anything in the table changes (the user asked
+            # for edits to save by default, not wait on a button) -- except
+            # while a row is missing its time, store, item or cost, e.g. one
+            # just added with "+" and still being filled in: saving it then
+            # would file it under no day at all (relocate_edited_entries
+            # sorts rows into day-folders by their time).
+            editor_changes = st.session_state.get(f"editor_{selected_date}", {})
+            has_changes = any(editor_changes.get(part) for part in ("edited_rows", "added_rows", "deleted_rows"))
+            # A time typed by hand can be in any everyday format ("2026-09-24
+            # 13:00", no seconds) -- rewritten to the stored one so every row
+            # in the file matches (pandas won't parse a mix of the two).
+            parsed_times = pd.to_datetime(edited_entries["timestamp"], errors="coerce", format="mixed")
+            edited_entries.loc[parsed_times.notna(), "timestamp"] = parsed_times[parsed_times.notna()].dt.strftime(
+                "%Y-%m-%d %H:%M:%S"
+            )
+            incomplete = edited_entries[["store", "item", "cost_yen"]].isna().any(axis=1) | parsed_times.isna()
+            if has_changes and incomplete.any():
+                st.caption(
+                    "A row is missing its time (e.g. 2026-09-24 13:00), store, item or cost "
+                    "-- it'll save once those are filled in."
+                )
+            elif has_changes:
                 same_day_entries = relocate_edited_entries(edited_entries, selected_date)
                 moved_count = len(edited_entries) - len(same_day_entries)
                 save_entries(selected_csv, same_day_entries)
@@ -400,14 +418,12 @@ with st.container(key="main_body"):
                 # A data_editor's own widget state (its accumulated cell
                 # edits/added/deleted rows) persists across reruns under its
                 # key regardless of what's passed as its value -- so without
-                # clearing it here, a row just moved out to another day's
-                # file would keep reappearing in this table (replayed from
-                # that stale state) until some unrelated widget interaction
-                # happened to reset it.
+                # clearing it here, the saved edits would be replayed on top
+                # of the saved file: added rows added twice, deletions
+                # removing whichever rows slid into those positions, and a
+                # row moved out to another day reappearing here.
                 del st.session_state[f"editor_{selected_date}"]
                 st.rerun()
-            else:
-                st.caption("Edits above aren't saved until you click **Save changes**.")
             day_total = counted_total(edited_entries)
 
         # Showing "¥0 vs budget" for a past day with no logged entries at all
