@@ -5,6 +5,7 @@
 # is planned for later. All data/scheduling lives in japanese_data.py (no UI
 # there), so the Overview tile can read it too.
 import html
+import random
 import urllib.error
 
 import pandas as pd
@@ -108,18 +109,56 @@ def render_flashcard(card: dict, show_back: bool) -> None:
     )
 
 
+def practice_card(deck: dict, kinds: list[str], filter_name: str) -> tuple[dict | None, int, int]:
+    # Practice goes through the chosen deck in a shuffled order, then
+    # reshuffles and goes round again, forever. Returns (card, its 1-based
+    # place in this round, cards in the round). The order is rebuilt when
+    # the deck filter changes or a card in it has been deleted.
+    cards = {card["id"]: card for card in deck["cards"] if card["kind"] in kinds}
+    if not cards:
+        return None, 0, 0
+    state = st.session_state.get("japanese_practice")
+    if (
+        not state
+        or state["filter"] != filter_name
+        or set(state["order"]) != set(cards)
+        or state["position"] >= len(state["order"])
+    ):
+        order = list(cards)
+        random.shuffle(order)
+        # Don't start a new round on the card the last one just ended with.
+        if state and len(order) > 1 and state["order"] and order[0] == state["order"][-1]:
+            order.append(order.pop(0))
+        state = {"filter": filter_name, "order": order, "position": 0}
+        st.session_state["japanese_practice"] = state
+    return cards[state["order"][state["position"]]], state["position"] + 1, len(state["order"])
+
+
+def advance_practice() -> None:
+    st.session_state["japanese_practice"]["position"] += 1
+
+
 deck = load_deck()
 
 with st.container(key="main_body"):
     # Review: the page's primary content, so always visible (house style --
     # secondary sections go in expanders below).
     st.subheader("Review")
-    filter_column, typed_column = st.columns([3, 2], vertical_alignment="bottom")
+    filter_column, toggle_column = st.columns([3, 2], vertical_alignment="bottom")
     with filter_column:
         review_filter = st.segmented_control(
             "Deck", list(DECK_FILTERS), default="All", required=True, key="japanese_review_filter"
         )
-    with typed_column:
+    with toggle_column:
+        # Practice: cycles through every card (of the chosen deck) for as
+        # long as wanted, without touching the SRS schedule -- for when
+        # nothing's due but there's time to keep going. Session-only: a
+        # fresh visit starts back on real reviews.
+        practice_mode = st.toggle(
+            "Practice",
+            key="japanese_practice_toggle",
+            help="Go through all your cards as many times as you like. Doesn't change when cards are due.",
+        )
         # realkana-style: type the answer and have it checked, instead of
         # revealing it and grading yourself. Saved with the deck, so it
         # stays how it was left.
@@ -133,9 +172,18 @@ with st.container(key="main_body"):
         deck["settings"]["typed_answers"] = typed_mode
         save_deck(deck)
 
-    due = due_cards(deck, DECK_FILTERS[review_filter])
+    kinds = DECK_FILTERS[review_filter]
+    due = due_cards(deck, kinds)
     reviewed_today = deck["reviews"].get(today_jst().isoformat(), 0)
-    st.caption(f"{len(due)} due · {reviewed_today} reviewed today")
+    card = None
+    if practice_mode:
+        card, position, total = practice_card(deck, kinds, review_filter)
+        if card:
+            st.caption(f"Practice · card {position} of {total} · doesn't change when cards are due")
+    else:
+        st.caption(f"{len(due)} due · {reviewed_today} reviewed today")
+        if due:
+            card = due[0]
 
     # Typed mode moves straight on to the next card after an answer, so the
     # verdict on the one just answered shows here, above it.
@@ -151,7 +199,8 @@ with st.container(key="main_body"):
             else:
                 typed_note = f" (you typed *{html.escape(last_result['typed'])}*)" if last_result["typed"] else ""
                 st.markdown(f"❌ **{html.escape(answered['front'])}** — {html.escape(answer)}{typed_note}")
-        if not last_result["correct"] and last_result["typed"]:
+        # Practice answers aren't scheduled, so there's nothing to undo.
+        if not last_result["correct"] and last_result["typed"] and not last_result.get("practice"):
             with override_column:
                 # For typos and answers the check was too strict about:
                 # undoes the "Again" and counts it as "Good" instead.
@@ -163,16 +212,16 @@ with st.container(key="main_body"):
 
     if not deck["cards"]:
         st.write("No cards yet -- add some below.")
-    elif not due:
-        upcoming = sorted(
-            card["due"] for card in deck["cards"] if card["kind"] in DECK_FILTERS[review_filter]
-        )
+    elif card is None and practice_mode:
+        st.write(f"No {review_filter.lower()} cards yet.")
+    elif card is None:
+        upcoming = sorted(other["due"] for other in deck["cards"] if other["kind"] in kinds)
         if upcoming:
             st.write(f"Nothing due right now. Next card is due {upcoming[0]}.")
+            st.caption("Turn on **Practice** to keep going anyway.")
         else:
             st.write(f"No {review_filter.lower()} cards yet.")
     elif typed_mode:
-        card = due[0]
         render_flashcard(card, show_back=False)
         asks_reading = answer_prompt(card) == "reading"
         with st.form("japanese_typed_form", clear_on_submit=True, border=False):
@@ -185,30 +234,46 @@ with st.container(key="main_body"):
         if checked:
             correct = bool(typed.strip()) and check_answer(card, typed)
             snapshot = dict(card)
-            review_card(deck, card["id"], "good" if correct else "again")
-            save_deck(deck)
-            st.session_state["japanese_last_result"] = {"card": snapshot, "correct": correct, "typed": typed.strip()}
+            if practice_mode:
+                advance_practice()
+            else:
+                review_card(deck, card["id"], "good" if correct else "again")
+                save_deck(deck)
+            st.session_state["japanese_last_result"] = {
+                "card": snapshot,
+                "correct": correct,
+                "typed": typed.strip(),
+                "practice": practice_mode,
+            }
+            st.session_state["japanese_answer_count"] = st.session_state.get("japanese_answer_count", 0) + 1
             st.rerun()
         # Puts the cursor back in the answer box for each new card, so a
-        # review session is just type, Enter, type, Enter. The card id and
-        # count make the snippet differ per card -- an unchanged one isn't
-        # re-run.
+        # review session is just type, Enter, type, Enter. The answer count
+        # makes the snippet differ each time -- an unchanged one isn't re-run
+        # (and in practice the same card can come straight back around).
+        answer_count = st.session_state.get("japanese_answer_count", 0)
         st.html(
-            f"<script>/* {card['id']} {reviewed_today} */"
+            f"<script>/* {card['id']} {answer_count} */"
             "setTimeout(() => document.querySelector('.st-key-japanese_typed_answer input')?.focus(), 100);"
             "</script>",
             unsafe_allow_javascript=True,
         )
     else:
-        card = due[0]
-        # Which card's answer is showing -- by id, so answering (or the
-        # queue changing under it) hides the answer for whatever comes next.
-        revealed = st.session_state.get("japanese_revealed") == card["id"]
+        # Which card's answer is showing -- by id and mode, so answering (or
+        # the queue changing under it) hides the answer for whatever's next.
+        reveal_key = (card["id"], practice_mode)
+        revealed = st.session_state.get("japanese_revealed") == reveal_key
         render_flashcard(card, show_back=revealed)
 
         if not revealed:
             if st.button("Show answer", key="japanese_show_answer", width="stretch"):
-                st.session_state["japanese_revealed"] = card["id"]
+                st.session_state["japanese_revealed"] = reveal_key
+                st.rerun()
+        elif practice_mode:
+            # Nothing to grade in practice -- just on to the next card.
+            if st.button("Next", key="japanese_practice_next", width="stretch"):
+                advance_practice()
+                st.session_state.pop("japanese_revealed", None)
                 st.rerun()
         else:
             # Each button shows when the card comes back if picked, like Anki.
