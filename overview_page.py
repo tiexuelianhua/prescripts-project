@@ -14,6 +14,7 @@ from datetime import datetime
 
 import streamlit as st
 
+from japanese_data import KIND_LABELS, practice_summary as japanese_practice_summary
 from meal_receipts_data import today_summary as meal_receipts_today_summary
 from prescripts_common import JST, LOGO_PATH, inject_body_fade_in, render_page_title, theme_colors
 from spotify_data import (
@@ -196,6 +197,21 @@ def render_spotify_tile() -> None:
     st.page_link("spotify_page.py", label="Open Spotify", icon="🎵")
 
 
+def render_japanese_tile() -> None:
+    st.subheader("🈁 Japanese")
+    data = japanese_practice_summary()
+    if not sum(data["total"].values()):
+        st.caption("No flashcards yet.")
+    else:
+        due_total = sum(data["due"].values())
+        st.metric("Due for review", due_total)
+        st.caption(
+            " · ".join(f"{KIND_LABELS[kind]}: {data['due'][kind]} due of {data['total'][kind]}" for kind in data["total"])
+        )
+        st.caption(f"Reviewed today: {data['reviewed_today']}")
+    st.page_link("japanese_page.py", label="Open Japanese", icon="🈁")
+
+
 # Two columns, each tile placed in whichever is currently shorter -- so a
 # short tile (Meal Receipts) gets the next one stacked under it instead of
 # leaving a gap beside a tall one (Weather). Weights are rough relative
@@ -213,6 +229,7 @@ def render_spotify_tile() -> None:
 TILES = [
     (render_meal_receipts_tile, 3, False),
     (render_weather_tile, 4, False),
+    (render_japanese_tile, 3, False),
     (render_spotify_tile, 4, True),
 ]
 

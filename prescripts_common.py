@@ -43,6 +43,12 @@ PAGES = [
         "path": "spotify_page.py",
         "keywords": ["spotify", "music", "playlist", "song", "playback"],
     },
+    {
+        "title": "Japanese",
+        "icon": "🈁",
+        "path": "japanese_page.py",
+        "keywords": ["japanese", "vocab", "vocabulary", "kanji", "flashcard", "flashcards", "srs", "study", "日本語"],
+    },
 ]
 
 
