@@ -12,6 +12,7 @@
 # CSVs and Spotify's settings) -- it's personal data, not code.
 import json
 import os
+import random
 import re
 import urllib.error
 import urllib.parse
@@ -204,6 +205,16 @@ def search_cards(deck: dict, query: str, kinds: list[str] | None = None) -> list
             or query in card["meaning"].lower()
         )
     ]
+
+
+def card_by_id(card_id: str | None) -> dict | None:
+    return next((card for card in load_deck()["cards"] if card["id"] == card_id), None)
+
+
+def random_card() -> dict | None:
+    # For the Overview tile's word display.
+    cards = load_deck()["cards"]
+    return random.choice(cards) if cards else None
 
 
 def practice_summary() -> dict:

@@ -22,4 +22,11 @@ inject_toast_style()
 home_page = st.Page("home_page.py", title="Home", icon="🏠", default=True)
 other_pages = [st.Page(page["path"], title=page["title"], icon=page["icon"]) for page in PAGES]
 
-st.navigation([home_page, *other_pages]).run()
+current_page = st.navigation([home_page, *other_pages])
+# Which page the previous run was on, so a page can tell "just arrived here"
+# from "rerunning while staying here" (e.g. Overview picks a new random
+# Japanese word per visit, not per button press). Fragment reruns don't go
+# through this script, so they don't count as leaving.
+st.session_state["_previous_page"] = st.session_state.get("_current_page")
+st.session_state["_current_page"] = current_page.url_path
+current_page.run()

@@ -8,13 +8,20 @@
 # render_..._tile() function below, and add it to TILES. No registry beyond
 # that list -- with only a handful of pages, a heavier plugin mechanism
 # would be solving a problem this doesn't have yet.
+import html
 import time
 import urllib.error
 from datetime import datetime
 
 import streamlit as st
 
-from japanese_data import KIND_LABELS, practice_summary as japanese_practice_summary
+from japanese_data import (
+    KIND_LABELS,
+    card_by_id as japanese_card_by_id,
+    has_distinct_reading as japanese_has_distinct_reading,
+    practice_summary as japanese_practice_summary,
+    random_card as japanese_random_card,
+)
 from meal_receipts_data import today_summary as meal_receipts_today_summary
 from prescripts_common import JST, LOGO_PATH, inject_body_fade_in, render_page_title, theme_colors
 from spotify_data import (
@@ -203,6 +210,22 @@ def render_japanese_tile() -> None:
     if not sum(data["total"].values()):
         st.caption("No flashcards yet.")
     else:
+        # A random card from the deck, just to look at: new one each time
+        # Overview is opened, but kept while staying on the page, so a
+        # Spotify button press (a full rerun) doesn't swap it out.
+        just_arrived = st.session_state.get("_previous_page") != st.session_state.get("_current_page")
+        card = None if just_arrived else japanese_card_by_id(st.session_state.get("overview_japanese_card"))
+        if card is None:  # just arrived, or the shown card was deleted
+            card = japanese_random_card()
+            st.session_state["overview_japanese_card"] = card["id"]
+        reading = ""
+        if japanese_has_distinct_reading(card):
+            reading = f'<div class="overview-word-reading">{html.escape(card["reading"])}</div>'
+        st.markdown(
+            f'<div class="overview-word"><div class="overview-word-front" lang="ja">{html.escape(card["front"])}</div>'
+            f'{reading}<div class="overview-word-meaning">{html.escape(card["meaning"])}</div></div>',
+            unsafe_allow_html=True,
+        )
         due_total = sum(data["due"].values())
         st.metric("Due for review", due_total)
         st.caption(
@@ -229,7 +252,7 @@ def render_japanese_tile() -> None:
 TILES = [
     (render_meal_receipts_tile, 3, False),
     (render_weather_tile, 4, False),
-    (render_japanese_tile, 3, False),
+    (render_japanese_tile, 5, False),
     (render_spotify_tile, 4, True),
 ]
 
@@ -266,6 +289,26 @@ st.markdown(
     }}
     [data-testid="stColumn"]:has([class*="st-key-overview_tile_"]) > [data-testid="stVerticalBlock"] {{
         gap: 0;
+    }}
+    /* The Japanese tile's random word: the word in Windows' Japanese font,
+       same as the Japanese page's flashcard front (the pixel font drops
+       strokes from dense kanji), reading in the accent blue. */
+    .overview-word {{
+        text-align: center;
+        margin: 0.5rem 0 1rem;
+    }}
+    .overview-word-front {{
+        font-family: "Yu Gothic UI", "Yu Gothic", "Meiryo", sans-serif;
+        font-size: 3rem;
+        line-height: 1.2;
+    }}
+    .overview-word-reading {{
+        color: {ACCENT_COLOR};
+        font-size: 1.2rem;
+        margin-top: 0.25rem;
+    }}
+    .overview-word-meaning {{
+        margin-top: 0.25rem;
     }}
     [data-testid="stColumn"]:has([class*="st-key-overview_tile_"]) > [data-testid="stVerticalBlock"] > [data-testid="stLayoutWrapper"]:last-child {{
         flex-grow: 1;
