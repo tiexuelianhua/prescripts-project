@@ -57,6 +57,11 @@ def load_deck() -> dict:
     deck.setdefault("cards", [])
     deck.setdefault("reviews", {})
     deck.setdefault("settings", {})
+    # Kanji readings were added after the first cards were made -- older
+    # cards just have them blank.
+    for card in deck["cards"]:
+        card.setdefault("onyomi", "")
+        card.setdefault("kunyomi", "")
     return deck
 
 
@@ -78,15 +83,22 @@ def find_duplicate(deck: dict, kind: str, front: str, exclude_id: str | None = N
     return None
 
 
-def add_card(deck: dict, kind: str, front: str, reading: str, meaning: str) -> dict:
+def add_card(
+    deck: dict, kind: str, front: str, reading: str, meaning: str, onyomi: str = "", kunyomi: str = ""
+) -> dict:
     # New cards are due straight away: they're things the user already
     # knows, so the first review just confirms it and starts the schedule.
+    # `reading` is for vocab; kanji have their on'yomi / kun'yomi instead
+    # (each a 、-separated list, kun'yomi okurigana marked with a dot as
+    # KANJIDIC does: まな.ぶ).
     card = {
         "id": uuid.uuid4().hex,
         "kind": kind,
         "front": front.strip(),
         "reading": reading.strip() if kind == "vocab" else "",
         "meaning": meaning.strip(),
+        "onyomi": onyomi.strip() if kind == "kanji" else "",
+        "kunyomi": kunyomi.strip() if kind == "kanji" else "",
         "added": today_jst().isoformat(),
         "due": today_jst().isoformat(),
         "interval": 0,
@@ -100,15 +112,16 @@ def add_card(deck: dict, kind: str, front: str, reading: str, meaning: str) -> d
 
 
 def update_card(deck: dict, card_id: str, **fields) -> None:
-    # A blanked-out front or meaning is ignored (a card needs both); a
-    # blanked-out reading is allowed, e.g. for a word written in kana only.
+    # A blanked-out front or meaning is ignored (a card needs both); blank
+    # readings are allowed, e.g. a word written in kana only, or a kanji
+    # with no kun'yomi.
     for card in deck["cards"]:
         if card["id"] == card_id:
-            for name in ("front", "reading", "meaning"):
+            for name in ("front", "reading", "meaning", "onyomi", "kunyomi"):
                 if name not in fields:
                     continue
                 value = "" if pd.isna(fields[name]) else str(fields[name]).strip()
-                if value or name == "reading":
+                if value or name not in ("front", "meaning"):
                     card[name] = value
             return
 
@@ -131,10 +144,12 @@ def next_schedule(card: dict, grade: str) -> tuple[int, float]:
         if reps == 1:
             return 3, ease
         return max(interval + 1, round(interval * ease)), ease
-    # easy
+    # easy -- always at least a day past what "Good" would give (on a
+    # card's second review the formula alone could land on the same day).
+    good_interval, _ = next_schedule(card, "good")
     if reps == 0:
-        return 4, ease + 0.15
-    return max(interval + 1, round(interval * ease * 1.3)), ease + 0.15
+        return max(4, good_interval + 1), ease + 0.15
+    return max(good_interval + 1, round(interval * ease * 1.3)), ease + 0.15
 
 
 def review_card(deck: dict, card_id: str, grade: str) -> None:
@@ -190,7 +205,7 @@ def format_interval(days: int) -> str:
 
 
 def search_cards(deck: dict, query: str, kinds: list[str] | None = None) -> list[dict]:
-    # Matches the written form, the reading, or the meaning (case-insensitive
+    # Matches the written form, any reading, or the meaning (case-insensitive
     # for the English side). Empty query = every card of those kinds.
     kinds = kinds or KINDS
     query = query.strip().lower()
@@ -200,9 +215,7 @@ def search_cards(deck: dict, query: str, kinds: list[str] | None = None) -> list
         if card["kind"] in kinds
         and (
             not query
-            or query in card["front"].lower()
-            or query in card["reading"].lower()
-            or query in card["meaning"].lower()
+            or any(query in card[field].lower() for field in ("front", "reading", "meaning", "onyomi", "kunyomi"))
         )
     ]
 
@@ -302,8 +315,9 @@ def kanji_lookup(query: str, limit: int = 10) -> list[dict]:
 
 # --- Typed answers ---------------------------------------------------------
 # realkana-style review: type the answer and the app checks it. Vocab asks
-# for the reading (kana, or romaji converted here); kanji -- and kana-only
-# vocab, where the reading is the front itself -- ask for the meaning.
+# for the reading (kana, or romaji converted here) -- or the meaning, for
+# kana-only words; kanji ask for the meaning and then each kind of reading
+# (see answer_steps below).
 ROMAJI = {
     "a": "あ", "i": "い", "u": "う", "e": "え", "o": "お",
     "ka": "か", "ki": "き", "ku": "く", "ke": "け", "ko": "こ",
@@ -421,17 +435,62 @@ def has_distinct_reading(card: dict) -> bool:
     )
 
 
-def answer_prompt(card: dict) -> str:
-    # What a typed answer should be for this card: "reading" or "meaning".
-    return "reading" if has_distinct_reading(card) else "meaning"
+def split_readings(text: str) -> list[str]:
+    # "キョウ、ゴウ" / "つよ.い, し.いる" -> one entry per reading.
+    return [part for part in re.split(r"[、,;/\s]+", text or "") if part]
 
 
-def check_answer(card: dict, typed: str) -> bool:
-    if answer_prompt(card) == "reading":
-        if re.search(r"[a-zA-Z]", typed):
-            typed = romaji_to_kana(typed)
-        return normalize_kana(typed) == normalize_kana(card["reading"])
-    # Any of the card's meanings counts; typing several ("study, learning")
-    # is fine as long as each one is on the card.
-    typed_parts = meaning_parts(typed)
-    return bool(typed_parts) and typed_parts <= meaning_parts(card["meaning"])
+def display_readings(text: str) -> str:
+    # For showing kun'yomi: KANJIDIC's dot before the okurigana becomes
+    # brackets (つよ.い -> つよ(い)), and the list gets a readable separator.
+    shown = []
+    for reading in split_readings(text):
+        stem, _, okurigana = reading.partition(".")
+        shown.append(f"{stem}({okurigana})" if okurigana else stem)
+    return "、".join(shown)
+
+
+# The parts a typed answer is asked for, in order. Vocab: its reading (or
+# its meaning, for kana-only words). Kanji: meaning, then on'yomi, then
+# kun'yomi -- skipping a reading the card doesn't have.
+STEP_LABELS = {
+    "reading": "Reading (kana or romaji)",
+    "meaning": "Meaning",
+    "onyomi": "On'yomi (kana or romaji)",
+    "kunyomi": "Kun'yomi (kana or romaji)",
+}
+
+
+def answer_steps(card: dict) -> list[str]:
+    if card["kind"] == "vocab":
+        return ["reading"] if has_distinct_reading(card) else ["meaning"]
+    return ["meaning"] + [field for field in ("onyomi", "kunyomi") if split_readings(card.get(field, ""))]
+
+
+def _typed_kana(typed: str) -> str:
+    if re.search(r"[a-zA-Z]", typed):
+        typed = romaji_to_kana(typed)
+    return normalize_kana(typed)
+
+
+def check_step(card: dict, step: str, typed: str) -> bool:
+    if not typed.strip():
+        return False
+    if step == "meaning":
+        # Any of the card's meanings counts; typing several ("study,
+        # learning") is fine as long as each one is on the card.
+        typed_parts = meaning_parts(typed)
+        return bool(typed_parts) and typed_parts <= meaning_parts(card["meaning"])
+    typed_kana = _typed_kana(typed)
+    if step == "reading":
+        return typed_kana == normalize_kana(card["reading"])
+    # A reading: any one listed of that kind counts. Kun'yomi can be typed
+    # whole (まなぶ) or as just the stem (まな); KANJIDIC's "-" marks
+    # (prefix/suffix readings like -め) are ignored.
+    accepted = set()
+    for reading in split_readings(card[step]):
+        reading = reading.replace("-", "")
+        stem, _, okurigana = reading.partition(".")
+        accepted.add(normalize_kana(stem + okurigana))
+        accepted.add(normalize_kana(stem))
+    return typed_kana in accepted

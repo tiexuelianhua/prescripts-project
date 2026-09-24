@@ -18,6 +18,7 @@ import streamlit as st
 from japanese_data import (
     KIND_LABELS,
     card_by_id as japanese_card_by_id,
+    display_readings as japanese_display_readings,
     has_distinct_reading as japanese_has_distinct_reading,
     practice_summary as japanese_practice_summary,
     random_card as japanese_random_card,
@@ -221,6 +222,12 @@ def render_japanese_tile() -> None:
         reading = ""
         if japanese_has_distinct_reading(card):
             reading = f'<div class="overview-word-reading">{html.escape(card["reading"])}</div>'
+        # Kanji: on'yomi and kun'yomi on one line, where vocab has its reading.
+        kanji_readings = " · ".join(
+            japanese_display_readings(card[field]) for field in ("onyomi", "kunyomi") if card.get(field)
+        )
+        if kanji_readings:
+            reading = f'<div class="overview-word-reading">{html.escape(kanji_readings)}</div>'
         st.markdown(
             f'<div class="overview-word"><div class="overview-word-front" lang="ja">{html.escape(card["front"])}</div>'
             f'{reading}<div class="overview-word-meaning">{html.escape(card["meaning"])}</div></div>',
