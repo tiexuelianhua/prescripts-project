@@ -1,8 +1,10 @@
 # Japanese page: flashcards for vocab and kanji the user already knows,
-# reviewed on a spaced-repetition (SRS) schedule, plus a lookup of the whole
-# deck. Grammar is planned for later. All data/scheduling lives in
+# reviewed on a spaced-repetition (SRS) schedule -- either revealed and
+# self-graded, or typed and checked (realkana-style) -- plus a lookup of the
+# whole deck. New cards can be filled in from Jisho / kanjiapi.dev. Grammar is planned for later. All data/scheduling lives in
 # japanese_data.py (no UI there), so the Overview tile can read it too.
 import html
+import urllib.error
 
 import pandas as pd
 import streamlit as st
@@ -13,12 +15,17 @@ from japanese_data import (
     KIND_LABELS,
     KINDS,
     add_card,
+    answer_prompt,
+    check_answer,
     delete_cards,
     due_cards,
     find_duplicate,
     format_interval,
+    jisho_lookup,
+    kanji_lookup,
     load_deck,
     next_schedule,
+    regrade,
     review_card,
     save_deck,
     search_cards,
@@ -83,18 +90,74 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+
+
+def render_flashcard(card: dict, show_back: bool) -> None:
+    back = ""
+    if show_back:
+        if card["kind"] == "vocab" and card["reading"]:
+            back += f'<div class="flashcard-reading">{html.escape(card["reading"])}</div>'
+        back += f'<div class="flashcard-meaning">{html.escape(card["meaning"])}</div>'
+    st.markdown(
+        f'<div class="flashcard">'
+        f'<div class="flashcard-kind">{KIND_LABELS[card["kind"]]}</div>'
+        f'<div class="flashcard-front" lang="ja">{html.escape(card["front"])}</div>'
+        f"{back}</div>",
+        unsafe_allow_html=True,
+    )
+
+
 deck = load_deck()
 
 with st.container(key="main_body"):
     # Review: the page's primary content, so always visible (house style --
     # secondary sections go in expanders below).
     st.subheader("Review")
-    review_filter = st.segmented_control(
-        "Deck", list(DECK_FILTERS), default="All", required=True, key="japanese_review_filter"
-    )
+    filter_column, typed_column = st.columns([3, 2], vertical_alignment="bottom")
+    with filter_column:
+        review_filter = st.segmented_control(
+            "Deck", list(DECK_FILTERS), default="All", required=True, key="japanese_review_filter"
+        )
+    with typed_column:
+        # realkana-style: type the answer and have it checked, instead of
+        # revealing it and grading yourself. Saved with the deck, so it
+        # stays how it was left.
+        typed_mode = st.toggle(
+            "Type answers",
+            value=deck["settings"].get("typed_answers", False),
+            key="japanese_typed_toggle",
+            help="Type the reading (vocab) or the meaning (kanji) and it's checked for you. Romaji turns into kana.",
+        )
+    if typed_mode != deck["settings"].get("typed_answers", False):
+        deck["settings"]["typed_answers"] = typed_mode
+        save_deck(deck)
+
     due = due_cards(deck, DECK_FILTERS[review_filter])
     reviewed_today = deck["reviews"].get(today_jst().isoformat(), 0)
     st.caption(f"{len(due)} due · {reviewed_today} reviewed today")
+
+    # Typed mode moves straight on to the next card after an answer, so the
+    # verdict on the one just answered shows here, above it.
+    last_result = st.session_state.get("japanese_last_result")
+    if typed_mode and last_result:
+        answered = last_result["card"]
+        answer = " · ".join(part for part in (answered["reading"], answered["meaning"]) if part)
+        verdict_column, override_column = st.columns([4, 1], vertical_alignment="center")
+        with verdict_column:
+            if last_result["correct"]:
+                st.markdown(f"✅ **{html.escape(answered['front'])}** — {html.escape(answer)}")
+            else:
+                typed_note = f" (you typed *{html.escape(last_result['typed'])}*)" if last_result["typed"] else ""
+                st.markdown(f"❌ **{html.escape(answered['front'])}** — {html.escape(answer)}{typed_note}")
+        if not last_result["correct"] and last_result["typed"]:
+            with override_column:
+                # For typos and answers the check was too strict about:
+                # undoes the "Again" and counts it as "Good" instead.
+                if st.button("I was right", key="japanese_override", width="stretch"):
+                    regrade(deck, last_result["card"], "good")
+                    save_deck(deck)
+                    last_result["correct"] = True
+                    st.rerun()
 
     if not deck["cards"]:
         st.write("No cards yet -- add some below.")
@@ -106,23 +169,40 @@ with st.container(key="main_body"):
             st.write(f"Nothing due right now. Next card is due {upcoming[0]}.")
         else:
             st.write(f"No {review_filter.lower()} cards yet.")
+    elif typed_mode:
+        card = due[0]
+        render_flashcard(card, show_back=False)
+        asks_reading = answer_prompt(card) == "reading"
+        with st.form("japanese_typed_form", clear_on_submit=True, border=False):
+            typed = st.text_input(
+                "Reading (kana or romaji)" if asks_reading else "Meaning",
+                key="japanese_typed_answer",
+                placeholder="Leave blank and press Enter if you don't know it",
+            )
+            checked = st.form_submit_button("Check", width="stretch")
+        if checked:
+            correct = bool(typed.strip()) and check_answer(card, typed)
+            snapshot = dict(card)
+            review_card(deck, card["id"], "good" if correct else "again")
+            save_deck(deck)
+            st.session_state["japanese_last_result"] = {"card": snapshot, "correct": correct, "typed": typed.strip()}
+            st.rerun()
+        # Puts the cursor back in the answer box for each new card, so a
+        # review session is just type, Enter, type, Enter. The card id and
+        # count make the snippet differ per card -- an unchanged one isn't
+        # re-run.
+        st.html(
+            f"<script>/* {card['id']} {reviewed_today} */"
+            "setTimeout(() => document.querySelector('.st-key-japanese_typed_answer input')?.focus(), 100);"
+            "</script>",
+            unsafe_allow_javascript=True,
+        )
     else:
         card = due[0]
         # Which card's answer is showing -- by id, so answering (or the
         # queue changing under it) hides the answer for whatever comes next.
         revealed = st.session_state.get("japanese_revealed") == card["id"]
-        back = ""
-        if revealed:
-            if card["kind"] == "vocab" and card["reading"]:
-                back += f'<div class="flashcard-reading">{html.escape(card["reading"])}</div>'
-            back += f'<div class="flashcard-meaning">{html.escape(card["meaning"])}</div>'
-        st.markdown(
-            f'<div class="flashcard">'
-            f'<div class="flashcard-kind">{KIND_LABELS[card["kind"]]}</div>'
-            f'<div class="flashcard-front" lang="ja">{html.escape(card["front"])}</div>'
-            f"{back}</div>",
-            unsafe_allow_html=True,
-        )
+        render_flashcard(card, show_back=revealed)
 
         if not revealed:
             if st.button("Show answer", key="japanese_show_answer", width="stretch"):
@@ -146,28 +226,77 @@ with st.container(key="main_body"):
 
     # Adding cards: open by default only while the deck is still empty.
     with st.expander("Add cards", expanded=not deck["cards"]):
-        # Outside the form so the fields below can change with it (a form
-        # only reports widget values on submit).
         add_kind = st.segmented_control(
             "Type", KINDS, format_func=KIND_LABELS.get, default="vocab", required=True, key="japanese_add_kind"
         )
-        with st.form("japanese_add_form", clear_on_submit=True, border=False):
-            if add_kind == "vocab":
-                front = st.text_input("Word", placeholder="e.g. 勉強")
-                reading = st.text_input("Reading (hiragana)", placeholder="e.g. べんきょう")
-            else:
-                front = st.text_input("Kanji", placeholder="e.g. 学")
-                reading = ""
-            meaning = st.text_input("Meaning", placeholder="e.g. study")
-            submitted = st.form_submit_button("Add card")
-        if submitted:
+        # Cleared here, before the fields exist, after a card is added --
+        # a widget's value can't be changed once it's been drawn this run.
+        if st.session_state.pop("_reset_japanese_add", False):
+            for key in ("japanese_add_lookup", "japanese_add_front", "japanese_add_reading", "japanese_add_meaning"):
+                st.session_state[key] = ""
+            st.session_state.pop("_japanese_filled_from", None)
+
+        is_vocab = add_kind == "vocab"
+        lookup = st.text_input(
+            "Look up on Jisho" if is_vocab else "Look up kanji",
+            key="japanese_add_lookup",
+            placeholder="Kanji, kana, romaji, or English" if is_vocab else "A kanji, or a word to pick its kanji from",
+        )
+        candidates = []
+        if lookup.strip():
+            try:
+                candidates = jisho_lookup(lookup) if is_vocab else kanji_lookup(lookup)
+                if not candidates:
+                    st.caption("No matches -- fill the card in by hand below.")
+            except (urllib.error.URLError, TimeoutError, ValueError):
+                source_name = "Jisho" if is_vocab else "kanjiapi.dev"
+                st.caption(f"Couldn't reach {source_name} right now -- fill the card in by hand below.")
+        if candidates:
+            in_deck = {card["front"] for card in deck["cards"] if card["kind"] == add_kind}
+
+            def candidate_label(index: int) -> str:
+                candidate = candidates[index]
+                if is_vocab:
+                    label = candidate["front"]
+                    if candidate["reading"]:
+                        label += f"【{candidate['reading']}】"
+                    label += f" — {candidate['meaning']}"
+                    if candidate["common"]:
+                        label += " · common"
+                else:
+                    readings = " · ".join(
+                        f"{name}: {value}" for name, value in (("on", candidate["on"]), ("kun", candidate["kun"])) if value
+                    )
+                    label = f"{candidate['front']} — {candidate['meaning']}" + (f" ({readings})" if readings else "")
+                if candidate["front"] in in_deck:
+                    label += " · already added"
+                return label
+
+            pick = st.radio(
+                "Matches", range(len(candidates)), format_func=candidate_label, key=f"japanese_pick_{add_kind}_{lookup}"
+            )
+            # Fill the card in from the pick -- once per pick, so edits made
+            # to the fields afterwards aren't overwritten on the next rerun.
+            filled_from = (add_kind, lookup, pick)
+            if st.session_state.get("_japanese_filled_from") != filled_from:
+                chosen = candidates[pick]
+                st.session_state["japanese_add_front"] = chosen["front"]
+                st.session_state["japanese_add_reading"] = chosen.get("reading", "")
+                st.session_state["japanese_add_meaning"] = chosen["meaning"]
+                st.session_state["_japanese_filled_from"] = filled_from
+
+        front = st.text_input("Word" if is_vocab else "Kanji", key="japanese_add_front")
+        reading = st.text_input("Reading (hiragana)", key="japanese_add_reading") if is_vocab else ""
+        meaning = st.text_input("Meaning", key="japanese_add_meaning")
+        if st.button("Add card", key="japanese_add_button"):
             if not front.strip() or not meaning.strip():
-                st.toast(f"A card needs both the {'word' if add_kind == 'vocab' else 'kanji'} and its meaning.", icon="⚠️")
+                st.toast(f"A card needs both the {'word' if is_vocab else 'kanji'} and its meaning.", icon="⚠️")
             elif find_duplicate(deck, add_kind, front):
                 st.toast(f"{front.strip()} is already in your {KIND_LABELS[add_kind].lower()} cards.", icon="⚠️")
             else:
                 add_card(deck, add_kind, front, reading, meaning)
                 save_deck(deck)
+                st.session_state["_reset_japanese_add"] = True
                 # st.toast(), not st.success(): only a toast survives st.rerun().
                 st.toast(f"Added {front.strip()}.", icon="✅")
                 st.rerun()
