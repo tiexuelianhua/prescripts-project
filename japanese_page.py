@@ -33,7 +33,7 @@ from japanese_data import (
     today_jst,
     update_card,
 )
-from prescripts_common import LOGO_PATH, inject_body_fade_in, render_page_title, theme_colors
+from prescripts_common import LOGO_PATH, inject_body_fade_in, render_page_title, theme_colors, typewriter
 
 TEXT_COLOR, ACCENT_COLOR = theme_colors()
 PAGE_TITLE = "Japanese"
@@ -294,12 +294,22 @@ with st.container(key="main_body"):
             elif find_duplicate(deck, add_kind, front):
                 st.toast(f"{front.strip()} is already in your {KIND_LABELS[add_kind].lower()} cards.", icon="⚠️")
             else:
-                add_card(deck, add_kind, front, reading, meaning)
+                card = add_card(deck, add_kind, front, reading, meaning)
                 save_deck(deck)
                 st.session_state["_reset_japanese_add"] = True
-                # st.toast(), not st.success(): only a toast survives st.rerun().
-                st.toast(f"Added {front.strip()}.", icon="✅")
+                # Typed out under the button on the next run, like Meal
+                # Receipts' "[Logged ...]" line -- stashed rather than typed
+                # here, since st.rerun() below would discard it unseen.
+                reading_note = f" ({card['reading']})" if card["reading"] else ""
+                st.session_state["_japanese_add_confirmation"] = (
+                    f"[Added {card['front']}{reading_note}: {card['meaning']}]"
+                )
                 st.rerun()
+        else:
+            # Popped so it types out once, not on every later rerun.
+            pending_confirmation = st.session_state.pop("_japanese_add_confirmation", None)
+            if pending_confirmation:
+                typewriter(pending_confirmation)
 
     # Lookup of everything already in the deck, editable in place.
     with st.expander("Your cards"):
