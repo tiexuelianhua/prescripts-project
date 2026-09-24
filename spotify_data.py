@@ -332,6 +332,36 @@ def play_track(uri: str) -> None:
     _clear_playback_cache()
 
 
+class NotInQueue(LookupError):
+    """The track a queue row pointed at has left the queue since it was shown."""
+
+
+def skip_to_queued(uri: str, position: int) -> None:
+    # Plays a queued track now by skipping forward to it, the way Spotify's
+    # own apps do when you tap a queued song: the songs ahead of it are
+    # dropped, everything after it stays. play_track() isn't usable here --
+    # a `uris` body replaces the whole playback context with that one track,
+    # wiping out the rest of the queue.
+    #
+    # `position` is the 1-based row the button was shown on. The queue is
+    # re-read fresh first: if it shifted since render (a song ended, an edit
+    # from another device), skip to wherever that track is now -- the row
+    # shown if it's still there (the same song can be queued twice), else
+    # its first occurrence -- rather than blindly skipping `position` times.
+    queue = (_api_request("GET", "/me/player/queue") or {}).get("queue", [])
+    uris = [item.get("uri") for item in queue]
+    if position <= len(uris) and uris[position - 1] == uri:
+        skips = position
+    elif uri in uris:
+        skips = uris.index(uri) + 1
+    else:
+        raise NotInQueue(uri)
+    for _ in range(skips):
+        _api_request("POST", "/me/player/next")
+    _clear_playback_cache()
+    current_queue.clear()
+
+
 def add_to_queue(uri: str) -> None:
     _api_request("POST", "/me/player/queue", params={"uri": uri})
     current_queue.clear()

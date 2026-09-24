@@ -33,6 +33,7 @@ from spotify_data import (
     set_read_only,
     set_shuffle,
     set_volume,
+    skip_to_queued,
     unsave_item,
 )
 from spotify_log import log_event, log_slow
@@ -118,7 +119,7 @@ with st.container(key="main_body"):
 
         inject_seek_slider_styles("spotify_page_seek")
         # The icon-only heart buttons (beside the song title, and in the
-        # queue / Recently played rows) drop the app-wide outlined-button
+        # queue / Recently played rows) and the queue's play buttons drop the app-wide outlined-button
         # look so they read as plain icons. They also sit in narrow columns,
         # where the default button padding is wider than the column and
         # clipped the heart, hence the zero side padding.
@@ -128,6 +129,7 @@ with st.container(key="main_body"):
             .st-key-spotify_page_like button,
             .st-key-spotify_page_unlike button,
             [class*="st-key-queue_like_"] button,
+            [class*="st-key-queue_play_"] button,
             [class*="st-key-recent_like_"] button {
                 border: none;
                 box-shadow: none;
@@ -290,13 +292,21 @@ with st.container(key="main_body"):
             with st.container(height=QUEUE_BOX_HEIGHT):
                 for position, queued in enumerate(shown, start=1):
                     described = describe_item(queued)
-                    row_text, row_like = st.columns([5, 1], vertical_alignment="center")
+                    row_text, row_play, row_like = st.columns([4, 1, 1], vertical_alignment="center")
                     with row_text:
                         st.markdown(
                             f"**{position}. {html.escape(described['name'])}**<br>"
                             f'<span style="opacity:0.6;font-size:0.85em">{html.escape(described["artists"])}</span>',
                             unsafe_allow_html=True,
                         )
+                    if not locked:
+                        with row_play:
+                            # Skips forward to this song rather than playing
+                            # it on its own, so the rest of the queue survives
+                            # -- see skip_to_queued. Same uri-in-key reasoning
+                            # as the Like button below.
+                            if st.button("▶", key=f"queue_play_{position}_{queued['uri']}", help="Play now (skips the songs ahead of it)"):
+                                run_control(skip_to_queued, uri=queued["uri"], position=position)
                     if can_like:
                         with row_like:
                             # Key carries the uri as well as the position: if

@@ -10,6 +10,7 @@ import urllib.error
 import streamlit as st
 
 from spotify_data import (
+    NotInQueue,
     is_read_only,
     live_progress_ms,
     next_track,
@@ -33,8 +34,8 @@ def run_control(action, *, success=None, rerun=True, rerun_scope="app", **kwargs
     #
     # Every call is logged: this is the single choke point every transport
     # control (Next/Previous/Play/Pause, Like/Unlike, volume, shuffle, Play
-    # again, Add to queue) and the seek slider all go through, so it's the
-    # one place that can answer "did the app actually do this, and why" --
+    # again, Play from queue, Add to queue) and the seek slider all go
+    # through, so it's the one place that can answer "did the app actually do this, and why" --
     # e.g. a track skip with no button click behind it in the log points at
     # a spurious call here rather than something on Spotify's own side.
     call = f"{action.__name__}({', '.join(f'{k}={v}' for k, v in kwargs.items())})"
@@ -60,6 +61,10 @@ def run_control(action, *, success=None, rerun=True, rerun_scope="app", **kwargs
     except (urllib.error.URLError, TimeoutError):
         log_event(f"control failed: {call} -- unreachable")
         st.toast("Couldn't reach Spotify right now.", icon="⚠️")
+        return False
+    except NotInQueue:
+        log_event(f"control failed: {call} -- no longer queued")
+        st.toast("That song isn't in the queue anymore.", icon="⚠️")
         return False
     log_event(f"control: {call}")
     if success:
