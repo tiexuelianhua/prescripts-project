@@ -32,6 +32,7 @@ from meal_receipts_data import (
 from prescripts_common import (
     JST,
     inject_body_fade_in,
+    keep_typed_selectbox_text,
     render_page_title,
     show_logo,
     theme_colors,
@@ -242,6 +243,8 @@ with st.container(key="main_body"):
     entry_date = st.date_input(
         "Day", value=today_date, max_value=today_date, key="add_entry_day"
     )
+    # Typed text in these three survives clicking/tabbing away without Enter.
+    keep_typed_selectbox_text("add_entry_item", "add_entry_store", "add_entry_excluded_reason")
     item = st.selectbox(
         "Item", options=known_values("item", exclude=excluded_items), index=None,
         accept_new_options=True, placeholder="Type or pick an item",

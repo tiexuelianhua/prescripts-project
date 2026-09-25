@@ -244,6 +244,52 @@ def inject_input_style() -> None:
     )
 
 
+def keep_typed_selectbox_text(*keys: str) -> None:
+    # A selectbox that accepts new options treats typing as a *search*: the
+    # text only becomes its value on Enter (or by picking from the list), and
+    # clicking or tabbing away silently throws it away -- easy to lose a
+    # typed store/item that way. This presses Enter on the user's behalf
+    # first, whenever they leave one of these boxes (by clicking elsewhere, or
+    # Tab) while its list is still open with something typed -- the same
+    # thing Enter itself would have done. Clicks on the list's own options,
+    # or on the same box, are left alone.
+    #
+    # Listeners go on the document once per browser tab (the flag), keyed by
+    # these widgets' st-key-* classes, so reruns and page switches don't
+    # stack up duplicates.
+    selectors = json.dumps([f".st-key-{key} input" for key in keys])
+    st.html(
+        f"""<script>
+        window._keepTypedSelectors = new Set([...(window._keepTypedSelectors || []), ...{selectors}]);
+        if (!window._keepTypedInstalled) {{
+            window._keepTypedInstalled = true;
+            const pending = () => {{
+                const input = document.activeElement;
+                if (!input || input.tagName !== "INPUT" || !input.value.trim()) return null;
+                if (input.getAttribute("aria-expanded") !== "true") return null;
+                return [...window._keepTypedSelectors].some(s => input.matches(s)) ? input : null;
+            }};
+            const pressEnter = input => input.dispatchEvent(new KeyboardEvent("keydown", {{
+                key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true, cancelable: true,
+            }}));
+            document.addEventListener("pointerdown", event => {{
+                const input = pending();
+                if (!input) return;
+                if (event.target.closest('[role="listbox"]')) return;
+                if (input.closest(".stSelectbox").contains(event.target)) return;
+                pressEnter(input);
+            }}, true);
+            document.addEventListener("keydown", event => {{
+                if (event.key !== "Tab") return;
+                const input = pending();
+                if (input) pressEnter(input);
+            }}, true);
+        }}
+        </script>""",
+        unsafe_allow_javascript=True,
+    )
+
+
 def inject_body_fade_in(container_key: str) -> None:
     # Fades in every element inside st.container(key=container_key) --
     # scoped there (not the whole page) so a page's title isn't
