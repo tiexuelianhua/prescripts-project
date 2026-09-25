@@ -166,8 +166,20 @@ def main() -> None:
     try:
         _wait_for_server()
         api = _Api()
+        # The Startup-folder shortcut passes --minimized (through
+        # ThePrescriptsLauncher.exe), so at sign-in the window waits in the
+        # taskbar instead of popping up over everything else starting.
+        # Launched by hand, it opens as normal.
+        minimized = "--minimized" in sys.argv[1:]
         window = webview.create_window(
-            "The Prescripts", URL, width=1200, height=850, min_size=(800, 600), js_api=api
+            "The Prescripts",
+            URL,
+            width=1200,
+            height=850,
+            min_size=(800, 600),
+            js_api=api,
+            minimized=minimized,
+            focus=not minimized,
         )
         api._window = window
         # Blocks until the window is closed -- that's the signal to tear the
