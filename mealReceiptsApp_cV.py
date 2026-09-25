@@ -478,14 +478,6 @@ with st.container(key="main_body"):
                 st.caption(f"Not counted: ¥{excluded_by_reason.sum():,.0f} ({breakdown})")
             st.bar_chart(summary.set_index("day")["total_yen"])
 
-    st.divider()
-    st.caption(
-        "Visual style (logo, color palette, layout) inspired by *Limbus Company* "
-        "(Project Moon) and the fan site [prescript.neocities.org]"
-        "(https://prescript.neocities.org/). Pixel font: "
-        "[Galmuri](https://github.com/quiple/galmuri) by quiple, OFL-1.1 licensed."
-    )
-
 # Streamlit reruns this whole script on every widget interaction (picking an
 # item, typing a store, nudging the cost), and typewriter() blocks for
 # speed_ms per character -- animating this line on every one of those runs

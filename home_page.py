@@ -145,6 +145,31 @@ typewriter(
     placeholder=prompt_placeholder,
 )
 
+# The app's one place for attribution (the same list as the README's
+# Credits). Collapsed to a single word under the Mili note so it adds next
+# to nothing to the page; a plain <details> rather than an st.expander, so
+# opening it is purely in the browser and doesn't rerun the page. The corner
+# note is pinned by its bottom edge, so it opens upwards.
+_CREDITS_HTML = """
+<details style="margin-top: 0.5rem;">
+    <summary style="cursor: pointer;">Credits</summary>
+    The Prescripts come from The Index, from Project Moon's games
+    (<a href="https://library-of-ruina.fandom.com/wiki/The_Index" target="_blank">Library of Ruina</a>,
+    <a href="https://limbuscompany.wiki.gg/wiki/The_Index" target="_blank">Limbus Company</a>).
+    Colours and button style:
+    <a href="https://prescript.neocities.org/" target="_blank">prescript.neocities.org</a>.
+    Font: <a href="https://github.com/quiple/galmuri" target="_blank">Galmuri</a> by quiple (OFL-1.1).
+    Weather: <a href="https://www.jma.go.jp/bosai/" target="_blank">JMA</a>.
+    Lyrics: <a href="https://lrclib.net" target="_blank">LRCLIB</a>.
+    Word lookups: <a href="https://jisho.org" target="_blank">Jisho</a>,
+    <a href="https://kanjiapi.dev" target="_blank">kanjiapi.dev</a>.
+</details>
+"""
+# Collapsed onto one line before it's dropped into the footer below: its own
+# unindented lines would stop Streamlit dedenting the footer's HTML, and
+# Markdown would then show the whole indented footer as a code block.
+_CREDITS_HTML = " ".join(_CREDITS_HTML.split())
+
 # Pinned to the corner via CSS rather than st.caption's normal inline flow,
 # so it reads as a page-level footer note instead of sitting right under the
 # search box. Fades in on load (matches the typewriter's gradual-reveal feel
@@ -175,6 +200,7 @@ st.markdown(
         "Children of the City" (feat. Project Moon, from the album
         <i>To Kill a Living Book</i>) is the song the Prescript concept
         itself comes from.
+        {_CREDITS_HTML}
     </div>
     """,
     unsafe_allow_html=True,
