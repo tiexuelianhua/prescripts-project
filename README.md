@@ -178,6 +178,16 @@ The project has automated tests. They load every page and check a few behaviours
 
 It takes about a minute and should finish with `6 passed`. Close the app first if it's running: installing packages while it's open can fail, because Windows locks files the app is using.
 
+### Updating the screenshots
+
+The screenshots above can be retaken with one command. It needs Chrome or Edge installed:
+
+```powershell
+.venv\Scripts\python tools\take_screenshots.py
+```
+
+It runs a throwaway copy of the app in `C:\Prescripts`, filled with made-up sample data, screenshots each page into `docs/screenshots/`, and deletes `C:\Prescripts` again. Your own data is never used. Look at each image before committing: the Home prompt is picked at random, and Weather shows that day's real forecast.
+
 ## Troubleshooting
 
 **`py` is not recognised.** Python isn't installed, or PowerShell was opened before it was. Install Python 3.12 from python.org, then open a new PowerShell window.
