@@ -1,6 +1,6 @@
 # The Prescripts
 
-A personal dashboard app for everyday life in Japan, themed on the Prescripts of [The Index](https://library-of-ruina.fandom.com/wiki/The_Index), from Project Moon's games. It runs on your own computer, in its own window, and keeps all its data in plain files next to the code.
+A personal dashboard app for everyday life in Japan, themed on the Prescripts of [The Index](https://library-of-ruina.fandom.com/wiki/The_Index), from Project Moon's games. It runs on your own computer in its own window and keeps all its data in plain files next to the code.
 
 | Page | What it does |
 |---|---|
@@ -15,7 +15,7 @@ A personal dashboard app for everyday life in Japan, themed on the Prescripts of
 <details>
 <summary><b>More screenshots</b></summary>
 
-**Home**: the front door. Type what you're after, or pick a page from the » menu.
+**Home**: Initial page. Type what you're after or pick a page from the » menu.
 ![Home page](docs/screenshots/home.png)
 
 **Meal Receipts**: log a meal, see the day's entries, and track the week against a budget.
@@ -24,7 +24,7 @@ A personal dashboard app for everyday life in Japan, themed on the Prescripts of
 **Japanese**: flashcard reviews, graded Again / Hard / Good / Easy.
 ![Japanese page](docs/screenshots/japanese.png)
 
-**Weather**: today, warnings and a 7-day outlook from the Japan Meteorological Agency.
+**Weather**: today, warnings, and a 7-day outlook from the Japan Meteorological Agency.
 ![Weather page](docs/screenshots/weather.png)
 
 </details>
