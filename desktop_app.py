@@ -44,11 +44,25 @@ else:
 
 # .streamlit/config.toml holds the public look's colors; the private look
 # overrides them at launch (flags beat the config file). Must match
-# ACCENT_COLOR / ACCENT_COLOR_LIGHT in prescripts_common.py.
+# ACCENT_COLOR in prescripts_common.py. The private look is also dark-only
+# (the sky blue is unreadable on white), while the public one keeps light
+# mode for anyone who wants it. theme.base can't force that -- with both
+# [theme.light] and [theme.dark] defined, the viewer's light/dark preference
+# still picks one -- so the light slot just gets the dark palette too
+# (values from config.toml's [theme.dark]).
+_PRIVATE_DARK_PALETTE = {
+    "primaryColor": "#96c4ec",
+    "linkColor": "#96c4ec",
+    "backgroundColor": "#000000",
+    "secondaryBackgroundColor": "#111318",
+    "textColor": "#f0f8ff",
+    "borderColor": "#2a2f3a",
+    "codeBackgroundColor": "#0a0a0d",
+}
 _PRIVATE_THEME_FLAGS = [
-    f"--theme.{mode}.{key}=#96c4ec"
+    f"--theme.{mode}.{key}={value}"
     for mode in ("light", "dark")
-    for key in ("primaryColor", "linkColor")
+    for key, value in _PRIVATE_DARK_PALETTE.items()
 ]
 
 # Fullscreen is toggled with F11, like any browser/app -- not on by default

@@ -23,13 +23,14 @@ PRIVATE_LOOK = PRIVATE_LOGO_PATH.exists()
 LOGO_PATH = PRIVATE_LOGO_PATH if PRIVATE_LOOK else SCRIPTS_DIR / "static" / "forget_me_not.png"
 
 # Buttons/links/input borders. Must match primaryColor in
-# .streamlit/config.toml (public) and desktop_app.py's _PRIVATE_THEME_FLAGS.
+# .streamlit/config.toml (public) and desktop_app.py's _PRIVATE_DARK_PALETTE.
 # The public periwinkle is sampled from the forget-me-not's petals; light
 # mode gets a deeper shade of it, since the petal color itself is too faint
 # to read on white. The private sky blue was measured from
-# prescript.neocities.org's style.css.
+# prescript.neocities.org's style.css; the private look is dark-only, so it
+# has no light-mode shade.
 ACCENT_COLOR = "#96c4ec" if PRIVATE_LOOK else "#7578b2"
-ACCENT_COLOR_LIGHT = "#96c4ec" if PRIVATE_LOOK else "#6b6ead"
+ACCENT_COLOR_LIGHT = "#6b6ead"
 
 # Every non-home page in the app, in one place -- app.py's st.navigation()
 # and the Home page's tile grid / search both read this, so adding a page
@@ -157,7 +158,10 @@ def theme_colors() -> tuple[str, str]:
     # .streamlit/config.toml by hand. Defaults to the dark palette when type
     # is unset (system default), since dark is this app's primary intended
     # look.
-    is_light = st.context.theme.get("type") == "light"
+    # The private look renders dark even in the "light" slot (see
+    # desktop_app.py's _PRIVATE_DARK_PALETTE), so it always takes the dark
+    # colors here too.
+    is_light = not PRIVATE_LOOK and st.context.theme.get("type") == "light"
     text_color = "#162a3b" if is_light else "#f0f8ff"
     return text_color, ACCENT_COLOR_LIGHT if is_light else ACCENT_COLOR
 
