@@ -10,6 +10,27 @@ A personal dashboard app for everyday life in Japan, themed on the Prescripts of
 | **Spotify** | See and control what's playing, with lyrics (needs a one-off setup, below) |
 | **Japanese** | Vocabulary and kanji flashcards with spaced-repetition reviews |
 
+![The Overview page: a tile each for Meal Receipts, Weather, Japanese and Spotify](docs/screenshots/overview.png)
+
+<details>
+<summary><b>More screenshots</b></summary>
+
+**Home**: the front door. Type what you're after, or pick a page from the » menu.
+![Home page](docs/screenshots/home.png)
+
+**Meal Receipts**: log a meal, see the day's entries, and track the week against a budget.
+![Meal Receipts page](docs/screenshots/meal_receipts.png)
+
+**Japanese**: flashcard reviews, graded Again / Hard / Good / Easy.
+![Japanese page](docs/screenshots/japanese.png)
+
+**Weather**: today, warnings and a 7-day outlook from the Japan Meteorological Agency.
+![Weather page](docs/screenshots/weather.png)
+
+</details>
+
+*Screenshots show made-up sample data.*
+
 Personal portfolio project developed with the help of PeaceWorks K.K. and ORBWEVA.
 
 ---
