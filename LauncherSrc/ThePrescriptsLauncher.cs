@@ -10,7 +10,8 @@
 // A plain csc.exe-compiled .exe carries a default asInvoker manifest, so it
 // triggers neither problem.
 //
-// If the app is already open, a launch just brings its window forward.
+// If the app is already open (or still starting up), a launch just brings
+// its window forward.
 // Otherwise every launch first stops whatever is already serving on Port, then starts
 // desktop_app.py, which starts its own fresh server there (and separately
 // closes any previous *window* left over from an earlier launch -- see its
@@ -25,6 +26,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Management;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -33,12 +35,9 @@ class ThePrescriptsLauncher
 {
     // Must match REDIRECT_URI in spotify_data.py.
     const int Port = 8501;
-    // Must match PID_FILE in desktop_app.py.
     // The exe is built into the repo folder itself (see the csc command in
     // the commit history), so everything is found relative to where it sits.
     static readonly string ScriptsDir = AppDomain.CurrentDomain.BaseDirectory.TrimEnd('\\');
-    // Must match PID_FILE in desktop_app.py.
-    static readonly string PidFile = Path.Combine(ScriptsDir, ".desktop_app.pid");
 
     const int SW_RESTORE = 9;
     delegate bool EnumWindowsProc(IntPtr hwnd, IntPtr lParam);
@@ -94,30 +93,66 @@ class ThePrescriptsLauncher
         Process.Start(psi);
     }
 
-    // The visible window of the process desktop_app.py recorded in its
-    // pidfile, if that process is still alive and is Python (a stale
-    // pidfile's PID could have been reused by anything since).
+    // The visible window of a running desktop_app.py, if there is one.
+    //
+    // A copy that's running but has no window yet is still starting --
+    // desktop_app.py only opens its window once Streamlit is listening, which
+    // can take a good while right after sign-in. So wait for the window
+    // rather than treat the app as closed: restarting there used to replace
+    // the Startup shortcut's minimised copy with an un-minimised one whenever
+    // the taskbar pin was clicked before the window had appeared. The copies
+    // are found by command line rather than desktop_app.py's pidfile, which
+    // isn't written until Python has finished its imports.
     static IntPtr FindExistingWindow()
     {
-        int pid;
+        // A little over desktop_app.py's own 30s wait for the server.
+        for (int i = 0; i < 70; i++)
+        {
+            HashSet<uint> pids = DesktopAppPids();
+            if (pids.Count == 0)
+                return IntPtr.Zero;
+            IntPtr window = VisibleWindowOf(pids);
+            if (window != IntPtr.Zero)
+                return window;
+            Thread.Sleep(500);
+        }
+        return IntPtr.Zero;
+    }
+
+    // Python processes running desktop_app.py. Both .venv's pythonw.exe (a
+    // small redirector) and the base-install pythonw.exe it hands off to
+    // show up; the window belongs to the latter.
+    static HashSet<uint> DesktopAppPids()
+    {
+        var pids = new HashSet<uint>();
         try
         {
-            if (!int.TryParse(File.ReadAllText(PidFile).Trim(), out pid))
-                return IntPtr.Zero;
-            if (!Process.GetProcessById(pid).ProcessName.StartsWith("python", StringComparison.OrdinalIgnoreCase))
-                return IntPtr.Zero;
+            using (var search = new ManagementObjectSearcher(
+                "SELECT ProcessId, CommandLine FROM Win32_Process WHERE Name LIKE 'python%'"))
+            {
+                foreach (ManagementObject process in search.Get())
+                {
+                    string commandLine = process["CommandLine"] as string;
+                    if (commandLine != null && commandLine.IndexOf("desktop_app.py", StringComparison.OrdinalIgnoreCase) >= 0)
+                        pids.Add((uint)process["ProcessId"]);
+                }
+            }
         }
         catch (Exception)
         {
-            return IntPtr.Zero;
+            // WMI unavailable: fall back to a normal fresh start.
         }
+        return pids;
+    }
 
+    static IntPtr VisibleWindowOf(HashSet<uint> pids)
+    {
         IntPtr found = IntPtr.Zero;
         EnumWindows((hwnd, _) =>
         {
             uint owner;
             GetWindowThreadProcessId(hwnd, out owner);
-            if (owner == pid && IsWindowVisible(hwnd) && GetWindowTextLength(hwnd) > 0)
+            if (pids.Contains(owner) && IsWindowVisible(hwnd) && GetWindowTextLength(hwnd) > 0)
             {
                 found = hwnd;
                 return false;
