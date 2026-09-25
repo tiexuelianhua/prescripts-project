@@ -16,6 +16,12 @@
 [server]
 enableStaticServing = true
 
+[client]
+# No Deploy button or developer menu items (rerun, clear cache) -- this is a
+# personal app, not one being published. The Settings menu stays, so the
+# public look can still be switched between light and dark.
+toolbarMode = "viewer"
+
 [theme]
 font = "Galmuri14, Helvetica, sans-serif"
 
