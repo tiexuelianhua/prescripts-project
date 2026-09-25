@@ -7,6 +7,7 @@
 import html
 import random
 import urllib.error
+import uuid
 
 import pandas as pd
 import streamlit as st
@@ -222,14 +223,30 @@ with st.container(key="main_body"):
             "Type answers",
             value=deck["settings"].get("typed_answers", False),
             key="japanese_typed_toggle",
-            help="Type the reading (vocab) or the meaning (kanji) and it's checked for you. Romaji turns into kana.",
+            help="Type the reading and meaning (plus on'yomi/kun'yomi for kanji) and they're checked for you. Romaji turns into kana.",
         )
-    if typed_mode != deck["settings"].get("typed_answers", False):
+        # Daily reviews in a random order rather than oldest-due first. On by
+        # default and saved with the deck; Practice always shuffles anyway.
+        shuffle_mode = st.toggle(
+            "Shuffle",
+            value=deck["settings"].get("shuffle_reviews", True),
+            key="japanese_shuffle_toggle",
+            disabled=practice_mode,
+            help="Show due cards in a random order. Cards you get wrong still come back after the rest.",
+        )
+    if (
+        typed_mode != deck["settings"].get("typed_answers", False)
+        or shuffle_mode != deck["settings"].get("shuffle_reviews", True)
+    ):
         deck["settings"]["typed_answers"] = typed_mode
+        deck["settings"]["shuffle_reviews"] = shuffle_mode
         save_deck(deck)
 
     kinds = DECK_FILTERS[review_filter]
-    due = due_cards(deck, kinds)
+    # One seed per visit: the shuffled order holds still across reruns (and
+    # the deck filter), and a fresh visit gets a new one.
+    shuffle_seed = st.session_state.setdefault("japanese_shuffle_seed", uuid.uuid4().hex) if shuffle_mode else None
+    due = due_cards(deck, kinds, shuffle_seed)
     reviewed_today = deck["reviews"].get(today_jst().isoformat(), 0)
     card = None
     if practice_mode:
@@ -243,10 +260,10 @@ with st.container(key="main_body"):
 
     # Typed mode moves straight on to the next card after an answer, so the
     # verdict on the one just answered shows here, above it.
-    # A kanji card is typed in parts (meaning, on'yomi, kun'yomi); this is
-    # how far into the current card that's got. The last card's verdict is
-    # hidden while one is part-way through, so the marks shown are all for
-    # the card on screen.
+    # A card is typed in parts (vocab: reading, meaning; kanji: meaning,
+    # on'yomi, kun'yomi); this is how far into the current card that's got.
+    # The last card's verdict is hidden while one is part-way through, so the
+    # marks shown are all for the card on screen.
     progress = st.session_state.get("japanese_step")
     if card is None or not progress or progress["key"] != (card["id"], practice_mode):
         progress = {"key": (card["id"], practice_mode) if card else None, "parts": []}

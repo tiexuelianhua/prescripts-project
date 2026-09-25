@@ -47,8 +47,8 @@ def today_jst() -> date:
 def load_deck() -> dict:
     # {"cards": [...], "reviews": {"YYYY-MM-DD": count}, "settings": {...}}.
     # "reviews" only feeds the "reviewed today" counts; the schedule itself
-    # is on each card. "settings" holds page preferences (typed answers on
-    # or off) so they survive a restart.
+    # is on each card. "settings" holds page preferences (typed answers,
+    # shuffled reviews) so they survive a restart.
     if CARDS_PATH.exists():
         with open(CARDS_PATH, encoding="utf-8") as file:
             deck = json.load(file)
@@ -185,13 +185,26 @@ def regrade(deck: dict, snapshot: dict, grade: str) -> None:
             return
 
 
-def due_cards(deck: dict, kinds: list[str] | None = None) -> list[dict]:
+def due_cards(deck: dict, kinds: list[str] | None = None, shuffle_seed: str | None = None) -> list[dict]:
     # Overdue first (oldest due date), then least recently reviewed -- never-
     # reviewed cards before anything answered "Again" earlier today.
+    # With a shuffle_seed, cards not yet seen today come in a random order
+    # instead -- the same order for the same seed, so the card on screen
+    # doesn't change under Streamlit's reruns -- and anything answered
+    # "Again" today still waits behind them, oldest miss first.
     today = today_jst().isoformat()
     kinds = kinds or KINDS
     due = [card for card in deck["cards"] if card["kind"] in kinds and card["due"] <= today]
-    return sorted(due, key=lambda card: (card["due"], card["last_reviewed"] or ""))
+    if shuffle_seed is None:
+        return sorted(due, key=lambda card: (card["due"], card["last_reviewed"] or ""))
+
+    def shuffled_key(card: dict) -> tuple:
+        seen_today = (card["last_reviewed"] or "").startswith(today)
+        if seen_today:
+            return (1, card["last_reviewed"], 0.0)
+        return (0, "", random.Random(f"{shuffle_seed}:{card['id']}").random())
+
+    return sorted(due, key=shuffled_key)
 
 
 def format_interval(days: int) -> str:
@@ -469,8 +482,9 @@ STEP_LABELS = {
 
 
 def answer_steps(card: dict) -> list[str]:
+    # Every card asks for its meaning; readings come first where there are any.
     if card["kind"] == "vocab":
-        return ["reading"] if has_distinct_reading(card) else ["meaning"]
+        return ["reading", "meaning"] if has_distinct_reading(card) else ["meaning"]
     return ["meaning"] + [field for field in ("onyomi", "kunyomi") if split_readings(card.get(field, ""))]
 
 
