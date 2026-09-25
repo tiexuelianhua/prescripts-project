@@ -4,6 +4,7 @@
 # That separation means other pages (e.g. an Overview page wanting today's
 # total) can import and call these directly without accidentally triggering
 # mealReceiptsApp_cV.py's own UI as a side effect of the import.
+import calendar
 import json
 import subprocess
 from datetime import date, datetime, timedelta
@@ -243,6 +244,82 @@ def last_entry_for_item(item: str) -> pd.Series | None:
     if matches.empty:
         return None
     return matches.sort_values("timestamp").iloc[-1]
+
+
+def daily_totals_for_month(year: int, month: int) -> dict[date, int]:
+    # Counted total per logged day of one month, keyed by date (read from the
+    # day folders' dd-mm-yyyy names). Days with no receipts.csv are absent.
+    month_dir = day_folder_for(date(year, month, 1)).parent
+    totals = {}
+    if month_dir.exists():
+        for day_dir in month_dir.iterdir():
+            csv_path = day_dir / "receipts.csv"
+            if not csv_path.exists():
+                continue
+            try:
+                day = datetime.strptime(day_dir.name, "%d-%m-%Y").date()
+            except ValueError:
+                continue
+            totals[day] = counted_total(load_entries(csv_path))
+    return totals
+
+
+def _previous_month(year: int, month: int) -> tuple[int, int]:
+    return (year - 1, 12) if month == 1 else (year, month - 1)
+
+
+def signed_yen(amount: float) -> str:
+    # "+¥175" / "-¥10,400": the sign before the ¥, as it's read aloud. A plain
+    # hyphen, not a minus sign -- st.metric picks a delta's colour from it.
+    return f"{'-' if amount < 0 else '+'}¥{abs(amount):,.0f}"
+
+
+def allowance_for_days(budget_amount: int, budget_period: str, days: int) -> int:
+    # What the budget allows over a number of days. A weekly budget is spread
+    # evenly across its 7 days, so a month's share is pro rata.
+    per_day = budget_amount if budget_period == "daily" else budget_amount / 7
+    return round(per_day * days)
+
+
+def month_comparison(today: date) -> dict:
+    # This month so far against last month *up to the same day* (1-10 Sep vs
+    # 1-10 Aug), so a comparison mid-month isn't against a whole month.
+    this_month = daily_totals_for_month(today.year, today.month)
+    last_year, last_month = _previous_month(today.year, today.month)
+    last_month_totals = daily_totals_for_month(last_year, last_month)
+    same_point = min(today.day, calendar.monthrange(last_year, last_month)[1])
+    return {
+        "this_month_so_far": sum(yen for day, yen in this_month.items() if day <= today),
+        "last_month_same_point": sum(yen for day, yen in last_month_totals.items() if day.day <= same_point),
+        "has_last_month": bool(last_month_totals),
+        "days_so_far": today.day,
+    }
+
+
+def monthly_history(today: date, budget_amount: int = 0, budget_period: str = "daily", months: int = 6) -> pd.DataFrame:
+    # One row per month, oldest first, for the last `months` months up to and
+    # including this one -- starting from the first of them with any receipts,
+    # so months before logging began don't show as zeros. The current month
+    # counts only the days so far, for its per-day average and allowance.
+    rows = []
+    year, month = today.year, today.month
+    for _ in range(months):
+        totals = daily_totals_for_month(year, month)
+        is_current = (year, month) == (today.year, today.month)
+        days = today.day if is_current else calendar.monthrange(year, month)[1]
+        total = sum(totals.values())
+        rows.append({
+            "month": f"{year}年{month}月" + (" (so far)" if is_current else ""),
+            "total_yen": total,
+            "per_day_yen": round(total / days),
+            "allowance_yen": allowance_for_days(budget_amount, budget_period, days) if budget_amount > 0 else None,
+            "has_entries": bool(totals),
+        })
+        year, month = _previous_month(year, month)
+    rows.reverse()
+    while rows and not rows[0]["has_entries"]:
+        rows.pop(0)
+    return pd.DataFrame(rows, columns=["month", "total_yen", "per_day_yen", "allowance_yen", "has_entries"]).drop(columns="has_entries")
 
 
 def budget_settings(settings: dict) -> tuple[int, str]:

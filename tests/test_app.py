@@ -103,6 +103,49 @@ def test_home_credits_only_the_quote_showing(app_copy):
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+def test_month_comparisons(app_copy):
+    # This month is compared with last month up to the same day, excluded
+    # entries never count, and the history starts at the first month with
+    # receipts. "Today" is fixed so the numbers are exact.
+    result = run_in(app_copy, """
+        from datetime import date
+        from meal_receipts_data import append_entry, day_folder_for, month_comparison, monthly_history, signed_yen
+
+        assert (signed_yen(175), signed_yen(-10400), signed_yen(0)) == ("+¥175", "-¥10,400", "+¥0")
+
+        def log(day, yen, excluded=False):
+            folder = day_folder_for(day)
+            folder.mkdir(parents=True, exist_ok=True)
+            append_entry(folder / "receipts.csv", f"{day} 12:00:00", "Lawson", "Onigiri", yen, excluded=excluded)
+
+        for d in range(1, 32):  # August: 1,000/day to the 10th, then 500/day
+            log(date(2026, 8, d), 1000 if d <= 10 else 500)
+        log(date(2026, 8, 5), 5000, excluded=True)
+        for d in range(1, 11):  # September so far (today = the 10th): 800/day
+            log(date(2026, 9, d), 800)
+
+        today = date(2026, 9, 10)
+        c = month_comparison(today)
+        assert (c["this_month_so_far"], c["last_month_same_point"], c["days_so_far"]) == (8000, 10000, 10), c
+        assert c["has_last_month"]
+
+        h = monthly_history(today, budget_amount=1000, budget_period="daily")
+        assert list(h["month"]) == ["2026年8月", "2026年9月 (so far)"], list(h["month"])  # empty months before August dropped
+        assert list(h["total_yen"]) == [20500, 8000], list(h["total_yen"])
+        assert list(h["per_day_yen"]) == [661, 800], list(h["per_day_yen"])
+        assert list(h["allowance_yen"]) == [31000, 10000], list(h["allowance_yen"])
+
+        weekly = monthly_history(today, budget_amount=7000, budget_period="weekly")
+        assert list(weekly["allowance_yen"]) == [31000, 10000]  # 7,000 a week = 1,000 a day
+
+        # Compared on the 30th of a 30-day month: last month counts only up
+        # to its 30th, not its 31st.
+        c = month_comparison(date(2026, 9, 30))
+        assert c["last_month_same_point"] == 20500 - 500, c
+    """)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 def test_home_commands(app_copy):
     result = run_in(app_copy, """
         from home_data import route_command

@@ -19,12 +19,15 @@ from meal_receipts_data import (
     last_entry_for_item,
     load_entries,
     load_settings,
+    month_comparison,
     month_excluded_by_reason,
     month_summary,
+    monthly_history,
     relocate_edited_entries,
     rename_value,
     save_entries,
     save_settings,
+    signed_yen,
     week_bounds,
     week_total_so_far,
 )
@@ -470,12 +473,53 @@ with st.container(key="main_body"):
         if summary.empty:
             st.write("No entries logged yet this month.")
         else:
-            st.metric("This month's total", f"¥{summary['total_yen'].sum():,.0f}")
+            # Compared with last month only up to the same day, so it's a fair
+            # comparison mid-month. Spending less is the good direction, hence
+            # "inverse" (a drop shows green).
+            comparison = month_comparison(today_date)
+            month_delta = None
+            if comparison["has_last_month"]:
+                difference = comparison["this_month_so_far"] - comparison["last_month_same_point"]
+                month_delta = f"{signed_yen(difference)} vs this point last month"
+            st.metric(
+                "This month's total", f"¥{summary['total_yen'].sum():,.0f}",
+                delta=month_delta, delta_color="inverse",
+            )
+            st.caption(
+                f"About ¥{comparison['this_month_so_far'] / comparison['days_so_far']:,.0f} a day "
+                f"over the {comparison['days_so_far']} days so far"
+            )
             excluded_by_reason = month_excluded_by_reason(today_folder)
             if not excluded_by_reason.empty:
                 breakdown = " · ".join(f"{reason} ¥{yen:,.0f}" for reason, yen in excluded_by_reason.items())
                 st.caption(f"Not counted: ¥{excluded_by_reason.sum():,.0f} ({breakdown})")
-            st.bar_chart(summary.set_index("day")["total_yen"])
+            st.bar_chart(summary.set_index("day")["total_yen"], color=ACCENT_COLOR)
+
+    # Secondary, so collapsed (the page's convention): the last six months
+    # side by side. Only months from the first one with receipts are shown.
+    with st.expander("Month by month"):
+        history = monthly_history(today_date, budget_amount, budget_period)
+        if len(history) < 2:
+            st.write("Month-by-month comparisons appear once there's more than one month of receipts.")
+        else:
+            # Labels without "(so far)" -- the chart's slanted labels cut it off.
+            chart = history.assign(month=history["month"].str.replace(" (so far)", "", regex=False))
+            st.bar_chart(chart.set_index("month")["total_yen"], x_label="", y_label="Total (¥)", color=ACCENT_COLOR)
+            table = pd.DataFrame({
+                "Month": history["month"],
+                "Total": history["total_yen"].map("¥{:,.0f}".format),
+                "Per day": history["per_day_yen"].map("¥{:,.0f}".format),
+            })
+            if budget_amount > 0:
+                table["Allowance"] = history["allowance_yen"].map("¥{:,.0f}".format)
+                table["Difference"] = (history["total_yen"] - history["allowance_yen"]).map(signed_yen)
+            st.dataframe(table, hide_index=True, width="stretch")
+            if budget_amount > 0:
+                st.caption(
+                    "Allowance is your budget spread over each month's days"
+                    + (" (a weekly allowance counts as a seventh per day)." if budget_period == "weekly" else ".")
+                    + " Under budget shows as a minus."
+                )
 
 # Streamlit reruns this whole script on every widget interaction (picking an
 # item, typing a store, nudging the cost), and typewriter() blocks for
