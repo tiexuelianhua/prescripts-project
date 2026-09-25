@@ -169,14 +169,14 @@ Back up the `Prescripts` folder to back up everything.
 
 ## Checking it works
 
-The project has automated tests. They load every page and check a few behaviours, using a throwaway copy of the app in a temporary folder, so your own data is never touched. From the `prescripts-project` folder:
+The project has automated tests. They load every page and check the rules underneath, like flashcard scheduling, typed answers and what counts toward a budget. They use a throwaway copy of the app in a temporary folder, so your own data is never touched. From the `prescripts-project` folder:
 
 ```powershell
 .venv\Scripts\python -m pip install -r requirements-dev.txt
 .venv\Scripts\python -m pytest
 ```
 
-It takes about a minute and should finish with `6 passed`. Close the app first if it's running: installing packages while it's open can fail, because Windows locks files the app is using.
+It takes about a minute and should finish with `19 passed`. Close the app first if it's running: installing packages while it's open can fail, because Windows locks files the app is using.
 
 ### Updating the screenshots
 
