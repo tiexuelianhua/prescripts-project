@@ -1,6 +1,6 @@
 # The Prescripts
 
-A personal dashboard app for everyday life in Japan, styled after [The Prescripts](https://prescript.neocities.org/). It runs on your own computer, in its own window, and keeps all its data in plain files next to the code.
+A personal dashboard app for everyday life in Japan, themed on the Prescripts of [The Index](https://library-of-ruina.fandom.com/wiki/The_Index), from Project Moon's games. It runs on your own computer, in its own window, and keeps all its data in plain files next to the code.
 
 | Page | What it does |
 |---|---|
@@ -170,6 +170,7 @@ The app window (`desktop_app.py`) and the desktop shortcut are Windows-only.
 
 ## Credits
 
-- Look and feel from [The Prescripts](https://prescript.neocities.org/).
+- The Prescripts come from The Index, a faction in Project Moon's games: see The Index on the [Library of Ruina wiki](https://library-of-ruina.fandom.com/wiki/The_Index) and the [Limbus Company wiki](https://limbuscompany.wiki.gg/wiki/The_Index).
+- Colours, font choice and button style are taken from the fan site [prescript.neocities.org](https://prescript.neocities.org/).
 - Pixel font: [Galmuri](https://github.com/quiple/galmuri) by quiple, under the SIL Open Font License (`static/Galmuri-OFL.txt`).
 - Weather: [Japan Meteorological Agency](https://www.jma.go.jp/bosai/). Lyrics: [LRCLIB](https://lrclib.net). Word lookups: [Jisho](https://jisho.org) and [kanjiapi.dev](https://kanjiapi.dev).
