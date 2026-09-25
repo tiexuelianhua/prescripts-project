@@ -1,13 +1,14 @@
-# Home page: the front door to every other Prescripts page. Deliberately
-# light on logic for now -- the search box's real scope is still undecided,
-# so it only does simple keyword matching against existing pages. Getting to
-# other pages otherwise happens via the sidebar nav that st.navigation
-# already renders (see app.py), so there's no second page-link list here.
+# Home page: the first page, leading to every other Prescripts page. Its box
+# takes commands ("go to meal receipts", "what's the weather like") and
+# offers a web search for anything that isn't a page -- see
+# home_data.route_command. Getting to other pages otherwise happens via the
+# sidebar nav that st.navigation already renders (see app.py), so there's no
+# second page-link list here.
 import random
 
 import streamlit as st
 
-from home_data import add_quote, load_quotes, quote_credit, remove_quote
+from home_data import add_quote, load_quotes, quote_credit, remove_quote, route_command
 from prescripts_common import PAGES, PRIVATE_LOOK, show_logo, theme_colors, typewriter
 
 # Rotates like a search-portal prompt (Gemini-style) rather than always
@@ -154,20 +155,21 @@ query = st.text_input(
     key="home_query",
 )
 # No submit button -- st.text_input already reruns on Enter, so that alone
-# is the submit action.
-if query:
-    query_lower = query.strip().lower()
-    matches = [
-        page for page in PAGES
-        if query_lower in page["title"].lower()
-        or any(query_lower in keyword for keyword in page["keywords"])
-    ]
-    if len(matches) == 1:
-        st.switch_page(matches[0]["path"])
-    elif len(matches) > 1:
-        st.info("More than one page matches that -- try being more specific.")
+# is the submit action. Commands ("go to meal receipts", "what's the
+# weather like") go to their page; anything else is offered as a search.
+# The search links open in the user's own browser, not this window.
+if query.strip():
+    route = route_command(query, PAGES)
+    if route["action"] == "page":
+        st.switch_page(route["page"]["path"])
+    elif route["action"] == "choose":
+        st.caption("That could mean more than one page:")
+        for page in route["pages"]:
+            st.page_link(page["path"], label=page["title"], icon=page["icon"])
     else:
-        st.info("No page matches that yet.")
+        st.caption("No page for that. Search for it instead?")
+        for column, (label, url) in zip(st.columns(len(route["links"])), route["links"]):
+            column.link_button(label, url, width="stretch")
 
 typewriter(
     st.session_state["_home_prompt"],
@@ -202,6 +204,10 @@ _CREDITS_HTML = f"""
 # unindented lines would stop Streamlit dedenting the footer's HTML, and
 # Markdown would then show the whole indented footer as a code block.
 _CREDITS_HTML = " ".join(_CREDITS_HTML.split())
+# The quote's credit (if the prompt is a quote) and the Credits toggle, on
+# one line. Not on separate lines: when there's no credit, its empty line
+# would end the HTML block, and Markdown would show the rest as code.
+_corner_note = " ".join(filter(None, [_credit_for(st.session_state["_home_prompt"]), _CREDITS_HTML]))
 
 # Pinned to the corner via CSS rather than st.caption's normal inline flow,
 # so it reads as a page-level footer note instead of sitting right under the
@@ -229,8 +235,7 @@ st.markdown(
         text-align: right;
         z-index: 100;
     ">
-        {_credit_for(st.session_state["_home_prompt"])}
-        {_CREDITS_HTML}
+        {_corner_note}
     </div>
     """,
     unsafe_allow_html=True,

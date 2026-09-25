@@ -82,7 +82,11 @@ def test_home_credits_only_the_quote_showing(app_copy):
             at.session_state["_home_prompt"] = prompt
             at.run()
             assert not at.exception, at.exception
-            return next(m.value for m in at.markdown if "<details" in m.value)
+            note = next(m.value for m in at.markdown if "<details" in m.value)
+            # A blank line inside it ends the HTML block, and Markdown shows
+            # the rest as a code block instead of the note.
+            assert "\\n\\n" not in "\\n".join(line.strip() for line in note.strip().splitlines()), note
+            return note
 
         hero = corner_note("Hero on a plastic horse, riding like it's real.")
         assert 'This line is from "Hero" by Mili.' in hero, hero
@@ -99,7 +103,38 @@ def test_home_credits_only_the_quote_showing(app_copy):
     assert result.returncode == 0, result.stdout + result.stderr
 
 
-@pytest.mark.parametrize("script",["addYear_cV.ps1", "addMonth_cV.ps1", "addDay_cV.ps1"])
+def test_home_commands(app_copy):
+    result = run_in(app_copy, """
+        from home_data import route_command
+        from prescripts_common import PAGES
+
+        def goes_to(query):
+            route = route_command(query, PAGES)
+            return route["page"]["title"] if route["action"] == "page" else route["action"]
+
+        assert goes_to("Go to Meal Receipts") == "Meal Receipts"
+        assert goes_to("open the japanese page please") == "Japanese"
+        assert goes_to("take me to weather") == "Weather"
+        assert goes_to("what's the weather like") == "Weather"
+        assert goes_to("wea") == "Weather"  # partial typing still works
+        assert goes_to("spotify") == "Spotify"
+        assert goes_to("日本語") == "Japanese"
+
+        both = route_command("japanese food", PAGES)
+        assert both["action"] == "choose", both
+        assert {page["title"] for page in both["pages"]} == {"Japanese", "Meal Receipts"}
+
+        search = route_command("how tall is Mount Fuji", PAGES)
+        assert search["action"] == "search", search
+        assert search["links"] == [("Search Google for it", "https://www.google.com/search?q=how+tall+is+Mount+Fuji")]
+
+        cat = route_command("猫", PAGES)
+        assert cat["links"][0] == ("Look it up on Jisho", "https://jisho.org/search/%E7%8C%AB"), cat
+    """)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("script", ["addYear_cV.ps1", "addMonth_cV.ps1", "addDay_cV.ps1"])
 def test_folder_scripts_write_beside_the_code(app_copy, script):
     # The PowerShell scripts find Meal Receipts relative to themselves, so a
     # copy of the code writes into its own Meal Receipts -- not a fixed path.

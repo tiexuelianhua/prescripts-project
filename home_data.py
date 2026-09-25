@@ -5,6 +5,8 @@
 # page's data.
 import html
 import json
+import re
+import urllib.parse
 
 from prescripts_common import SCRIPTS_DIR
 
@@ -36,6 +38,50 @@ def remove_quote(index: int) -> None:
     if 0 <= index < len(quotes):
         del quotes[index]
         save_quotes(quotes)
+
+
+# Words around a request that aren't what's being asked for: "go to meal
+# receipts please" is about "meal receipts". Longest phrases first, so "take
+# me to" is stripped whole rather than just its "to".
+_COMMAND_PHRASES = sorted([
+    "go to", "goto", "open", "open up", "show", "show me", "take me to", "bring up", "switch to",
+    "navigate to", "launch", "i want to", "i'd like to", "let's", "lets", "can you", "could you",
+    "please", "the", "my", "page", "tab",
+], key=len, reverse=True)
+_COMMAND_PATTERN = re.compile(r"\b(?:" + "|".join(re.escape(p) for p in _COMMAND_PHRASES) + r")\b")
+_JAPANESE_TEXT = re.compile(r"[぀-ヿ㐀-鿿]")
+
+
+def route_command(query: str, pages: list[dict]) -> dict:
+    # What Home's box should do with what was typed:
+    #   {"action": "page", "page": ...}          -- exactly one page fits
+    #   {"action": "choose", "pages": [...]}     -- more than one fits
+    #   {"action": "search", "links": [(label, url), ...]}  -- no page fits
+    # A page fits when its title or one of its keywords appears in the
+    # request as whole words ("what's the weather like" -> Weather), or when
+    # what's left is the start of one (typing "wea" still finds Weather).
+    text = query.strip().lower()
+    subject = " ".join(_COMMAND_PATTERN.sub(" ", text).split())
+    matches = []
+    for page in pages:
+        names = [page["title"].lower(), *page["keywords"]]
+        for name in names:
+            if _JAPANESE_TEXT.search(name):
+                found = name in text  # no word boundaries in Japanese
+            else:
+                found = re.search(r"\b" + re.escape(name) + r"\b", text) is not None
+            if found or (len(subject) >= 3 and name.startswith(subject)):
+                matches.append(page)
+                break
+    if len(matches) == 1:
+        return {"action": "page", "page": matches[0]}
+    if matches:
+        return {"action": "choose", "pages": matches}
+    search_for = query.strip()
+    links = [("Search Google for it", "https://www.google.com/search?q=" + urllib.parse.quote_plus(search_for))]
+    if _JAPANESE_TEXT.search(search_for):
+        links.insert(0, ("Look it up on Jisho", "https://jisho.org/search/" + urllib.parse.quote(search_for)))
+    return {"action": "search", "links": links}
 
 
 def quote_credit(quote: dict, escape: bool = True) -> str:
