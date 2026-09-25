@@ -146,6 +146,17 @@ Back up the `Prescripts` folder to back up everything.
 - Times and dates are in **Japan time (JST)** whatever your computer's clock says, and the Weather page covers Japan only.
 - To update to the newest version: `git pull` in the `prescripts-project` folder, then run step 4 again.
 
+## Checking it works
+
+The project has automated tests. They load every page and check a few behaviours, using a throwaway copy of the app in a temporary folder, so your own data is never touched. From the `prescripts-project` folder:
+
+```powershell
+.venv\Scripts\python -m pip install -r requirements-dev.txt
+.venv\Scripts\python -m pytest
+```
+
+It takes about a minute and should finish with `6 passed`. Close the app first if it's running: installing packages while it's open can fail, because Windows locks files the app is using.
+
 ## Troubleshooting
 
 **`py` is not recognised.** Python isn't installed, or PowerShell was opened before it was. Install Python 3.12 from python.org, then open a new PowerShell window.

@@ -1,0 +1,80 @@
+# Run with:  .venv\Scripts\python -m pytest
+# Everything runs against a temp copy of the code with its own empty data
+# folders -- see conftest.py -- so the real data is never touched.
+import shutil
+import subprocess
+import textwrap
+
+import pytest
+
+from conftest import run_in
+
+# Loads app.py, switches to each page in turn, and prints any page whose run
+# raised an error. Pages that fetch live data (Weather, lyrics, word
+# lookups) need an internet connection to show it, but already cope without
+# one, so they still load either way.
+_RUN_EVERY_PAGE = """
+    from streamlit.testing.v1 import AppTest
+    from prescripts_common import PAGES, SCRIPTS_DIR
+
+    failures = []
+    for path in ["home_page.py", *[page["path"] for page in PAGES]]:
+        at = AppTest.from_file(str(SCRIPTS_DIR / "app.py"), default_timeout=120)
+        at.run()
+        if path != "home_page.py":
+            at.switch_page(path)
+            at.run()
+        for error in at.exception:
+            failures.append(f"{path}: {str(error.value).splitlines()[0]}")
+    print("\\n".join(failures) or "all pages OK")
+    sys.exit(1 if failures else 0)
+"""
+
+
+def test_every_page_loads(app_copy):
+    # A fresh copy has no private logo beside it, so this is the public look
+    # -- what anyone installing from the README gets.
+    result = run_in(app_copy, _RUN_EVERY_PAGE)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_every_page_loads_in_private_look(app_copy):
+    # The private look switches on when Images/The_Index_Logo.webp exists
+    # beside the code; any real image will do for that.
+    images = app_copy.parent / "Images"
+    images.mkdir()
+    shutil.copy(app_copy / "static" / "forget_me_not.png", images / "The_Index_Logo.webp")
+    result = run_in(app_copy, "assert prescripts_common.PRIVATE_LOOK\n" + textwrap.dedent(_RUN_EVERY_PAGE))
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_new_store_and_item_are_suggested_straight_away(app_copy):
+    # The Store/Item suggestions are cached; adding an entry must refresh
+    # them, not leave a new store/item missing for a minute.
+    result = run_in(app_copy, """
+        from meal_receipts_data import append_entry, day_folder_for, known_values
+        from datetime import date
+
+        assert known_values("store") == [] and known_values("item") == []
+        folder = day_folder_for(date(2026, 8, 1))
+        folder.mkdir(parents=True)
+        append_entry(folder / "receipts.csv", "2026-08-01 12:00:00", "Lawson", "Onigiri", 150)
+        assert known_values("store") == ["Lawson"], known_values("store")
+        assert known_values("item") == ["Onigiri"], known_values("item")
+    """)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("script", ["addYear_cV.ps1", "addMonth_cV.ps1", "addDay_cV.ps1"])
+def test_folder_scripts_write_beside_the_code(app_copy, script):
+    # The PowerShell scripts find Meal Receipts relative to themselves, so a
+    # copy of the code writes into its own Meal Receipts -- not a fixed path.
+    shutil.which("powershell") or pytest.skip("PowerShell is Windows-only")
+    (app_copy.parent / "Meal Receipts" / "Error Logs").mkdir(parents=True)
+    result = subprocess.run(
+        ["powershell", "-NoProfile", "-Command",
+         f"[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; & '{app_copy / script}' -Silent"],
+        capture_output=True, text=True, encoding="utf-8",
+    )
+    created = result.stdout.strip()
+    assert created.startswith(str(app_copy.parent / "Meal Receipts")), result.stdout + result.stderr
