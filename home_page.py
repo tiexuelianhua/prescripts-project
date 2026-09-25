@@ -97,14 +97,16 @@ TEXT_COLOR, ACCENT_COLOR = theme_colors()
 # A blinking "|" in place of the input's placeholder text -- a minimal
 # type-here cue instead of a labeled button or instructional placeholder
 # text. Scoped to this page only (re-injected fresh each time this script
-# runs, gone once navigation swaps in another page).
+# runs, gone once navigation swaps in another page), and to the search box
+# alone by its key -- the sidebar's quote fields have ordinary placeholder
+# hints that shouldn't blink.
 st.markdown(
     f"""
     <style>
     @keyframes blink-caret {{
         50% {{ opacity: 0; }}
     }}
-    div[data-testid="stTextInput"] input::placeholder {{
+    .st-key-home_query input::placeholder {{
         color: {TEXT_COLOR};
         opacity: 1;
         animation: blink-caret 1s step-start infinite;
