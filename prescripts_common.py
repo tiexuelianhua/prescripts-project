@@ -122,6 +122,13 @@ def render_zoom_controls() -> None:
         [data-testid="stMainBlockContainer"] {{
             zoom: {zoom};
         }}
+        /* Tables and charts size themselves from on-screen (zoomed) pixels,
+           then get zoomed again -- too narrow when zoomed out, spilling out
+           of their box when zoomed in. Undoing the zoom on just them keeps
+           them the width of their slot, at their normal text size. */
+        [data-testid="stElementContainer"]:has(> [data-testid="stFullScreenFrame"] :is([data-testid="stDataFrame"], [data-testid="stVegaLiteChart"])) {{
+            zoom: {1 / zoom};
+        }}
         /* Out of the page's flow, into the top bar beside Streamlit's own
            menu -- the wrapper otherwise leaves a gap above the page. */
         [data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"] > *:has(.st-key-zoom_controls) {{

@@ -602,7 +602,7 @@ with st.container(key="main_body"):
             editor_key = f"japanese_editor_{lookup_filter}_{query}"
             # Room for the table's hover toolbar, which sits just above its
             # top-right corner -- otherwise right over the Deck buttons.
-            st.space("small")
+            st.space(32)
             edited = st.data_editor(
                 table,
                 num_rows="delete",
