@@ -35,13 +35,17 @@ ICON_PATH = SCRIPTS_DIR.parent / "Images" / "The_Index_Logo.ico"
 # taskbar and Alt-Tab show.
 TITLE_BAR_ICON_PATH = SCRIPTS_DIR.parent / "Images" / "The_Index_Logo_plain.ico"
 
-# Toggled with F11, like any browser/app -- not on by default at launch,
-# since that's a bigger behavior change than just "make it possible".
-_FULLSCREEN_TOGGLE_JS = """
+# Fullscreen is toggled with F11, like any browser/app -- not on by default
+# at launch, since that's a bigger behavior change than just "make it
+# possible". Ctrl+Q quits, the same as closing the window.
+_SHORTCUTS_JS = """
 document.addEventListener("keydown", (event) => {
     if (event.key === "F11") {
         event.preventDefault();
         window.pywebview.api.toggle_fullscreen();
+    } else if (event.ctrlKey && event.key.toLowerCase() === "q") {
+        event.preventDefault();
+        window.pywebview.api.quit();
     }
 });
 """
@@ -64,8 +68,11 @@ class _Api:
     def toggle_fullscreen(self) -> None:
         self._window.toggle_fullscreen()
 
+    def quit(self) -> None:
+        self._window.destroy()
 
-def _inject_fullscreen_toggle(window: "webview.Window") -> None:
+
+def _inject_shortcuts(window: "webview.Window") -> None:
     # Runs in the dedicated background thread webview.start(func=...) spins
     # up once the GUI loop is ready -- deliberately not wired via
     # `window.events.loaded += ...` instead: that fires the callback
@@ -76,7 +83,7 @@ def _inject_fullscreen_toggle(window: "webview.Window") -> None:
     # pattern pywebview's own docs use for anything that needs to touch the
     # window after it's up.
     window.events.loaded.wait()
-    window.run_js(_FULLSCREEN_TOGGLE_JS)
+    window.run_js(_SHORTCUTS_JS)
     _set_title_bar_icon()
 
 
@@ -186,7 +193,7 @@ def main() -> None:
         # server down too, in the `finally` below, rather than leaving it
         # running invisibly until the next launch's port-based cleanup.
         webview.start(
-            _inject_fullscreen_toggle, window, icon=str(ICON_PATH) if ICON_PATH.exists() else None
+            _inject_shortcuts, window, icon=str(ICON_PATH) if ICON_PATH.exists() else None
         )
     finally:
         server.terminate()
