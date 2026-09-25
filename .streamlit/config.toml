@@ -4,10 +4,14 @@
 #   an open-source (OFL-1.1) Korean bitmap font family based on Nintendo DS
 #   fonts, not Comic Sans MS as first (wrongly) guessed from a screenshot.
 # - Colors, measured from style.css directly: pure black background, off-white
-#   body text (#f0f8ff), #96c4ec for buttons/links/input borders (hover turns
-#   these to the off-white text color). #4facff is the logo's own glow color,
-#   used only for the static logo image itself, not page chrome.
+#   body text (#f0f8ff).
 # Sampled/verified 2026-09-16.
+#
+# Buttons/links/input borders use the public look's periwinkle, sampled from
+# the forget-me-not logo (static/forget_me_not.png) -- #7578b2 on dark, and a
+# deeper #6b6ead on light, where the petal color itself is too faint to read
+# on white. The original author's own copy swaps these for its sky blue
+# (#96c4ec, from style.css) at launch -- see PRIVATE_LOOK in desktop_app.py.
 
 [server]
 enableStaticServing = true
@@ -28,17 +32,17 @@ weight = "400"
 style = "normal"
 
 [theme.light]
-primaryColor = "#96c4ec"
+primaryColor = "#6b6ead"
 backgroundColor = "#ffffff"
 secondaryBackgroundColor = "#e5f3ff"
 textColor = "#162a3b"
-linkColor = "#96c4ec"
+linkColor = "#6b6ead"
 
 [theme.dark]
-primaryColor = "#96c4ec"
+primaryColor = "#7578b2"
 backgroundColor = "#000000"
 secondaryBackgroundColor = "#111318"
 textColor = "#f0f8ff"
 borderColor = "#2a2f3a"
 codeBackgroundColor = "#0a0a0d"
-linkColor = "#96c4ec"
+linkColor = "#7578b2"

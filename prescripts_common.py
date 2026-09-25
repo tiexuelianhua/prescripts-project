@@ -11,12 +11,25 @@ from pathlib import Path
 import streamlit as st
 
 SCRIPTS_DIR = Path(__file__).resolve().parent
-# Outside the repo, like every page's data -- so a fresh clone won't have it,
-# and everything that shows it has to cope without (see show_logo).
-LOGO_PATH = SCRIPTS_DIR.parent / "Images" / "The_Index_Logo.webp"
 JST = timezone(timedelta(hours=9))
 
-ACCENT_COLOR = "#96c4ec"  # buttons/links/input borders, measured from style.css
+# Two looks. The public one (what the repo ships) uses the forget-me-not
+# logo in static/ and its periwinkle. The original author's own copy uses
+# The Index logo and a sky blue instead -- that logo is kept outside the
+# repo, so its presence is what picks the private look. desktop_app.py makes
+# the same check to swap .streamlit/config.toml's colors to match.
+PRIVATE_LOGO_PATH = SCRIPTS_DIR.parent / "Images" / "The_Index_Logo.webp"
+PRIVATE_LOOK = PRIVATE_LOGO_PATH.exists()
+LOGO_PATH = PRIVATE_LOGO_PATH if PRIVATE_LOOK else SCRIPTS_DIR / "static" / "forget_me_not.png"
+
+# Buttons/links/input borders. Must match primaryColor in
+# .streamlit/config.toml (public) and desktop_app.py's _PRIVATE_THEME_FLAGS.
+# The public periwinkle is sampled from the forget-me-not's petals; light
+# mode gets a deeper shade of it, since the petal color itself is too faint
+# to read on white. The private sky blue was measured from
+# prescript.neocities.org's style.css.
+ACCENT_COLOR = "#96c4ec" if PRIVATE_LOOK else "#7578b2"
+ACCENT_COLOR_LIGHT = "#96c4ec" if PRIVATE_LOOK else "#6b6ead"
 
 # Every non-home page in the app, in one place -- app.py's st.navigation()
 # and the Home page's tile grid / search both read this, so adding a page
@@ -64,10 +77,7 @@ ZOOM_LEVELS = [0.8, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75]
 
 
 def show_logo(width: int) -> None:
-    # st.image raises on a missing file, which took down every page on a
-    # fresh clone -- so the logo is simply left out there instead.
-    if LOGO_PATH.exists():
-        st.image(str(LOGO_PATH), width=width)
+    st.image(str(LOGO_PATH), width=width)
 
 
 def load_app_settings() -> dict:
@@ -149,7 +159,7 @@ def theme_colors() -> tuple[str, str]:
     # look.
     is_light = st.context.theme.get("type") == "light"
     text_color = "#162a3b" if is_light else "#f0f8ff"
-    return text_color, ACCENT_COLOR
+    return text_color, ACCENT_COLOR_LIGHT if is_light else ACCENT_COLOR
 
 
 def inject_button_style() -> None:

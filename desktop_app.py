@@ -24,16 +24,32 @@ PORT = 8501
 URL = f"http://127.0.0.1:{PORT}"
 # Not committed (see .gitignore) -- purely local runtime state.
 PID_FILE = SCRIPTS_DIR / ".desktop_app.pid"
-# Sibling of the repo, like Spotify/Weather/Meal Receipts's own data --
-# generated from Images/The_Index_Logo.webp (padded to square; webview.start's
-# icon= wants a real .ico on Windows, not the webp app.py uses for the
-# browser-tab favicon).
-ICON_PATH = SCRIPTS_DIR.parent / "Images" / "The_Index_Logo.ico"
-# Title bar only (the window's small icon) -- the plain transparent logo reads
-# fine there against the title bar, and the user prefers it without the black
-# square. The black-backdrop ICON_PATH stays the big icon, which is what the
-# taskbar and Alt-Tab show.
-TITLE_BAR_ICON_PATH = SCRIPTS_DIR.parent / "Images" / "The_Index_Logo_plain.ico"
+# Same check as PRIVATE_LOOK in prescripts_common.py (not imported from
+# there, since that pulls in all of Streamlit): the original author's own
+# logo, kept outside the repo, picks their private look over the public one.
+_IMAGES_DIR = SCRIPTS_DIR.parent / "Images"
+PRIVATE_LOOK = (_IMAGES_DIR / "The_Index_Logo.webp").exists()
+if PRIVATE_LOOK:
+    # Generated from Images/The_Index_Logo.webp (padded to square;
+    # webview.start's icon= wants a real .ico on Windows, not the webp app.py
+    # uses for the browser-tab favicon).
+    ICON_PATH = _IMAGES_DIR / "The_Index_Logo.ico"
+    # Title bar only (the window's small icon) -- the plain transparent logo
+    # reads fine there against the title bar, and the user prefers it without
+    # the black square. The black-backdrop ICON_PATH stays the big icon,
+    # which is what the taskbar and Alt-Tab show.
+    TITLE_BAR_ICON_PATH = _IMAGES_DIR / "The_Index_Logo_plain.ico"
+else:
+    ICON_PATH = TITLE_BAR_ICON_PATH = SCRIPTS_DIR / "static" / "forget_me_not.ico"
+
+# .streamlit/config.toml holds the public look's colors; the private look
+# overrides them at launch (flags beat the config file). Must match
+# ACCENT_COLOR / ACCENT_COLOR_LIGHT in prescripts_common.py.
+_PRIVATE_THEME_FLAGS = [
+    f"--theme.{mode}.{key}=#96c4ec"
+    for mode in ("light", "dark")
+    for key in ("primaryColor", "linkColor")
+]
 
 # Fullscreen is toggled with F11, like any browser/app -- not on by default
 # at launch, since that's a bigger behavior change than just "make it
@@ -167,6 +183,7 @@ def main() -> None:
             # browser open to the same server.
             "--server.headless",
             "true",
+            *(_PRIVATE_THEME_FLAGS if PRIVATE_LOOK else []),
         ],
         cwd=SCRIPTS_DIR,
     )
