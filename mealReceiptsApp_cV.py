@@ -31,9 +31,9 @@ from meal_receipts_data import (
 )
 from prescripts_common import (
     JST,
-    LOGO_PATH,
     inject_body_fade_in,
     render_page_title,
+    show_logo,
     theme_colors,
     typewriter,
 )
@@ -60,7 +60,7 @@ inject_body_fade_in("main_body")
 # everything else" load.
 header_logo, header_title = st.columns([1, 4], vertical_alignment="center")
 with header_logo:
-    st.image(str(LOGO_PATH), width=120)
+    show_logo(width=120)
 with header_title:
     render_page_title(PAGE_TITLE, is_first_load)
 

@@ -15,7 +15,8 @@ from prescripts_common import (
 
 st.set_page_config(
     page_title="The Prescripts",
-    page_icon=str(LOGO_PATH),
+    # Streamlit's own default icon on a fresh clone, which has no logo.
+    page_icon=str(LOGO_PATH) if LOGO_PATH.exists() else None,
     # Applies once, on initial load -- which lands on Home (default=True
     # below), the one page with nothing sidebar-worthy on it (Meal Receipts'
     # actual settings live in its own sidebar). Manually expanding it from

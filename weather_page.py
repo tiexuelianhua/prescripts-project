@@ -8,7 +8,7 @@ from datetime import datetime
 
 import streamlit as st
 
-from prescripts_common import JST, LOGO_PATH, inject_body_fade_in, render_page_title, theme_colors
+from prescripts_common import JST, inject_body_fade_in, render_page_title, show_logo, theme_colors
 from weather_data import (
     CATEGORY_EMOJI,
     DEFAULT_OFFICE_CODE,
@@ -41,7 +41,7 @@ inject_body_fade_in("main_body")
 
 header_logo, header_title = st.columns([1, 4], vertical_alignment="center")
 with header_logo:
-    st.image(str(LOGO_PATH), width=120)
+    show_logo(width=120)
 with header_title:
     render_page_title(PAGE_TITLE, is_first_load)
 

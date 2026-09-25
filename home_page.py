@@ -7,7 +7,7 @@ import random
 
 import streamlit as st
 
-from prescripts_common import LOGO_PATH, PAGES, theme_colors, typewriter
+from prescripts_common import PAGES, show_logo, theme_colors, typewriter
 
 # Rotates like a search-portal prompt (Gemini-style) rather than always
 # asking the same thing. Picked once per session (below), not re-rolled on
@@ -106,7 +106,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
-st.image(str(LOGO_PATH), width=240)
+show_logo(width=240)
 
 # Reserved here, in reading order (logo, then question, then the input
 # below), but only actually animated at the very end of the script via the

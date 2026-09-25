@@ -11,7 +11,7 @@ import streamlit as st
 
 from lyrics_data import current_line_index, lyrics_status
 from play_history import merge_with_api
-from prescripts_common import LOGO_PATH, inject_body_fade_in, render_page_title, theme_colors
+from prescripts_common import inject_body_fade_in, render_page_title, show_logo, theme_colors
 from spotify_data import (
     add_to_queue,
     authorize_url,
@@ -57,7 +57,7 @@ inject_body_fade_in("main_body")
 
 header_logo, header_title = st.columns([1, 4], vertical_alignment="center")
 with header_logo:
-    st.image(str(LOGO_PATH), width=120)
+    show_logo(width=120)
 with header_title:
     render_page_title(PAGE_TITLE, is_first_load)
 

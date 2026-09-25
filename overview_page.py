@@ -24,7 +24,7 @@ from japanese_data import (
     random_card as japanese_random_card,
 )
 from meal_receipts_data import today_summary as meal_receipts_today_summary
-from prescripts_common import JST, LOGO_PATH, inject_body_fade_in, render_page_title, theme_colors
+from prescripts_common import JST, inject_body_fade_in, render_page_title, show_logo, theme_colors
 from spotify_data import (
     current_playback as spotify_current_playback,
     describe_item as spotify_describe_item,
@@ -52,7 +52,7 @@ inject_body_fade_in("main_body")
 
 header_logo, header_title, header_clock = st.columns([1, 3, 1.2], vertical_alignment="center")
 with header_logo:
-    st.image(str(LOGO_PATH), width=120)
+    show_logo(width=120)
 with header_title:
     render_page_title(PAGE_TITLE, is_first_load)
 

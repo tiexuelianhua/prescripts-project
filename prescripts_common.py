@@ -11,6 +11,8 @@ from pathlib import Path
 import streamlit as st
 
 SCRIPTS_DIR = Path(__file__).resolve().parent
+# Outside the repo, like every page's data -- so a fresh clone won't have it,
+# and everything that shows it has to cope without (see show_logo).
 LOGO_PATH = SCRIPTS_DIR.parent / "Images" / "The_Index_Logo.webp"
 JST = timezone(timedelta(hours=9))
 
@@ -59,6 +61,13 @@ APP_SETTINGS_PATH = SCRIPTS_DIR.parent / "app_settings.json"
 
 # Zoom steps offered by the page zoom controls (see render_zoom_controls).
 ZOOM_LEVELS = [0.8, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75]
+
+
+def show_logo(width: int) -> None:
+    # st.image raises on a missing file, which took down every page on a
+    # fresh clone -- so the logo is simply left out there instead.
+    if LOGO_PATH.exists():
+        st.image(str(LOGO_PATH), width=width)
 
 
 def load_app_settings() -> dict:
