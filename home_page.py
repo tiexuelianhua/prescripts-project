@@ -7,7 +7,7 @@ import random
 
 import streamlit as st
 
-from prescripts_common import PAGES, show_logo, theme_colors, typewriter
+from prescripts_common import PAGES, PRIVATE_LOOK, show_logo, theme_colors, typewriter
 
 # Rotates like a search-portal prompt (Gemini-style) rather than always
 # asking the same thing. Picked once per session (below), not re-rolled on
@@ -150,12 +150,15 @@ typewriter(
 # to nothing to the page; a plain <details> rather than an st.expander, so
 # opening it is purely in the browser and doesn't rerun the page. The corner
 # note is pinned by its bottom edge, so it opens upwards.
-_CREDITS_HTML = """
+# Only the public look shows the forget-me-not (see PRIVATE_LOOK).
+_LOGO_CREDIT = "" if PRIVATE_LOOK else "Forget-me-not logo drawn by a friend of the author."
+_CREDITS_HTML = f"""
 <details style="margin-top: 0.5rem;">
     <summary style="cursor: pointer;">Credits</summary>
     The Prescripts come from The Index, from Project Moon's games
     (<a href="https://library-of-ruina.fandom.com/wiki/The_Index" target="_blank">Library of Ruina</a>,
     <a href="https://limbuscompany.wiki.gg/wiki/The_Index" target="_blank">Limbus Company</a>).
+    {_LOGO_CREDIT}
     Colours and button style:
     <a href="https://prescript.neocities.org/" target="_blank">prescript.neocities.org</a>.
     Font: <a href="https://github.com/quiple/galmuri" target="_blank">Galmuri</a> by quiple (OFL-1.1).
