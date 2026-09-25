@@ -9,7 +9,6 @@ import pandas as pd
 import streamlit as st
 
 from meal_receipts_data import (
-    all_entries,
     append_entry,
     budget_settings,
     counted_total,
@@ -169,7 +168,6 @@ with st.sidebar:
             disabled=not (rename_item_old and rename_item_new.strip()),
         ):
             renamed = rename_value("item", rename_item_old, rename_item_new.strip())
-            all_entries.clear()
             st.session_state["_reset_rename_item"] = True
             # st.toast(), not st.success(): a message shown right before
             # st.rerun() is otherwise discarded with the rest of this
@@ -187,7 +185,6 @@ with st.sidebar:
             disabled=not (rename_store_old and rename_store_new.strip()),
         ):
             renamed = rename_value("store", rename_store_old, rename_store_new.strip())
-            all_entries.clear()
             st.session_state["_reset_rename_store"] = True
             st.toast(f"Renamed {renamed} receipt(s): '{rename_store_old}' → '{rename_store_new.strip()}'.")
             st.rerun()
@@ -408,7 +405,6 @@ with st.container(key="main_body"):
                 same_day_entries = relocate_edited_entries(edited_entries, selected_date)
                 moved_count = len(edited_entries) - len(same_day_entries)
                 save_entries(selected_csv, same_day_entries)
-                all_entries.clear()
                 # st.toast(), not st.success(): a message shown right before
                 # st.rerun() is otherwise discarded with the rest of this
                 # interrupted run before ever reaching the browser -- toast is

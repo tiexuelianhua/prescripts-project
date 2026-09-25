@@ -103,6 +103,10 @@ def save_entries(csv_path: Path, entries: pd.DataFrame) -> None:
     # Normalized on the way out too, so a reason picked in the Entries table
     # is written with its implied excluded=True, not just read back that way.
     with_excluded_column(entries).to_csv(csv_path, index=False, encoding="utf-8")
+    # Every write goes through here, so this is the one place the cached
+    # all_entries() scan is dropped -- a just-added store/item is suggested
+    # straight away instead of after the cache's 60s ttl.
+    all_entries.clear()
 
 
 def relocate_edited_entries(entries: pd.DataFrame, viewed_date) -> pd.DataFrame:
@@ -210,8 +214,9 @@ def all_entries() -> pd.DataFrame:
     # Backs both the Store/Item autocomplete and the last-price lookup below --
     # scans every day's CSV, not just the current month, so history from
     # months ago still counts. Cached (one disk scan shared by both features)
-    # since it reads every receipts.csv on disk; 60s ttl balances that against
-    # a freshly-typed store/item not showing up for a minute.
+    # since it reads every receipts.csv on disk. save_entries() clears it on
+    # every write, so the 60s ttl only matters for files changed outside the
+    # app.
     frames = []
     for csv_file in MEAL_RECEIPTS_DIR.glob("*/*/*/receipts.csv"):
         try:
