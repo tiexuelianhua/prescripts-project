@@ -9,7 +9,9 @@ param(
 )
 $tokyoDate = [System.TimeZoneInfo]::ConvertTimeBySystemTimeZoneId(
         (Get-Date), "Tokyo Standard Time").ToString('dd-MM-yyyy')
-$dailyFolder = "C:\Users\echoj\The Prescripts\Meal Receipts\$tokyoDate"
+# Beside this repo's folder, wherever that's been put.
+$mealReceiptsPath = Join-Path (Split-Path $PSScriptRoot -Parent) "Meal Receipts"
+$dailyFolder = Join-Path $mealReceiptsPath $tokyoDate
 
 if (-not (Test-Path -PathType Container $dailyFolder)) {
     ni -Path $dailyFolder -ItemType directory 
@@ -17,6 +19,6 @@ if (-not (Test-Path -PathType Container $dailyFolder)) {
 else {
     $errorTime = [System.TimeZoneInfo]::ConvertTimeBySystemTimeZoneId(
         (Get-Date), "Tokyo Standard Time").ToString('dd-MM-yyyy_HH-mm-ss')
-    Add-Content -Path "C:\Users\echoj\The Prescripts\Meal Receipts\Error Logs\Error on $tokyoDate.txt" -Value "Error on $errorTime. $Reason"
+    Add-Content -Path (Join-Path $mealReceiptsPath "Error Logs\Error on $tokyoDate.txt") -Value "Error on $errorTime. $Reason"
 }
 

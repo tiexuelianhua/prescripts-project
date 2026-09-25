@@ -99,7 +99,7 @@ A **The Prescripts** icon appears on your desktop. To pin it to the taskbar, rig
 
 Want it open (minimised) whenever you sign in? Press **Win+R**, type `shell:startup`, press Enter, and copy the shortcut into that folder. Then right-click the copy → **Properties** and change **Target** so it ends in `desktop_app.py --minimized`.
 
-> You'll also see `ThePrescriptsLauncher.exe` / `LauncherSrc` mentioned in the code. That's the original author's own launcher, with their folder paths built in. Use the shortcut above instead.
+> You'll also see `ThePrescriptsLauncher.exe` / `LauncherSrc` mentioned in the code. That's a small launcher the original author compiles for themselves. It isn't included in the repo, and the shortcut above does the same job.
 
 ## Optional: connect Spotify
 

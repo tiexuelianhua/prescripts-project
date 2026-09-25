@@ -34,7 +34,11 @@ class ThePrescriptsLauncher
     // Must match REDIRECT_URI in spotify_data.py.
     const int Port = 8501;
     // Must match PID_FILE in desktop_app.py.
-    const string PidFile = @"C:\Users\echoj\The Prescripts\Scripts\.desktop_app.pid";
+    // The exe is built into the repo folder itself (see the csc command in
+    // the commit history), so everything is found relative to where it sits.
+    static readonly string ScriptsDir = AppDomain.CurrentDomain.BaseDirectory.TrimEnd('\\');
+    // Must match PID_FILE in desktop_app.py.
+    static readonly string PidFile = Path.Combine(ScriptsDir, ".desktop_app.pid");
 
     const int SW_RESTORE = 9;
     delegate bool EnumWindowsProc(IntPtr hwnd, IntPtr lParam);
@@ -80,9 +84,9 @@ class ThePrescriptsLauncher
             // webview.start() blocks), so it's not just something whose
             // startup console needs hiding -- it should never have a
             // console at all.
-            FileName = @"C:\Users\echoj\The Prescripts\Scripts\.venv\Scripts\pythonw.exe",
-            Arguments = "\"C:\\Users\\echoj\\The Prescripts\\Scripts\\desktop_app.py\"" + forwarded,
-            WorkingDirectory = @"C:\Users\echoj\The Prescripts\Scripts",
+            FileName = Path.Combine(ScriptsDir, @".venv\Scripts\pythonw.exe"),
+            Arguments = "\"" + Path.Combine(ScriptsDir, "desktop_app.py") + "\"" + forwarded,
+            WorkingDirectory = ScriptsDir,
             UseShellExecute = false,
             CreateNoWindow = true,
             WindowStyle = ProcessWindowStyle.Hidden,

@@ -9,7 +9,8 @@ param(
     [switch]$Silent
 )
 
-$mealReceiptsPath = "C:\Users\echoj\The Prescripts\Meal Receipts"
+# Beside this repo's folder, wherever that's been put.
+$mealReceiptsPath = Join-Path (Split-Path $PSScriptRoot -Parent) "Meal Receipts"
 $jstNow = [System.TimeZoneInfo]::ConvertTimeBySystemTimeZoneId((Get-Date), "Tokyo Standard Time")
 $yearFolder = Join-Path $mealReceiptsPath $jstNow.ToString('yyyy')
 $errorLogPath = Join-Path $mealReceiptsPath "Error Logs\Error Log on $($jstNow.ToString('dd-MM-yyyy')).txt"
