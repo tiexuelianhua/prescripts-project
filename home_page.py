@@ -7,6 +7,7 @@ import random
 
 import streamlit as st
 
+from home_data import add_quote, load_quotes, quote_credit, remove_quote
 from prescripts_common import PAGES, PRIVATE_LOOK, show_logo, theme_colors, typewriter
 
 # Rotates like a search-portal prompt (Gemini-style) rather than always
@@ -22,25 +23,29 @@ FUNCTIONAL_PROMPTS = [
     "What's on your mind?",
 ]
 
-# Partial/fragmentary lines only (by design, not just by trimming), each
-# from a different Mili song -- not all from "Children of the City" despite
-# that being the one that matters most: it's the song the "Prescript"
-# concept itself comes from in Library of Ruina canon (a Project Moon game),
-# where a Prescript is exactly this kind of arbitrary decree handed down to
-# a follower. Every song is credited in the footer at the bottom of the page
-# (a blanket credit, not inline per-line -- keeps the quote itself unadorned
-# when it's shown), built from the song names below so it can't drift out of
-# sync with this list.
-MILI_QUOTES = [
-    ("Sleep for a total of 800 hours per day.", "Children of the City"),
-    ("Hero on a plastic horse, riding like it's real.", "Hero"),
-    (
-        "I know now I must be comfortable being who I considered worthless.",
-        "Children of the City",
-    ),
-    ("If we are always running, we can't behold the sceneries.", "TIAN TIAN"),
-    ("No tears, no regrets, no zero-days at our fault.", "sustain++"),
-    ("I am iron; in my blood, it streams roots deep.", "Iron Lotus"),
+# Partial/fragmentary song lines only (by design, not just by trimming).
+# Whichever quote is showing -- one of these or one the user added (see the
+# sidebar below, and home_data.py) -- gets credited in the corner note at the
+# bottom of the page, just that one, so the note always matches the line on
+# screen.
+#
+# "Children of the City" is the one that matters most: it's the song the
+# "Prescript" concept itself comes from in Library of Ruina canon (a Project
+# Moon game), where a Prescript is exactly this kind of arbitrary decree
+# handed down to a follower -- hence its extra note.
+_CHILDREN_OF_THE_CITY_NOTE = (
+    "feat. Project Moon, from the album <i>To Kill a Living Book</i> -- "
+    "the song the Prescript concept itself comes from"
+)
+BUILT_IN_QUOTES = [
+    {"line": "Sleep for a total of 800 hours per day.", "source": "Children of the City", "by": "Mili",
+     "note": _CHILDREN_OF_THE_CITY_NOTE},
+    {"line": "Hero on a plastic horse, riding like it's real.", "source": "Hero", "by": "Mili"},
+    {"line": "I know now I must be comfortable being who I considered worthless.",
+     "source": "Children of the City", "by": "Mili", "note": _CHILDREN_OF_THE_CITY_NOTE},
+    {"line": "If we are always running, we can't behold the sceneries.", "source": "TIAN TIAN", "by": "Mili"},
+    {"line": "No tears, no regrets, no zero-days at our fault.", "source": "sustain++", "by": "Mili"},
+    {"line": "I am iron; in my blood, it streams roots deep.", "source": "Iron Lotus", "by": "Mili"},
 ]
 
 # General Japanese phrases, not lyric quotes -- no attribution needed.
@@ -49,20 +54,43 @@ JAPANESE_PROMPTS = [
     "勝ちたい",
 ]
 
-PROMPTS = FUNCTIONAL_PROMPTS + [text for text, _ in MILI_QUOTES] + JAPANESE_PROMPTS
+user_quotes = load_quotes()
+all_quotes = BUILT_IN_QUOTES + user_quotes
+PROMPTS = FUNCTIONAL_PROMPTS + [quote["line"] for quote in all_quotes] + JAPANESE_PROMPTS
 
 
-def _oxford_quoted_list(items: list[str]) -> str:
-    quoted = [f'"{item}"' for item in items]
-    if len(quoted) == 1:
-        return quoted[0]
-    return ", ".join(quoted[:-1]) + ", and " + quoted[-1]
+def _credit_for(prompt: str) -> str:
+    # The corner note's first line: where the prompt on screen comes from,
+    # or nothing when it isn't a quote.
+    quote = next((quote for quote in all_quotes if quote["line"] == prompt), None)
+    return quote_credit(quote, escape=quote not in BUILT_IN_QUOTES) if quote else ""
 
 
-# Order of first appearance in MILI_QUOTES, de-duplicated -- dict.fromkeys
-# preserves insertion order and drops repeats (Children of the City appears
-# twice above).
-_MILI_SONGS = list(dict.fromkeys(song for _, song in MILI_QUOTES))
+# Adding/removing your own quotes -- in the sidebar, so Home itself stays the
+# plain front door. A new quote can come up as the prompt from the next
+# visit on (the prompt is picked once per session).
+with st.sidebar:
+    st.subheader("Your quotes")
+    st.caption("Lines that can show up as the prompt here, credited in the corner when they do.")
+    with st.form("add_quote", clear_on_submit=True, border=False):
+        new_line = st.text_input("Quote")
+        new_source = st.text_input("From", placeholder="e.g. a song, book or game")
+        new_by = st.text_input("By", placeholder="e.g. the artist or author")
+        new_note = st.text_input("Note", placeholder="Optional")
+        if st.form_submit_button("Add quote"):
+            if new_line.strip():
+                add_quote(new_line, new_source, new_by, new_note)
+                st.toast("Quote added -- it can come up as the prompt from your next visit.")
+                st.rerun()
+            else:
+                st.warning("Type the quote itself first.")
+    for index, quote in enumerate(user_quotes):
+        text_column, remove_column = st.columns([5, 1], vertical_alignment="center")
+        credit = quote_credit(quote)
+        text_column.caption(f"“{quote['line']}”" + (f"  \n{credit}" if credit else ""))
+        if remove_column.button("✕", key=f"remove_quote_{index}", help="Remove this quote"):
+            remove_quote(index)
+            st.rerun()
 
 TEXT_COLOR, ACCENT_COLOR = theme_colors()
 
@@ -146,7 +174,7 @@ typewriter(
 )
 
 # The app's one place for attribution (the same list as the README's
-# Credits). Collapsed to a single word under the Mili note so it adds next
+# Credits). Collapsed to a single word under the song credit so it adds next
 # to nothing to the page; a plain <details> rather than an st.expander, so
 # opening it is purely in the browser and doesn't rerun the page. The corner
 # note is pinned by its bottom edge, so it opens upwards.
@@ -199,10 +227,7 @@ st.markdown(
         text-align: right;
         z-index: 100;
     ">
-        Some of the lines above are drawn from Mili songs -- {_oxford_quoted_list(_MILI_SONGS)}.
-        "Children of the City" (feat. Project Moon, from the album
-        <i>To Kill a Living Book</i>) is the song the Prescript concept
-        itself comes from.
+        {_credit_for(st.session_state["_home_prompt"])}
         {_CREDITS_HTML}
     </div>
     """,

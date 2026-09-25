@@ -65,7 +65,41 @@ def test_new_store_and_item_are_suggested_straight_away(app_copy):
     assert result.returncode == 0, result.stdout + result.stderr
 
 
-@pytest.mark.parametrize("script", ["addYear_cV.ps1", "addMonth_cV.ps1", "addDay_cV.ps1"])
+def test_home_credits_only_the_quote_showing(app_copy):
+    # The corner note names the one quote on screen (built-in or added), and
+    # nothing when the prompt isn't a quote. Added quotes live outside the
+    # code, and their typed-in text can't break the note's HTML.
+    result = run_in(app_copy, """
+        from streamlit.testing.v1 import AppTest
+        from home_data import QUOTES_PATH, add_quote, load_quotes, remove_quote
+        from prescripts_common import SCRIPTS_DIR
+
+        assert QUOTES_PATH.parent == SCRIPTS_DIR.parent  # beside the code, not in it
+        add_quote("Stay a while.", "A <Book> & More", "Someone", "")
+
+        def corner_note(prompt):
+            at = AppTest.from_file(str(SCRIPTS_DIR / "app.py"), default_timeout=60)
+            at.session_state["_home_prompt"] = prompt
+            at.run()
+            assert not at.exception, at.exception
+            return next(m.value for m in at.markdown if "<details" in m.value)
+
+        hero = corner_note("Hero on a plastic horse, riding like it's real.")
+        assert 'This line is from "Hero" by Mili.' in hero, hero
+        assert "Children of the City" not in hero and "TIAN TIAN" not in hero, hero
+
+        assert "This line is from" not in corner_note("What's on your mind?")
+
+        added = corner_note("Stay a while.")
+        assert 'This line is from "A &lt;Book&gt; &amp; More" by Someone.' in added, added
+
+        remove_quote(0)
+        assert load_quotes() == []
+    """)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("script",["addYear_cV.ps1", "addMonth_cV.ps1", "addDay_cV.ps1"])
 def test_folder_scripts_write_beside_the_code(app_copy, script):
     # The PowerShell scripts find Meal Receipts relative to themselves, so a
     # copy of the code writes into its own Meal Receipts -- not a fixed path.
