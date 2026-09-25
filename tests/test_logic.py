@@ -126,6 +126,23 @@ def test_typed_answers(app_copy):
         assert check_step(vocab, "meaning", "study, diligence")
         assert not check_step(vocab, "meaning", "study, school")  # every part typed has to be on the card
         assert not check_step(vocab, "meaning", "   ")
+        assert check_step(vocab, "meaning", "studying?")  # other forms of the word
+        assert not check_step(vocab, "meaning", "work")    # a bracketed note isn't a meaning on its own
+
+        # Near enough counts: punctuation, filler words, typos, "and" lists.
+        genki = {"kind": "vocab", "front": "元気", "reading": "げんき", "meaning": "healthy; lively"}
+        for typed in ("Healthy.", "be healthy", "health", "helthy", "lively and healthy"):
+            assert check_step(genki, "meaning", typed), typed
+        assert not check_step(genki, "meaning", "happy")
+        assert not check_step({"kind": "vocab", "meaning": "big"}, "meaning", "bag")  # short words stay exact
+
+        # Quoted and bracketed alternatives count; a qualifier can be kept or left out.
+        un = {"kind": "vocab", "meaning": 'casual word for "yes" (yeah, uh-huh)'}
+        assert all(check_step(un, "meaning", typed) for typed in ("yes", "yeah", "uh-huh"))
+        assert not check_step(un, "meaning", "no")
+        kou = {"kind": "vocab", "meaning": "(things are) this way"}
+        assert check_step(kou, "meaning", "this way") and check_step(kou, "meaning", "things are this way")
+        assert not check_step(kou, "meaning", "that way")
 
         kana_only = {"kind": "vocab", "front": "これ", "reading": "これ", "meaning": "this"}
         assert answer_steps(kana_only) == ["meaning"]

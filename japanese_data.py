@@ -10,6 +10,7 @@
 #
 # Everything lives in one JSON file outside the repo (like Meal Receipts'
 # CSVs and Spotify's settings) -- it's personal data, not code.
+import difflib
 import json
 import os
 import random
@@ -431,17 +432,59 @@ def normalize_kana(text: str) -> str:
     return "".join(spelled)
 
 
+# Words that don't change a meaning: "to study", "a friend", "be healthy".
+FILLER_WORDS = {"to", "a", "an", "the", "be", "is", "are", "being"}
+
+
+def _plain_meaning(text: str) -> str:
+    # Lowercase, punctuation out, filler words dropped, so "Healthy." and
+    # "be healthy" compare as the word.
+    words = re.sub(r"[^\w\s]", " ", text.lower()).split()
+    return " ".join(word for word in words if word not in FILLER_WORDS)
+
+
 def meaning_parts(text: str) -> set[str]:
-    # "to study; diligence (work)" -> {"study", "diligence"}: split on the
-    # usual separators, lowercase, and drop a leading "to"/article and
-    # anything in brackets, so the check is about the word, not punctuation.
+    # What a card accepts: "healthy; lively" -> {"healthy", "lively"}. Split
+    # on the usual separators; a bracketed bit can be left out or kept
+    # ("(things are) this way"); a bracketed list of alternatives counts on
+    # its own, as does anything in quotes ('casual word for "yes" (yeah,
+    # uh-huh)').
     parts = set()
-    for part in re.split(r"[,;/]", text.lower()):
-        part = re.sub(r"\(.*?\)", "", part).strip()
-        part = re.sub(r"^(to|a|an|the) ", "", part).strip()
-        if part:
-            parts.add(part)
+    for segment in re.split(r"[;/]|,(?![^(]*\))", text):
+        options = [re.sub(r"\(.*?\)", "", segment), segment]
+        options += re.findall(r'"(.*?)"', segment)
+        for inside in re.findall(r"\((.*?)\)", segment):
+            if "," in inside:
+                options += inside.split(",")
+        parts.update(_plain_meaning(option) for option in options)
+    parts.discard("")
     return parts
+
+
+def typed_meaning_parts(typed: str) -> set[str]:
+    # What was typed: several meanings can be listed with commas, semicolons,
+    # slashes or "and" ("lively and healthy").
+    parts = {_plain_meaning(part) for part in re.split(r"[,;/]|\band\b", typed)}
+    parts.discard("")
+    return parts
+
+
+def meaning_close_enough(typed: str, accepted: set[str]) -> bool:
+    # Exact after _plain_meaning, or a near miss on a longer word -- a typo
+    # ("helthy"), a plural ("friends") or another form of it ("health",
+    # "studying"). Short words have to match exactly: "big" and "bag" are
+    # different answers.
+    if typed in accepted:
+        return True
+    for option in accepted:
+        if min(len(typed), len(option)) < 5:
+            continue
+        single_words = " " not in typed and " " not in option
+        if single_words and (typed.startswith(option) or option.startswith(typed)):
+            return True
+        if difflib.SequenceMatcher(None, typed, option).ratio() >= 0.85:
+            return True
+    return False
 
 
 def has_distinct_reading(card: dict) -> bool:
@@ -498,10 +541,12 @@ def check_step(card: dict, step: str, typed: str) -> bool:
     if not typed.strip():
         return False
     if step == "meaning":
-        # Any of the card's meanings counts; typing several ("study,
-        # learning") is fine as long as each one is on the card.
-        typed_parts = meaning_parts(typed)
-        return bool(typed_parts) and typed_parts <= meaning_parts(card["meaning"])
+        # Any of the card's meanings counts, loosely (see
+        # meaning_close_enough); typing several ("study, learning") is fine
+        # as long as each one is on the card.
+        typed_parts = typed_meaning_parts(typed)
+        accepted = meaning_parts(card["meaning"])
+        return bool(typed_parts) and all(meaning_close_enough(part, accepted) for part in typed_parts)
     typed_kana = _typed_kana(typed)
     if step == "reading":
         return typed_kana == normalize_kana(card["reading"])
