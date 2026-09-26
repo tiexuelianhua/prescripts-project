@@ -95,6 +95,16 @@ with st.sidebar:
 
 TEXT_COLOR, ACCENT_COLOR = theme_colors()
 
+# Arriving here (opening the app, or coming back from another page) types
+# the prompt in first, then fades in the logo and search box. Reruns while
+# staying on Home (e.g. pressing Enter in the box) just show it all at once.
+just_arrived = st.session_state.get("_previous_page") != st.session_state.get("_current_page")
+# Kept hidden while the prompt types; the footer below starts their fade-in
+# once it's done, so the timing follows the typing however long it takes.
+# One line each, like the footer's HTML below: a blank line left inside
+# that HTML ends it, and Markdown shows the rest as a code block.
+_HIDE_UNTIL_TYPED = ".st-key-home_logo, .st-key-home_query { opacity: 0; }" if just_arrived else ""
+
 # A blinking "|" in place of the input's placeholder text -- a minimal
 # type-here cue instead of a labeled button or instructional placeholder
 # text. Scoped to this page only (re-injected fresh each time this script
@@ -111,7 +121,7 @@ st.markdown(
         color: {TEXT_COLOR};
         opacity: 1;
         animation: blink-caret 1s step-start infinite;
-    }}
+    }} {_HIDE_UNTIL_TYPED}
     </style>
     """,
     unsafe_allow_html=True,
@@ -137,7 +147,8 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
-show_logo(width=240)
+with st.container(key="home_logo"):
+    show_logo(width=240)
 
 # Reserved here, in reading order (logo, then question, then the input
 # below), but only actually animated at the very end of the script via the
@@ -171,10 +182,21 @@ if query.strip():
         for column, (label, url) in zip(st.columns(len(route["links"])), route["links"]):
             column.link_button(label, url, width="stretch")
 
-typewriter(
-    st.session_state["_home_prompt"],
-    markdown_wrap=":primary[{}]",
-    placeholder=prompt_placeholder,
+if just_arrived:
+    typewriter(
+        st.session_state["_home_prompt"],
+        markdown_wrap=":primary[{}]",
+        placeholder=prompt_placeholder,
+    )
+else:
+    prompt_placeholder.markdown(f":primary[{st.session_state['_home_prompt']}]")
+# Starts the logo and search box fading in. Sent with the footer below,
+# which only reaches the browser once the typing above has finished.
+_FADE_IN_AFTER_TYPING = (
+    "@keyframes home-fade-in { from { opacity: 0; } to { opacity: 1; } } "
+    ".st-key-home_logo, .st-key-home_query { animation: home-fade-in 0.6s ease-out forwards; }"
+    if just_arrived
+    else ""
 )
 
 # The app's one place for attribution (the same list as the README's
@@ -221,7 +243,7 @@ st.markdown(
     @keyframes footer-fade-in {{
         from {{ opacity: 0; }}
         to {{ opacity: 0.6; }}
-    }}
+    }} {_FADE_IN_AFTER_TYPING}
     </style>
     <div style="
         position: fixed;
