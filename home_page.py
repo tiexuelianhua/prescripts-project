@@ -4,12 +4,14 @@
 # home_data.route_command. Getting to other pages otherwise happens via the
 # sidebar nav that st.navigation already renders (see app.py), so there's no
 # second page-link list here.
+import json
 import random
+import time
 
 import streamlit as st
 
 from home_data import add_quote, load_quotes, quote_credit, remove_quote, route_command
-from prescripts_common import PAGES, PRIVATE_LOOK, show_logo, theme_colors, typewriter
+from prescripts_common import PAGES, PRIVATE_LOOK, SCRIPTS_DIR, show_logo, theme_colors, typewriter
 
 # Rotates like a search-portal prompt (Gemini-style) rather than always
 # asking the same thing. Picked once per session (below), not re-rolled on
@@ -95,8 +97,9 @@ with st.sidebar:
 
 TEXT_COLOR, ACCENT_COLOR = theme_colors()
 
-# Arriving here (opening the app, or coming back from another page) types
-# the prompt in first, then fades in the logo and search box. Reruns while
+# Arriving here (opening the app, or coming back from another page) plays a
+# short glitch (static/home_glitch.js), types the prompt in as it clears,
+# then fades in the logo and search box. Reruns while
 # staying on Home (e.g. pressing Enter in the box) just show it all at once.
 just_arrived = st.session_state.get("_previous_page") != st.session_state.get("_current_page")
 # Kept hidden while the prompt types; the footer below starts their fade-in
@@ -182,7 +185,20 @@ if query.strip():
         for column, (label, url) in zip(st.columns(len(route["links"])), route["links"]):
             column.link_button(label, url, width="stretch")
 
+# Seconds the glitch runs for; the typing starts as its static clears.
+GLITCH_SECONDS = 1.0
 if just_arrived:
+    # Played from the prompt's own spot, which the typing then writes over --
+    # an element of its own would add an empty row to the page. The glitch
+    # draws on a canvas outside Streamlit's elements, so it keeps going.
+    glitch_options = json.dumps({"accent": ACCENT_COLOR, "seconds": GLITCH_SECONDS})
+    prompt_placeholder.html(
+        "<script>"
+        + (SCRIPTS_DIR / "static" / "home_glitch.js").read_text(encoding="utf-8")
+        + f"\nplayHomeGlitch({glitch_options});</script>",
+        unsafe_allow_javascript=True,
+    )
+    time.sleep(GLITCH_SECONDS * 0.85)
     typewriter(
         st.session_state["_home_prompt"],
         markdown_wrap=":primary[{}]",
@@ -213,6 +229,8 @@ _CREDITS_HTML = f"""
     (<a href="https://library-of-ruina.fandom.com/wiki/The_Index" target="_blank">Library of Ruina</a>,
     <a href="https://limbuscompany.wiki.gg/wiki/The_Index" target="_blank">Limbus Company</a>).
     {_LOGO_CREDIT}
+    The arrival glitch was inspired by Limbus Company's
+    <a href="https://youtu.be/Y2-VkdfA2os" target="_blank">[000] trailer</a>.
     Colours and button style:
     <a href="https://prescript.neocities.org/" target="_blank">prescript.neocities.org</a>.
     Font: <a href="https://github.com/quiple/galmuri" target="_blank">Galmuri</a> by quiple (OFL-1.1).
