@@ -178,7 +178,7 @@ def test_month_comparisons(app_copy):
 
 
 def test_home_button_goes_home(app_copy):
-    # Every page but Home has the Home button (Alt+Home presses it too).
+    # Every page but Home has the Home button (Ctrl+Shift+H presses it too).
     result = run_in(app_copy, """
         from streamlit.testing.v1 import AppTest
         from prescripts_common import PAGES, SCRIPTS_DIR

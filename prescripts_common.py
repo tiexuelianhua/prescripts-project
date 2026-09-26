@@ -109,7 +109,7 @@ def _step_zoom(step: int) -> None:
 
 def render_top_bar() -> None:
     # For every page but Home (called from app.py): a Home button (also
-    # Alt+Home) and small "−  100%  +" zoom buttons pinned in the top bar.
+    # Ctrl+Shift+H) and small "−  100%  +" zoom buttons pinned in the top bar.
     # The zoom scales the page's content
     # with CSS zoom. One level shared by all pages, remembered across
     # restarts. The whole main column is zoomed (so it widens like real
@@ -155,22 +155,23 @@ def render_top_bar() -> None:
         unsafe_allow_html=True,
     )
     with st.container(key="top_bar", horizontal=True):
-        if st.button("🏠", key="go_home", help="Home (Alt+Home)"):
+        if st.button("🏠", key="go_home", help="Home (Ctrl+Shift+H)"):
             st.switch_page("home_page.py")
         st.button("−", key="zoom_out", help="Zoom out", on_click=_step_zoom, args=(-1,), disabled=zoom <= ZOOM_LEVELS[0])
         st.button(f"{zoom:.0%}", key="zoom_reset", help="Reset zoom to 100%", on_click=_step_zoom, args=(0,))
         st.button("+", key="zoom_in", help="Zoom in", on_click=_step_zoom, args=(1,), disabled=zoom >= ZOOM_LEVELS[-1])
-        # Alt+Home (the browser's own "home page" keys) presses the Home button.
-        # Installed once per browser tab (the flag), so reruns and page switches
-        # don't stack up listeners. On Home itself there's no button, so it does
-        # nothing there. Inside the pinned bar, since anywhere in the page's own
-        # flow it adds an empty row above the title.
+        # Ctrl+Shift+H presses the Home button -- a Ctrl combo that neither
+        # Chrome, Edge nor Windows already uses. Installed once per browser
+        # tab (the flag), so reruns and page switches don't stack up
+        # listeners. On Home itself there's no button, so it does nothing
+        # there. Inside the pinned bar, since anywhere in the page's own flow
+        # it adds an empty row above the title.
         st.html(
             """<script>
-            if (!window._goHomeInstalled) {
-                window._goHomeInstalled = true;
+            if (!window._homeShortcutInstalled) {
+                window._homeShortcutInstalled = true;
                 document.addEventListener("keydown", event => {
-                    if (!event.altKey || event.key !== "Home") return;
+                    if (!event.ctrlKey || !event.shiftKey || event.altKey || event.key.toLowerCase() !== "h") return;
                     const button = document.querySelector(".st-key-go_home button");
                     if (!button) return;
                     event.preventDefault();
