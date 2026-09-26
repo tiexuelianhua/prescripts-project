@@ -150,7 +150,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
-with st.container(key="home_logo"):
+with st.container(key="home_logo", horizontal_alignment="center"):
     show_logo(width=240)
 
 # Reserved here, in reading order (logo, then question, then the input
