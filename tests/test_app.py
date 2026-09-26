@@ -177,6 +177,26 @@ def test_month_comparisons(app_copy):
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+def test_home_button_goes_home(app_copy):
+    # Every page but Home has the Home button (Alt+Home presses it too).
+    result = run_in(app_copy, """
+        from streamlit.testing.v1 import AppTest
+        from prescripts_common import PAGES, SCRIPTS_DIR
+
+        at = AppTest.from_file(str(SCRIPTS_DIR / "app.py"), default_timeout=120)
+        at.run()
+        assert not [b for b in at.button if b.key == "go_home"], "Home shouldn't have a Home button"
+        for page in PAGES:
+            at.switch_page(page["path"])
+            at.run()
+            at.button(key="go_home").click()
+            at.run()
+            assert not at.exception, (page["path"], at.exception)
+            assert not [b for b in at.button if b.key == "go_home"], page["path"] + " didn't go Home"
+    """)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 def test_home_commands(app_copy):
     result = run_in(app_copy, """
         from home_data import route_command

@@ -73,7 +73,7 @@ PAGES = [
 # zoom level), kept outside the repo like every page's own settings.
 APP_SETTINGS_PATH = SCRIPTS_DIR.parent / "app_settings.json"
 
-# Zoom steps offered by the page zoom controls (see render_zoom_controls).
+# Zoom steps offered by the page zoom controls (see render_top_bar).
 ZOOM_LEVELS = [0.8, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75]
 
 
@@ -107,9 +107,10 @@ def _step_zoom(step: int) -> None:
     save_app_settings(settings)
 
 
-def render_zoom_controls() -> None:
-    # Page zoom for every page but Home (called from app.py): small
-    # "−  100%  +" buttons pinned in the top bar, scaling the page's content
+def render_top_bar() -> None:
+    # For every page but Home (called from app.py): a Home button (also
+    # Alt+Home) and small "−  100%  +" zoom buttons pinned in the top bar.
+    # The zoom scales the page's content
     # with CSS zoom. One level shared by all pages, remembered across
     # restarts. The whole main column is zoomed (so it widens like real
     # browser zoom, rather than just bigger text in the same width); the
@@ -131,10 +132,10 @@ def render_zoom_controls() -> None:
         }}
         /* Out of the page's flow, into the top bar beside Streamlit's own
            menu -- the wrapper otherwise leaves a gap above the page. */
-        [data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"] > *:has(.st-key-zoom_controls) {{
+        [data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"] > *:has(.st-key-top_bar) {{
             position: absolute;
         }}
-        .st-key-zoom_controls {{
+        .st-key-top_bar {{
             position: fixed;
             top: 0.55rem;
             left: 3.5rem;
@@ -144,7 +145,7 @@ def render_zoom_controls() -> None:
             gap: 0.25rem;
             align-items: center;
         }}
-        .st-key-zoom_controls button {{
+        .st-key-top_bar button {{
             min-height: 0;
             padding: 0 0.6rem;
             line-height: 1.6;
@@ -153,10 +154,32 @@ def render_zoom_controls() -> None:
         """,
         unsafe_allow_html=True,
     )
-    with st.container(key="zoom_controls", horizontal=True):
+    with st.container(key="top_bar", horizontal=True):
+        if st.button("🏠", key="go_home", help="Home (Alt+Home)"):
+            st.switch_page("home_page.py")
         st.button("−", key="zoom_out", help="Zoom out", on_click=_step_zoom, args=(-1,), disabled=zoom <= ZOOM_LEVELS[0])
         st.button(f"{zoom:.0%}", key="zoom_reset", help="Reset zoom to 100%", on_click=_step_zoom, args=(0,))
         st.button("+", key="zoom_in", help="Zoom in", on_click=_step_zoom, args=(1,), disabled=zoom >= ZOOM_LEVELS[-1])
+        # Alt+Home (the browser's own "home page" keys) presses the Home button.
+        # Installed once per browser tab (the flag), so reruns and page switches
+        # don't stack up listeners. On Home itself there's no button, so it does
+        # nothing there. Inside the pinned bar, since anywhere in the page's own
+        # flow it adds an empty row above the title.
+        st.html(
+            """<script>
+            if (!window._goHomeInstalled) {
+                window._goHomeInstalled = true;
+                document.addEventListener("keydown", event => {
+                    if (!event.altKey || event.key !== "Home") return;
+                    const button = document.querySelector(".st-key-go_home button");
+                    if (!button) return;
+                    event.preventDefault();
+                    button.click();
+                }, true);
+            }
+            </script>""",
+            unsafe_allow_javascript=True,
+        )
 
 
 def theme_colors() -> tuple[str, str]:

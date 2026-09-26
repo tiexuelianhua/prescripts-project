@@ -163,6 +163,7 @@ Back up the `Prescripts` folder to back up everything.
 ## Handy to know
 
 - **F11** toggles full screen in the app window.
+- The **🏠** button at the top of every page except Home, or **Alt+Home**, goes back to Home.
 - The **− 100% +** buttons at the top of every page except Home zoom the page. The zoom level is remembered.
 - Times and dates are in **Japan time (JST)** whatever your computer's clock says, and the Weather page covers Japan only.
 - To update to the newest version: `git pull` in the `prescripts-project` folder, then run step 4 again.

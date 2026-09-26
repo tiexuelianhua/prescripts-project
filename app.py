@@ -10,7 +10,7 @@ from prescripts_common import (
     inject_button_style,
     inject_input_style,
     inject_toast_style,
-    render_zoom_controls,
+    render_top_bar,
 )
 
 st.set_page_config(
@@ -36,8 +36,8 @@ current_page = st.navigation([home_page, *other_pages])
 # through this script, so they don't count as leaving.
 st.session_state["_previous_page"] = st.session_state.get("_current_page")
 st.session_state["_current_page"] = current_page.url_path
-# Every page but Home gets zoom controls -- Home stays the plain Prescripts
-# front door.
+# Every page but Home gets the Home button and zoom controls -- Home stays
+# the plain Prescripts front door.
 if current_page.url_path:
-    render_zoom_controls()
+    render_top_bar()
 current_page.run()
