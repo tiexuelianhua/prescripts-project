@@ -131,7 +131,7 @@ def relocate_edited_entries(entries: pd.DataFrame, viewed_date) -> pd.DataFrame:
 def append_entry(
     csv_path: Path,
     timestamp: str,
-    store: str,
+    store: str | None,
     item: str,
     cost_yen: int,
     excluded: bool = False,

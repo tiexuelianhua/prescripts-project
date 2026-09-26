@@ -65,6 +65,37 @@ def test_new_store_and_item_are_suggested_straight_away(app_copy):
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+def test_store_can_be_left_blank(app_copy):
+    # For a store whose name can't be recalled -- the add form takes just an
+    # item, and a blank store is never offered back as a "nan" store.
+    # (AppTest can't type a brand-new option, so the item is logged once
+    # directly first, then picked from the suggestions.)
+    result = run_in(app_copy, """
+        from datetime import date
+        from streamlit.testing.v1 import AppTest
+        from meal_receipts_data import append_entry, day_folder_for, get_today_folder, known_values, load_entries
+        from prescripts_common import SCRIPTS_DIR
+
+        folder = day_folder_for(date(2026, 8, 1))
+        folder.mkdir(parents=True)
+        append_entry(folder / "receipts.csv", "2026-08-01 12:00:00", None, "Onigiri", 150)
+        assert known_values("store") == [], known_values("store")
+
+        at = AppTest.from_file(str(SCRIPTS_DIR / "mealReceiptsApp_cV.py"), default_timeout=60)
+        at.run()
+        at.selectbox(key="add_entry_item").set_value("Onigiri")
+        at.run()
+        assert at.selectbox(key="add_entry_store").value is None
+        next(button for button in at.button if button.label == "Add entry").click()
+        at.run()
+        assert not at.exception and not at.warning, (at.exception, at.warning)
+        entries = load_entries(get_today_folder() / "receipts.csv")
+        assert list(entries["item"]) == ["Onigiri"] and entries["store"].isna().all(), entries
+        assert known_values("store") == [], known_values("store")
+    """)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 def test_home_credits_only_the_quote_showing(app_copy):
     # The corner note names the one quote on screen (built-in or added), and
     # nothing when the prompt isn't a quote. Added quotes live outside the

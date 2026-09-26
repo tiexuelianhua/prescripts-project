@@ -255,14 +255,18 @@ with st.container(key="main_body"):
         if last_entry is not None:
             st.session_state["add_entry_cost"] = int(last_entry["cost_yen"])
             # Just a suggestion -- still an ordinary editable selectbox, so
-            # it can be confirmed or changed before submitting.
-            st.session_state["add_entry_store"] = str(last_entry["store"])
+            # it can be confirmed or changed before submitting. Left blank
+            # if the store was left blank last time too.
+            last_store = last_entry["store"]
+            st.session_state["add_entry_store"] = str(last_store) if pd.notna(last_store) else None
         st.session_state["_last_autofilled_item"] = item
 
     col1, col2 = st.columns(2)
     store = col1.selectbox(
         "Store", options=known_values("store", exclude=excluded_stores), index=None,
-        accept_new_options=True, placeholder="Type or pick a store",
+        accept_new_options=True, placeholder="Optional -- type or pick a store",
+        # Optional, for a store whose name can't be recalled (or read) at
+        # the time -- it can be filled in later from Entries.
         key="add_entry_store",
     )
     cost_yen = col2.number_input("Cost (¥)", min_value=0, step=1, key="add_entry_cost")
@@ -286,8 +290,8 @@ with st.container(key="main_body"):
     st.caption("Click **Add entry** to submit")
     submitted = st.button("Add entry")
     if submitted:
-        if not store or not item:
-            st.warning("Store and item are required.")
+        if not item:
+            st.warning("Item is required.")
         else:
             if entry_date == today_date:
                 target_folder = today_folder
@@ -322,7 +326,7 @@ with st.container(key="main_body"):
             if excluded:
                 excluded_note = f" (not counted: {excluded_reason})" if excluded_reason else " (not counted toward totals)"
             st.session_state["_add_entry_confirmation"] = (
-                f"[Logged {item} at {store} for ¥{cost_yen:,.0f}{excluded_note}]"
+                f"[Logged {item}{f' at {store}' if store else ''} for ¥{cost_yen:,.0f}{excluded_note}]"
             )
             st.rerun()
     else:
@@ -385,7 +389,7 @@ with st.container(key="main_body"):
             )
             # Saved as soon as anything in the table changes (the user asked
             # for edits to save by default, not wait on a button) -- except
-            # while a row is missing its time, store, item or cost, e.g. one
+            # while a row is missing its time, item or cost, e.g. one
             # just added with "+" and still being filled in: saving it then
             # would file it under no day at all (relocate_edited_entries
             # sorts rows into day-folders by their time).
@@ -398,10 +402,10 @@ with st.container(key="main_body"):
             edited_entries.loc[parsed_times.notna(), "timestamp"] = parsed_times[parsed_times.notna()].dt.strftime(
                 "%Y-%m-%d %H:%M:%S"
             )
-            incomplete = edited_entries[["store", "item", "cost_yen"]].isna().any(axis=1) | parsed_times.isna()
+            incomplete = edited_entries[["item", "cost_yen"]].isna().any(axis=1) | parsed_times.isna()
             if has_changes and incomplete.any():
                 st.caption(
-                    "A row is missing its time (e.g. 2026-09-24 13:00), store, item or cost "
+                    "A row is missing its time (e.g. 2026-09-24 13:00), item or cost "
                     "-- it'll save once those are filled in."
                 )
             elif has_changes:
