@@ -15,6 +15,7 @@ from datetime import datetime
 
 import streamlit as st
 
+from prescripts.common import JST, inject_body_fade_in, render_page_title, show_logo, theme_colors
 from prescripts.data.japanese.answers import (
     display_readings as japanese_display_readings,
     has_distinct_reading as japanese_has_distinct_reading,
@@ -26,7 +27,6 @@ from prescripts.data.japanese.deck import (
     random_card as japanese_random_card,
 )
 from prescripts.data.meal_receipts import today_summary as meal_receipts_today_summary
-from prescripts.common import JST, inject_body_fade_in, render_page_title, show_logo, theme_colors
 from prescripts.data.spotify import (
     current_playback as spotify_current_playback,
     describe_item as spotify_describe_item,
@@ -34,7 +34,6 @@ from prescripts.data.spotify import (
     is_connected as spotify_is_connected,
 )
 from prescripts.data.spotify_log import log_event, log_slow
-from prescripts.spotify_widgets import inject_seek_slider_styles, page_is_locked, render_seek_slider, render_transport_controls
 from prescripts.data.weather import (
     CATEGORY_EMOJI,
     format_condition,
@@ -43,6 +42,12 @@ from prescripts.data.weather import (
     today_conditions,
     translate_to_english,
     weather_codes,
+)
+from prescripts.spotify_widgets import (
+    inject_seek_slider_styles,
+    page_is_locked,
+    render_seek_slider,
+    render_transport_controls,
 )
 
 run_started = time.time()

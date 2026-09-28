@@ -186,7 +186,9 @@ The project has automated tests. They load every page and check the rules undern
 
 It takes about two minutes and should finish with `22 passed`. Close the app first if it's running: installing packages while it's open can fail, because Windows locks files the app is using.
 
-The same tests also run on GitHub on Windows, Mac, and Linux after every push. The badge at the top of this page shows the latest result.
+To check the code for mistakes like unused or undefined names, and for import order, run `.venv\Scripts\ruff check .` (add `--fix` to sort the imports for you). The settings are in `pyproject.toml`.
+
+The tests also run on GitHub on Windows, Mac, and Linux after every push, along with the ruff check. The badge at the top of this page shows the latest result.
 
 ### Updating the screenshots
 

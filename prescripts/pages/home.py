@@ -10,8 +10,8 @@ import time
 
 import streamlit as st
 
-from prescripts.data.home import add_quote, load_quotes, quote_credit, remove_quote, route_command
 from prescripts.common import PAGES, PRIVATE_LOOK, SCRIPTS_DIR, show_logo, theme_colors, typewriter
+from prescripts.data.home import add_quote, load_quotes, quote_credit, remove_quote, route_command
 
 # Rotates like a search-portal prompt (Gemini-style) rather than always
 # asking the same thing. Picked once per session (below), not re-rolled on

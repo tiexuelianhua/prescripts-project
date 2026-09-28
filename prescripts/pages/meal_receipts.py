@@ -8,6 +8,15 @@ from datetime import datetime
 import pandas as pd
 import streamlit as st
 
+from prescripts.common import (
+    JST,
+    inject_body_fade_in,
+    keep_typed_selectbox_text,
+    render_page_title,
+    show_logo,
+    theme_colors,
+    typewriter,
+)
 from prescripts.data.meal_receipts import (
     append_entry,
     budget_settings,
@@ -31,16 +40,6 @@ from prescripts.data.meal_receipts import (
     week_bounds,
     week_total_so_far,
 )
-from prescripts.common import (
-    JST,
-    inject_body_fade_in,
-    keep_typed_selectbox_text,
-    render_page_title,
-    show_logo,
-    theme_colors,
-    typewriter,
-)
-
 
 TEXT_COLOR, ACCENT_COLOR = theme_colors()
 PAGE_TITLE = "Meal Receipts"

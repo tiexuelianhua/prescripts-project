@@ -12,6 +12,7 @@ import uuid
 import pandas as pd
 import streamlit as st
 
+from prescripts.common import inject_body_fade_in, render_page_title, show_logo, theme_colors, typewriter
 from prescripts.data.japanese.answers import (
     STEP_LABELS,
     answer_steps,
@@ -40,7 +41,6 @@ from prescripts.data.japanese.deck import (
 )
 from prescripts.data.japanese.lookups import jisho_lookup, kanji_lookup
 from prescripts.data.japanese.spelling import check_new_card
-from prescripts.common import inject_body_fade_in, render_page_title, show_logo, theme_colors, typewriter
 
 TEXT_COLOR, ACCENT_COLOR = theme_colors()
 PAGE_TITLE = "Japanese"

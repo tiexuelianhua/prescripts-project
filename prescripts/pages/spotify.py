@@ -9,9 +9,9 @@ import urllib.error
 
 import streamlit as st
 
+from prescripts.common import inject_body_fade_in, render_page_title, show_logo, theme_colors
 from prescripts.data.lyrics import current_line_index, lyrics_status
 from prescripts.data.play_history import merge_with_api
-from prescripts.common import inject_body_fade_in, render_page_title, show_logo, theme_colors
 from prescripts.data.spotify import (
     add_to_queue,
     authorize_url,

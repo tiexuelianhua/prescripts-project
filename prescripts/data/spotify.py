@@ -21,8 +21,8 @@ import urllib.request
 
 import streamlit as st
 
-from prescripts.data.play_history import record_observation
 from prescripts.common import SCRIPTS_DIR
+from prescripts.data.play_history import record_observation
 from prescripts.data.spotify_log import SLOW_THRESHOLD_S, log_event
 
 SPOTIFY_DIR = SCRIPTS_DIR.parent / "Spotify"
