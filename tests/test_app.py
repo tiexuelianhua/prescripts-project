@@ -96,6 +96,37 @@ def test_store_can_be_left_blank(app_copy):
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+def test_meal_receipts_works_without_powershell(app_copy):
+    # Mac/Linux have no PowerShell, so today's folder is made in Python
+    # there. It must be the same folder the .ps1 scripts give, and the page
+    # (and Overview's tile from it) must load without ever calling them.
+    result = run_in(app_copy, """
+        import types
+        from streamlit.testing.v1 import AppTest
+        import meal_receipts_data
+        from prescripts_common import SCRIPTS_DIR
+
+        # Pages share this already-imported module, so the patches below
+        # reach them too.
+        from_powershell = meal_receipts_data.get_today_folder()
+        from_powershell.rmdir()
+        meal_receipts_data.sys = types.SimpleNamespace(platform="linux")
+        def no_powershell(*args, **kwargs):
+            raise AssertionError("called PowerShell off Windows")
+        meal_receipts_data.subprocess = types.SimpleNamespace(run=no_powershell)
+
+        assert meal_receipts_data.get_today_folder() == from_powershell
+        assert from_powershell.is_dir()
+        for page in ["mealReceiptsApp_cV.py", "overview_page.py"]:
+            at = AppTest.from_file(str(SCRIPTS_DIR / "app.py"), default_timeout=120)
+            at.run()
+            at.switch_page(page)
+            at.run()
+            assert not at.exception, (page, at.exception)
+    """)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 def test_home_credits_only_the_quote_showing(app_copy):
     # The corner note names the one quote on screen (built-in or added), and
     # nothing when the prompt isn't a quote. Added quotes live outside the

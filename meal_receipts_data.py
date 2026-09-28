@@ -7,6 +7,7 @@
 import calendar
 import json
 import subprocess
+import sys
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
@@ -34,6 +35,13 @@ JAPANESE_MONTHS = [
 
 
 def get_today_folder() -> Path:
+    # The .ps1 scripts (and their error logging) stay the source of truth on
+    # Windows. Mac/Linux have no PowerShell, so there the same Year/Month/Day
+    # folder is made directly -- what the scripts do in -Silent mode.
+    if sys.platform != "win32":
+        folder = day_folder_for(datetime.now(JST).date())
+        folder.mkdir(parents=True, exist_ok=True)
+        return folder
     # PowerShell's redirected-stdout encoding doesn't match Python's default
     # decoder, which mangles the kanji month name (e.g. "9月" -> "9?") unless
     # both sides are forced to UTF-8.
