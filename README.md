@@ -9,7 +9,7 @@ A personal dashboard app for everyday life in Japan, themed on the Prescripts of
 | **Overview** | A summary tile from each of the other pages, all on one screen |
 | **Meal Receipts** | Log meals and spending against a daily or weekly budget |
 | **Weather** | Forecasts, warnings and live readings from the Japan Meteorological Agency |
-| **Nearby** | Food and things to do within walking distance of a station, an area, or where you are |
+| **Activities** | Food and things to do within walking distance of a station, an area, or where you are |
 | **Spotify** | See and control what's playing, with lyrics (needs a one-off setup, below) |
 | **Japanese** | Vocabulary and kanji flashcards with spaced-repetition reviews |
 
@@ -47,7 +47,7 @@ It started as one hand-written PowerShell script that makes a folder for each da
 - **Windows 10 or 11.** This is the tested setup. On a Mac or Linux, skip to [Not on Windows?](#not-on-windows).
 - **Python 3.12** (not a newer version). Download the [Python 3.12.10 Windows installer](https://www.python.org/ftp/python/3.12.10/python-3.12.10-amd64.exe) and run it. The installer's defaults are fine. The python.org download page now leads with Python 3.14 and the "Python install manager". If you already have the install manager, run `py install 3.12` in PowerShell instead.
 - **Git**, from [git-scm.com](https://git-scm.com/downloads). Optional: you can download a ZIP instead (step 2).
-- **An internet connection.** Weather, Nearby, lyrics, and Japanese word lookups fetch live data. Nothing needs an account or API key except Spotify.
+- **An internet connection.** Weather, Activities, lyrics, and Japanese word lookups fetch live data. Nothing needs an account or API key except Spotify.
 
 To check Python is installed, open **PowerShell** (Start menu → type "PowerShell") and run:
 
@@ -161,7 +161,7 @@ Prescripts\
 ├── Meal Receipts\        ← created when you first log a meal
 ├── Japanese\             ← your flashcards
 ├── Weather\              ← your chosen forecast area (default: Tokyo)
-├── Nearby\               ← your saved area and walking distance
+├── Activities\           ← your saved area and walking distance
 ├── Spotify\              ← your Spotify keys + connection
 ├── quotes.json           ← quotes you add on Home
 └── app_settings.json     ← app-wide preferences, e.g. zoom level
@@ -240,12 +240,12 @@ app.py                       shared look, top bar, and navigation between pages
 prescripts/
 ├── common.py                what every page shares: the page list, the Prescripts styling, JST
 ├── spotify_widgets.py       Spotify controls used by both the Spotify page and Overview
-├── pages/                   home, overview, meal_receipts, weather, nearby, spotify, japanese
+├── pages/                   home, overview, meal_receipts, weather, activities, spotify, japanese
 └── data/
     ├── home.py              → quotes.json
     ├── meal_receipts.py     → Meal Receipts\ (a receipts.csv per day)
     ├── weather.py           → JMA, MyMemory (translation)
-    ├── nearby.py            → OpenStreetMap (Nominatim for areas, Overpass for places)
+    ├── activities.py        → OpenStreetMap (Nominatim for areas, Overpass for places)
     ├── spotify.py, lyrics.py → Spotify Web API, LRCLIB
     └── japanese/            → Japanese\cards.json, Jisho, kanjiapi.dev
                                (deck, lookups, typed answers, spelling check)

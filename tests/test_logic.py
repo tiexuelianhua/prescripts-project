@@ -1,7 +1,7 @@
 # The rules underneath the pages, tested directly rather than through the UI:
 # flashcard scheduling and typed answers, what counts toward a meal total,
 # lyrics timing, the play history that fills Spotify's gaps, and which
-# places Nearby shows. Same setup
+# places the Activities page shows. Same setup
 # as test_app.py -- each test runs in a temp copy of the code (conftest.py).
 from conftest import run_in
 
@@ -306,12 +306,12 @@ def test_play_history_fills_spotify_gaps(app_copy):
     """)
 
 
-def test_nearby_places(app_copy):
-    # What the Nearby page makes of OpenStreetMap's answer: named places of a
+def test_activities_places(app_copy):
+    # What the Activities page makes of OpenStreetMap's answer: named places of a
     # known category only, nearest first, outlines placed at their centre,
     # and shrines/temples but not other places of worship.
     _check(app_copy, """
-        from prescripts.data.nearby import category_of, distance_m, overpass_query, parse_places
+        from prescripts.data.activities import category_of, distance_m, overpass_query, parse_places
 
         assert abs(distance_m(35.0, 139.0, 35.001, 139.0) - 111.2) < 0.5  # a thousandth of a degree north
 

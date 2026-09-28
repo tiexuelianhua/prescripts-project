@@ -64,7 +64,7 @@ def route_command(query: str, pages: list[dict]) -> dict:
     subject = " ".join(_COMMAND_PATTERN.sub(" ", text).split())
     # Each fitting page, with how many words its best-fitting name has: a
     # longer phrase is the more specific match, so "food near me" goes to
-    # Nearby ("near me") rather than asking between it and Meal Receipts
+    # Activities ("near me") rather than asking between it and Meal Receipts
     # ("food"). Equally specific matches ("japanese food") still ask.
     fits = []
     for page in pages:

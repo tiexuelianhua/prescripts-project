@@ -173,17 +173,17 @@ def test_item_bought_at_two_stores_is_offered_per_store(app_copy):
     assert result.returncode == 0, result.stdout + result.stderr
 
 
-def test_nearby_page(app_copy):
+def test_activities_page(app_copy):
     # Around a saved area: named places nearest first, and a plain message
     # (not an error screen) when OpenStreetMap can't be reached. The lookup
     # is swapped for a stand-in, so this never touches the network.
     result = run_in(app_copy, """
         import urllib.error
         from streamlit.testing.v1 import AppTest
-        import prescripts.data.nearby as nearby
+        import prescripts.data.activities as activities
         from prescripts.common import SCRIPTS_DIR
 
-        nearby.save_settings({"area": "Shibuya Station", "lat": 35.658, "lon": 139.7016, "radius": 800})
+        activities.save_settings({"area": "Shibuya Station", "lat": 35.658, "lon": 139.7016, "radius": 800})
         sample = [
             {"type": "node", "id": 1, "lat": 35.6590, "lon": 139.7016,
              "tags": {"amenity": "restaurant", "name": "すき家", "name:en": "Sukiya"}},
@@ -191,11 +191,11 @@ def test_nearby_page(app_copy):
             {"type": "node", "id": 3, "lat": 35.6600, "lon": 139.7016,
              "tags": {"amenity": "restaurant", "name": "うなぎ 松川", "name:en": "Matsukawa's Eel & Rice"}},
         ]
-        nearby.fetch_places = lambda kind, lat, lon, radius: sample
+        activities.fetch_places = lambda kind, lat, lon, radius: sample
 
         at = AppTest.from_file(str(SCRIPTS_DIR / "app.py"), default_timeout=60)
         at.run()
-        at.switch_page("prescripts/pages/nearby.py")
+        at.switch_page("prescripts/pages/activities.py")
         at.run()
         assert not at.exception, at.exception
         shown = [block.value for block in at.markdown if "<b class='place-name'>" in block.value]
@@ -205,11 +205,11 @@ def test_nearby_page(app_copy):
         assert any("3 within 800 m of Shibuya Station" in caption.value for caption in at.caption)
 
         # "Map" opens OpenStreetMap's map of that place under it; again closes it.
-        at.button(key="nearby_map_food_node/2").click()
+        at.button(key="activities_map_food_node/2").click()
         at.run()
         frames = at.get("iframe")
         assert len(frames) == 1 and "marker=35.6581" in frames[0].proto.src, frames
-        at.button(key="nearby_map_food_node/2").click()
+        at.button(key="activities_map_food_node/2").click()
         at.run()
         assert not at.get("iframe")
 
@@ -222,17 +222,17 @@ def test_nearby_page(app_copy):
                         and "<div" in block.value)
         first = picked()
         assert any(name in first for name in ("Lawson", "すき家", "うなぎ")), first
-        at.button(key="overview_nearby_another").click()
+        at.button(key="overview_activities_another").click()
         at.run()
         assert picked() != first
 
         def unreachable(*args):
             raise urllib.error.URLError("down")
-        nearby.fetch_places = unreachable
+        activities.fetch_places = unreachable
         at.run()  # Overview first: a quiet note in the tile, no error screen
         assert not at.exception, at.exception
         assert any("Couldn't reach OpenStreetMap" in caption.value for caption in at.caption)
-        at.switch_page("prescripts/pages/nearby.py")
+        at.switch_page("prescripts/pages/activities.py")
         at.run()
         assert not at.exception, at.exception
         assert any("Couldn't reach OpenStreetMap" in error.value for error in at.error)
@@ -357,9 +357,10 @@ def test_home_commands(app_copy):
         assert goes_to("wea") == "Weather"  # partial typing still works
         assert goes_to("spotify") == "Spotify"
         assert goes_to("日本語") == "Japanese"
-        assert goes_to("nearby") == "Nearby"
+        assert goes_to("activities") == "Activities"
+        assert goes_to("nearby") == "Activities"
         # "near me" is more specific than Meal Receipts' "food".
-        assert goes_to("food near me") == "Nearby"
+        assert goes_to("food near me") == "Activities"
 
         both = route_command("japanese food", PAGES)
         assert both["action"] == "choose", both
@@ -388,7 +389,7 @@ def test_page_addresses_stay_the_same(app_copy):
             "Overview": "overview",
             "Meal Receipts": "meal_receipts",
             "Weather": "weather",
-            "Nearby": "nearby",
+            "Activities": "activities",
             "Spotify": "spotify_page",
             "Japanese": "japanese",
         }, addresses

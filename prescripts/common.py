@@ -64,12 +64,12 @@ PAGES = [
         "keywords": ["weather", "forecast", "typhoon", "rain", "temperature", "advisory"],
     },
     {
-        "title": "Nearby",
+        "title": "Activities",
         "icon": "📍",
-        "path": "prescripts/pages/nearby.py",
-        "url_path": "nearby",
+        "path": "prescripts/pages/activities.py",
+        "url_path": "activities",
         "keywords": [
-            "nearby", "near me", "near here", "around here", "places", "things to do", "restaurant",
+            "activities", "activity", "nearby", "near me", "near here", "around here", "places", "things to do", "restaurant",
             "restaurants", "cafe", "convenience store", "konbini", "park", "shrine", "temple", "museum",
         ],
     },

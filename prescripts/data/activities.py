@@ -1,4 +1,4 @@
-# Logic for the Nearby page: food and things to do around a saved area or
+# Logic for the Activities page: food and things to do around a saved area or
 # the computer's current location. No Streamlit rendering here, same split
 # as the other data files.
 #
@@ -19,8 +19,8 @@ import streamlit as st
 
 from prescripts.common import SCRIPTS_DIR
 
-NEARBY_DIR = SCRIPTS_DIR.parent / "Nearby"
-SETTINGS_PATH = NEARBY_DIR / "settings.json"
+ACTIVITIES_DIR = SCRIPTS_DIR.parent / "Activities"
+SETTINGS_PATH = ACTIVITIES_DIR / "settings.json"
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 OVERPASS_URL = "https://overpass-api.de/api/interpreter"
 _HEADERS = {"User-Agent": "The Prescripts (personal dashboard app)"}
@@ -62,7 +62,7 @@ def load_settings() -> dict:
 
 
 def save_settings(settings: dict) -> None:
-    NEARBY_DIR.mkdir(parents=True, exist_ok=True)
+    ACTIVITIES_DIR.mkdir(parents=True, exist_ok=True)
     SETTINGS_PATH.write_text(json.dumps(settings, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
