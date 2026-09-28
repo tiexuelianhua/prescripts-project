@@ -213,6 +213,17 @@ def test_activities_page(app_copy):
         at.run()
         assert not at.get("iframe")
 
+        # "What do you feel like?" narrows the list, says so when nothing
+        # matches (with a Google Maps search instead), and clearing it goes back.
+        at.text_input(key="activities_wish").input("lawson").run()
+        shown = [block.value for block in at.markdown if "<b class='place-name'>" in block.value]
+        assert len(shown) == 1 and "Lawson" in shown[0], shown
+        at.text_input(key="activities_wish").input("spanish restaurant").run()
+        assert any("Nothing matching" in caption.value for caption in at.caption)
+        assert any("google.com/maps/search/spanish%20restaurant" in block.value for block in at.markdown)
+        at.text_input(key="activities_wish").input("").run()
+        assert any("3 within 800 m" in caption.value for caption in at.caption)
+
         # Overview's tile: one of the places, and "Another" picks a different one.
         at.switch_page("prescripts/pages/overview.py")
         at.run()

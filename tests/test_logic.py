@@ -354,3 +354,35 @@ def test_activities_places(app_copy):
         query = overpass_query("things", 35.658, 139.7016, 800)
         assert '["religion"~"^(shinto|buddhist)$"]' in query and "(around:800,35.658,139.7016)" in query, query
     """)
+
+def test_activities_wishes(app_copy):
+    # "What do you feel like?": kinds of place pick the category (temples
+    # and shrines apart), other words must appear in the cuisine or name.
+    _check(app_copy, """
+        from prescripts.data.activities import matches_wish, parse_wish
+
+        def place(name, category, cuisine="", name_en="", religion=""):
+            return {"name": name, "name_en": name_en, "category": category, "cuisine": cuisine, "religion": religion}
+
+        spanish = place("バル・エスパーニャ", "restaurant", cuisine="spanish")
+        ramen = place("一蘭 ラーメン", "restaurant", cuisine="")
+        cafe = place("スターバックス", "cafe", cuisine="coffee shop", name_en="Starbucks")
+        temple = place("増上寺", "shrine_temple", religion="buddhist")
+        shrine = place("明治神宮", "shrine_temple", religion="shinto")
+        everything = [spanish, ramen, cafe, temple, shrine]
+
+        def found(text):
+            wish = parse_wish(text)
+            return [p["name"] for p in everything if matches_wish(p, wish)]
+
+        wish = parse_wish("Go to a Spanish restaurant")
+        assert (wish["kind"], wish["category"], wish["terms"]) == ("food", "restaurant", ["spanish"]), wish
+        assert found("Go to a Spanish restaurant") == ["バル・エスパーニャ"]
+        assert found("see a temple") == ["増上寺"]          # Buddhist only, not the shrine
+        assert found("visit some shrines") == ["明治神宮"]
+        assert found("ramen") == ["一蘭 ラーメン"]           # English word, Japanese name
+        assert found("coffee") == ["スターバックス"]
+        assert found("starbucks") == ["スターバックス"]      # by English name
+        assert parse_wish("fast food")["category"] == "fast_food"  # longer phrase wins over "food"
+        assert found("karaoke") == []
+    """)

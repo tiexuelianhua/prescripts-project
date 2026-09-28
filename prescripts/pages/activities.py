@@ -16,9 +16,12 @@ from prescripts.data.activities import (
     load_settings,
     map_embed,
     map_link,
+    matches_wish,
     parse_places,
+    parse_wish,
     place_spot,
     save_settings,
+    search_link,
 )
 
 PAGE_TITLE = "Activities"
@@ -190,13 +193,9 @@ def _toggle_map(place_id: str) -> None:
     st.session_state["_activities_open_map"] = None if current == place_id else place_id
 
 
-def render_places(kind: str, origin: dict, radius: int) -> None:
-    categories = CATEGORIES[kind]
-    chosen = st.pills(
-        "Show", list(categories), format_func=lambda category: categories[category][0],
-        selection_mode="multi", default=list(categories), key=f"activities_{kind}_categories",
-        label_visibility="collapsed",
-    )
+def load_places(kind: str, origin: dict, radius: int) -> list[dict] | None:
+    # Every named place of that kind in range, or None (with a message and
+    # a Try again button) if OpenStreetMap couldn't be reached.
     try:
         with st.spinner("Looking up places…"):
             elements = fetch_places(kind, *place_spot(origin["lat"], origin["lon"]), radius)
@@ -207,12 +206,48 @@ def render_places(kind: str, origin: dict, radius: int) -> None:
         st.error("Couldn't reach OpenStreetMap's place search right now. It's a shared service "
                  "and is sometimes busy for a moment.")
         st.button("Try again", key=f"activities_{kind}_retry")
-        return
-    places = [place for place in parse_places(kind, elements, origin["lat"], origin["lon"])
-              if place["category"] in chosen]
-    st.caption(f"{len(places)} within {format_distance(radius)} of {origin['label']}, nearest first.")
+        return None
+    return parse_places(kind, elements, origin["lat"], origin["lon"])
 
-    limit_key = f"_activities_{kind}_limit"
+
+def render_places(kind: str, origin: dict, radius: int) -> None:
+    categories = CATEGORIES[kind]
+    chosen = st.pills(
+        "Show", list(categories), format_func=lambda category: categories[category][0],
+        selection_mode="multi", default=list(categories), key=f"activities_{kind}_categories",
+        label_visibility="collapsed",
+    )
+    places = load_places(kind, origin, radius)
+    if places is None:
+        return
+    places = [place for place in places if place["category"] in chosen]
+    st.caption(f"{len(places)} within {format_distance(radius)} of {origin['label']}, nearest first.")
+    render_list(places, kind)
+
+
+def render_wish(text: str, origin: dict, radius: int) -> None:
+    # Places matching what was typed. With no kind of place named ("ramen",
+    # "starbucks"), food is tried first, then things to do.
+    wish = parse_wish(text)
+    found = []
+    for kind in [wish["kind"]] if wish["kind"] else ["food", "things"]:
+        places = load_places(kind, origin, radius)
+        if places is None:
+            return
+        found = [place for place in places if matches_wish(place, wish)]
+        if found:
+            break
+    if not found:
+        st.caption(f"Nothing matching that within {format_distance(radius)} of {origin['label']}. "
+                   "A wider distance may help, or other words.")
+        st.markdown(f"[Search Google Maps for it]({search_link(text, origin['lat'], origin['lon'])})")
+        return
+    st.caption(f"{len(found)} matching within {format_distance(radius)} of {origin['label']}, nearest first.")
+    render_list(found, "wish")
+
+
+def render_list(places: list[dict], list_key: str) -> None:
+    limit_key = f"_activities_{list_key}_limit"
     limit = st.session_state.get(limit_key, PAGE_SIZE)
     open_map = st.session_state.get("_activities_open_map")
     for place in places[:limit]:
@@ -228,12 +263,12 @@ def render_places(kind: str, origin: dict, radius: int) -> None:
         )
         is_open = open_map == place["id"]
         map_column.button(
-            "Hide" if is_open else "Map", key=f"activities_map_{kind}_{place['id']}", width="stretch",
+            "Hide" if is_open else "Map", key=f"activities_map_{list_key}_{place['id']}", width="stretch",
             on_click=_toggle_map, args=(place["id"],),
         )
         if is_open:
             st.iframe(map_embed(place), height=320)
-    if len(places) > limit and st.button("Show more", key=f"activities_{kind}_more"):
+    if len(places) > limit and st.button("Show more", key=f"activities_{list_key}_more"):
         st.session_state[limit_key] = limit + PAGE_SIZE
         st.rerun()
 
@@ -254,10 +289,20 @@ with st.container(key="main_body"):
     if origin is None:
         st.info("Type a station or area above to see what's around it, or use your location.")
     else:
-        kind = st.segmented_control(
-            "Looking for", list(KINDS), format_func=KINDS.get, default="food", required=True, key="activities_kind"
+        # When something's typed here it takes over from browsing by kind;
+        # clearing it brings the Food / Things to do choice back.
+        wish = st.text_input(
+            "What do you feel like?", placeholder="e.g. a Spanish restaurant, see a temple, ramen",
+            key="activities_wish",
         )
-        render_places(kind, origin, radius)
+        if wish.strip():
+            render_wish(wish, origin, radius)
+        else:
+            kind = st.segmented_control(
+                "Looking for", list(KINDS), format_func=KINDS.get, default="food", required=True,
+                key="activities_kind",
+            )
+            render_places(kind, origin, radius)
 
     st.caption(
         "Places © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors. "

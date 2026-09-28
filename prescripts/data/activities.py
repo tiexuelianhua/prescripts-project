@@ -11,6 +11,7 @@
 import json
 import math
 import re
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -103,8 +104,16 @@ def fetch_places(kind: str, lat: float, lon: float, radius: int) -> list[dict]:
     # Callers round lat/lon (see place_spot) so a location that wobbles by a
     # few metres still hits the cache.
     query = overpass_query(kind, lat, lon, radius)
-    data = _get_json(OVERPASS_URL, data=urllib.parse.urlencode({"data": query}).encode(), timeout=40)
-    return data["elements"]
+    body = urllib.parse.urlencode({"data": query}).encode()
+    try:
+        return _get_json(OVERPASS_URL, data=body, timeout=40)["elements"]
+    except urllib.error.HTTPError as error:
+        # 429/504: the server's busy -- it runs only two lookups at a time
+        # per address. One more try after a short wait usually gets through.
+        if error.code not in (429, 504):
+            raise
+        time.sleep(3)
+        return _get_json(OVERPASS_URL, data=body, timeout=40)["elements"]
 
 
 def place_spot(lat: float, lon: float) -> tuple[float, float]:
@@ -165,6 +174,7 @@ def parse_places(kind: str, elements: list[dict], lat: float, lon: float) -> lis
             "category": category,
             "cuisine": tags.get("cuisine", "").replace("_", " ").replace(";", ", "),
             "hours": tags.get("opening_hours", ""),
+            "religion": tags.get("religion", ""),
             "distance": distance_m(lat, lon, point["lat"], point["lon"]),
             "lat": point["lat"],
             "lon": point["lon"],
@@ -178,6 +188,79 @@ def parse_places(kind: str, elements: list[dict], lat: float, lon: float) -> lis
         ):
             kept.append(place)
     return kept
+
+
+# "What do you feel like?": plain keyword matching, no language model.
+# Words naming a kind of place pick its category (and, for shrines and
+# temples, the religion: temples are Buddhist, shrines Shinto). Longest
+# phrases are checked first, so "fast food" wins over "food".
+_PLACE_WORDS = {
+    "convenience store": ("food", "convenience", None), "konbini": ("food", "convenience", None),
+    "コンビニ": ("food", "convenience", None), "supermarket": ("food", "supermarket", None),
+    "groceries": ("food", "supermarket", None), "grocery": ("food", "supermarket", None),
+    "スーパー": ("food", "supermarket", None), "restaurant": ("food", "restaurant", None),
+    "cafe": ("food", "cafe", None), "café": ("food", "cafe", None), "coffee": ("food", "cafe", None),
+    "カフェ": ("food", "cafe", None), "fast food": ("food", "fast_food", None),
+    "eat": ("food", None, None), "food": ("food", None, None), "hungry": ("food", None, None),
+    "meal": ("food", None, None), "lunch": ("food", None, None), "dinner": ("food", None, None),
+    "park": ("things", "park", None), "garden": ("things", "park", None), "公園": ("things", "park", None),
+    "shrine": ("things", "shrine_temple", "shinto"), "jinja": ("things", "shrine_temple", "shinto"),
+    "神社": ("things", "shrine_temple", "shinto"), "temple": ("things", "shrine_temple", "buddhist"),
+    "寺": ("things", "shrine_temple", "buddhist"), "museum": ("things", "museum", None),
+    "gallery": ("things", "museum", None), "art": ("things", "museum", None),
+    "exhibition": ("things", "museum", None), "美術館": ("things", "museum", None),
+    "博物館": ("things", "museum", None), "view": ("things", "viewpoint", None),
+    "viewpoint": ("things", "viewpoint", None), "scenery": ("things", "viewpoint", None),
+    "cinema": ("things", "cinema_theatre", None), "movie": ("things", "cinema_theatre", None),
+    "film": ("things", "cinema_theatre", None), "theatre": ("things", "cinema_theatre", None),
+    "theater": ("things", "cinema_theatre", None), "映画": ("things", "cinema_theatre", None),
+}
+# Ignored: they say how, not what ("go to a", "I want some").
+_FILLER = {
+    "a", "an", "the", "some", "any", "go", "going", "to", "see", "visit", "want", "wanna", "i", "i'd",
+    "get", "grab", "find", "for", "at", "in", "on", "me", "like", "feel", "something", "somewhere",
+    "place", "places", "near", "nearby", "around", "here", "have", "let's", "lets", "with", "and", "or",
+    "of", "maybe", "please", "good", "nice", "quiet", "fancy",
+}
+# A few foods whose Japanese name is more likely in a place's name than the
+# English one is in its cuisine tag.
+_ALSO_MEANS = {
+    "ramen": ["ラーメン", "拉麺", "らーめん"], "sushi": ["寿司", "鮨", "すし"], "curry": ["カレー"],
+    "udon": ["うどん"], "soba": ["そば", "蕎麦"], "tonkatsu": ["とんかつ"], "yakiniku": ["焼肉"],
+    "izakaya": ["居酒屋"], "gyudon": ["牛丼"], "tempura": ["天ぷら", "天麩羅"], "okonomiyaki": ["お好み焼"],
+}
+
+
+def parse_wish(text: str) -> dict:
+    # {"kind": "food"/"things"/None, "category": ... or None, "religion":
+    # ... or None, "terms": [words to find in a place's cuisine or name]}.
+    rest = f" {text.casefold().strip()} "
+    wish = {"kind": None, "category": None, "religion": None, "terms": []}
+    for phrase in sorted(_PLACE_WORDS, key=len, reverse=True):
+        # Whole words for English (plurals too); anywhere for Japanese.
+        pattern = re.escape(phrase) if re.search(r"[^\x00-\x7f]", phrase) else rf"\b{re.escape(phrase)}(e?s)?\b"
+        if re.search(pattern, rest):
+            kind, category, religion = _PLACE_WORDS[phrase]
+            if wish["kind"] is None or (category and wish["category"] is None):
+                wish.update(kind=kind, category=category or wish["category"], religion=religion or wish["religion"])
+            rest = re.sub(pattern, " ", rest)
+    wish["terms"] = [word for word in re.split(r"[\s,.!?、。]+", rest) if word and word not in _FILLER]
+    return wish
+
+
+def matches_wish(place: dict, wish: dict) -> bool:
+    if wish["category"] and place["category"] != wish["category"]:
+        return False
+    if wish["religion"] and place["religion"] != wish["religion"]:
+        return False
+    text = f"{place['name']} {place['name_en']} {place['cuisine']}".casefold()
+    return all(any(form in text for form in [term, *_ALSO_MEANS.get(term, [])]) for term in wish["terms"])
+
+
+def search_link(text: str, lat: float, lon: float) -> str:
+    # Google Maps' own search for the phrase around the spot, for when
+    # OpenStreetMap has nothing -- a plain link, no API or key.
+    return f"https://www.google.com/maps/search/{urllib.parse.quote(text.strip())}/@{lat},{lon},16z"
 
 
 def map_link(place: dict) -> str:
