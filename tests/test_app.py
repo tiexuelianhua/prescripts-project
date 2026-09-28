@@ -269,11 +269,11 @@ def test_page_addresses_stay_the_same(app_copy):
 
         addresses = {page["title"]: page["url_path"] for page in PAGES}
         assert addresses == {
-            "Overview": "overview_page",
-            "Meal Receipts": "mealReceiptsApp_cV",
-            "Weather": "weather_page",
+            "Overview": "overview",
+            "Meal Receipts": "meal_receipts",
+            "Weather": "weather",
             "Spotify": "spotify_page",
-            "Japanese": "japanese_page",
+            "Japanese": "japanese",
         }, addresses
         assert REDIRECT_URI == "http://127.0.0.1:8501/" + addresses["Spotify"], REDIRECT_URI
     """)

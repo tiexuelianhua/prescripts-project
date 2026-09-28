@@ -34,10 +34,10 @@ WIDTH = 1280
 # (file name, page's url path, element that means it's loaded, height to capture)
 SHOTS = [
     ("home", "", "details summary", 800),
-    ("overview", "overview_page", "[data-testid^=stBaseButton]", 1100),
-    ("meal_receipts", "mealReceiptsApp_cV", ".st-key-add_entry_item input", 1500),
-    ("japanese", "japanese_page", "[data-testid^=stBaseButton]", 1060),
-    ("weather", "weather_page", "[data-testid^=stBaseButton], [data-testid=stMetric]", 1000),
+    ("overview", "overview", "[data-testid^=stBaseButton]", 1100),
+    ("meal_receipts", "meal_receipts", ".st-key-add_entry_item input", 1500),
+    ("japanese", "japanese", "[data-testid^=stBaseButton]", 1060),
+    ("weather", "weather", "[data-testid^=stBaseButton], [data-testid=stMetric]", 1000),
 ]
 
 BROWSERS = [

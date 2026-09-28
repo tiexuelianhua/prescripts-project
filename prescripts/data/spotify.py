@@ -39,8 +39,9 @@ API_BASE = "https://api.spotify.com/v1"
 # sends a bare-root request to whichever page has default=True (Home), and
 # only this page's script ever looks at st.query_params for the OAuth
 # callback, so landing on the bare root silently drops the code. The path
-# itself ("spotify_page") is inferred by Streamlit from this file's name
-# (pages/spotify.py); this must be kept in sync if the file is ever renamed.
+# ("spotify_page") is the Spotify page's url_path in PAGES (common.py); the
+# two must match, and changing either means updating the Redirect URI in
+# every user's Spotify developer app too.
 REDIRECT_URI = "http://127.0.0.1:8501/spotify_page"
 # Least-privilege: only what this page (currently playing, playback control,
 # queue, recently played, playlists, liked songs) actually uses.

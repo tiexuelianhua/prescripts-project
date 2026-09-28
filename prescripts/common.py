@@ -37,30 +37,30 @@ ACCENT_COLOR_LIGHT = "#6b6ead"
 # Every non-home page in the app, in one place -- app.py's st.navigation()
 # and the Home page's tile grid / search both read this, so adding a page
 # means adding one entry here rather than touching multiple files.
-# "url_path" is each page's address (e.g. 127.0.0.1:8501/spotify_page). They
-# were the old file names, kept when the files moved into prescripts/pages so
-# links and Spotify's registered redirect address (REDIRECT_URI in
-# data/spotify.py) keep working.
+# "url_path" is each page's address (e.g. 127.0.0.1:8501/weather). Spotify's
+# keeps its original "spotify_page": it's the redirect address every user
+# registers in their own Spotify developer app (REDIRECT_URI in
+# data/spotify.py), so changing it would break every existing setup.
 PAGES = [
     {
         "title": "Overview",
         "icon": "🎛️",
         "path": "prescripts/pages/overview.py",
-        "url_path": "overview_page",
+        "url_path": "overview",
         "keywords": ["overview", "summary", "today", "control center", "dashboard"],
     },
     {
         "title": "Meal Receipts",
         "icon": "🧾",
         "path": "prescripts/pages/meal_receipts.py",
-        "url_path": "mealReceiptsApp_cV",
+        "url_path": "meal_receipts",
         "keywords": ["meal", "receipt", "receipts", "food", "budget"],
     },
     {
         "title": "Weather",
         "icon": "🌤️",
         "path": "prescripts/pages/weather.py",
-        "url_path": "weather_page",
+        "url_path": "weather",
         "keywords": ["weather", "forecast", "typhoon", "rain", "temperature", "advisory"],
     },
     {
@@ -74,7 +74,7 @@ PAGES = [
         "title": "Japanese",
         "icon": "🈁",
         "path": "prescripts/pages/japanese.py",
-        "url_path": "japanese_page",
+        "url_path": "japanese",
         "keywords": ["japanese", "vocab", "vocabulary", "kanji", "flashcard", "flashcards", "srs", "study", "日本語"],
     },
 ]
