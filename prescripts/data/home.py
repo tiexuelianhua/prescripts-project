@@ -62,17 +62,25 @@ def route_command(query: str, pages: list[dict]) -> dict:
     # what's left is the start of one (typing "wea" still finds Weather).
     text = query.strip().lower()
     subject = " ".join(_COMMAND_PATTERN.sub(" ", text).split())
-    matches = []
+    # Each fitting page, with how many words its best-fitting name has: a
+    # longer phrase is the more specific match, so "food near me" goes to
+    # Nearby ("near me") rather than asking between it and Meal Receipts
+    # ("food"). Equally specific matches ("japanese food") still ask.
+    fits = []
     for page in pages:
         names = [page["title"].lower(), *page["keywords"]]
+        best = 0
         for name in names:
             if _JAPANESE_TEXT.search(name):
                 found = name in text  # no word boundaries in Japanese
             else:
                 found = re.search(r"\b" + re.escape(name) + r"\b", text) is not None
             if found or (len(subject) >= 3 and name.startswith(subject)):
-                matches.append(page)
-                break
+                best = max(best, len(name.split()))
+        if best:
+            fits.append((page, best))
+    most_specific = max((words for _page, words in fits), default=0)
+    matches = [page for page, words in fits if words == most_specific]
     if len(matches) == 1:
         return {"action": "page", "page": matches[0]}
     if matches:

@@ -1,6 +1,7 @@
 # The rules underneath the pages, tested directly rather than through the UI:
 # flashcard scheduling and typed answers, what counts toward a meal total,
-# lyrics timing, and the play history that fills Spotify's gaps. Same setup
+# lyrics timing, the play history that fills Spotify's gaps, and which
+# places Nearby shows. Same setup
 # as test_app.py -- each test runs in a temp copy of the code (conftest.py).
 from conftest import run_in
 
@@ -302,4 +303,40 @@ def test_play_history_fills_spotify_gaps(app_copy):
         merged = merge_with_api([api_item("spotify:track:A", start + 9), api_item("spotify:track:X", start - 60)])
         assert [m["track"]["uri"] for m in merged] == ["spotify:track:B", "spotify:track:A", "spotify:track:X"], merged
         assert merged[1]["played_at"] == _iso(start + 9)  # Spotify's copy, not ours
+    """)
+
+
+def test_nearby_places(app_copy):
+    # What the Nearby page makes of OpenStreetMap's answer: named places of a
+    # known category only, nearest first, outlines placed at their centre,
+    # and shrines/temples but not other places of worship.
+    _check(app_copy, """
+        from prescripts.data.nearby import category_of, distance_m, overpass_query, parse_places
+
+        assert abs(distance_m(35.0, 139.0, 35.001, 139.0) - 111.2) < 0.5  # a thousandth of a degree north
+
+        here = (35.6580, 139.7016)
+        elements = [
+            {"type": "node", "id": 1, "lat": 35.6590, "lon": 139.7016,
+             "tags": {"amenity": "restaurant", "name": "すき家", "name:en": "Sukiya", "cuisine": "beef_bowl;japanese"}},
+            {"type": "node", "id": 2, "lat": 35.6581, "lon": 139.7016,
+             "tags": {"shop": "convenience", "name": "Lawson", "name:en": "Lawson", "opening_hours": "24/7"}},
+            {"type": "way", "id": 3, "center": {"lat": 35.6600, "lon": 139.7016},
+             "tags": {"amenity": "cafe", "name": "Cafe Outline"}},
+            {"type": "node", "id": 4, "lat": 35.6582, "lon": 139.7016, "tags": {"amenity": "restaurant"}},
+            {"type": "node", "id": 5, "lat": 35.6582, "lon": 139.7016, "tags": {"amenity": "bank", "name": "A bank"}},
+        ]
+        places = parse_places("food", elements, *here)
+        assert [p["name"] for p in places] == ["Lawson", "すき家", "Cafe Outline"], places
+        assert places[0]["name_en"] == ""  # same as the name, so not repeated
+        assert places[1]["name_en"] == "Sukiya" and places[1]["cuisine"] == "beef bowl, japanese"
+        assert places[0]["hours"] == "24/7" and places[0]["category"] == "convenience"
+        assert round(places[0]["distance"]) == 11
+
+        assert category_of("things", {"amenity": "place_of_worship", "religion": "shinto"}) == "shrine_temple"
+        assert category_of("things", {"amenity": "place_of_worship", "religion": "christian"}) is None
+        assert category_of("things", {"leisure": "garden"}) == "park"
+
+        query = overpass_query("things", 35.658, 139.7016, 800)
+        assert '["religion"~"^(shinto|buddhist)$"]' in query and "(around:800,35.658,139.7016)" in query, query
     """)

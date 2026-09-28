@@ -173,6 +173,47 @@ def test_item_bought_at_two_stores_is_offered_per_store(app_copy):
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+def test_nearby_page(app_copy):
+    # Around a saved area: named places nearest first, and a plain message
+    # (not an error screen) when OpenStreetMap can't be reached. The lookup
+    # is swapped for a stand-in, so this never touches the network.
+    result = run_in(app_copy, """
+        import urllib.error
+        from streamlit.testing.v1 import AppTest
+        import prescripts.data.nearby as nearby
+        from prescripts.common import SCRIPTS_DIR
+
+        nearby.save_settings({"area": "Shibuya Station", "lat": 35.658, "lon": 139.7016, "radius": 800})
+        sample = [
+            {"type": "node", "id": 1, "lat": 35.6590, "lon": 139.7016,
+             "tags": {"amenity": "restaurant", "name": "すき家", "name:en": "Sukiya"}},
+            {"type": "node", "id": 2, "lat": 35.6581, "lon": 139.7016, "tags": {"shop": "convenience", "name": "Lawson"}},
+            {"type": "node", "id": 3, "lat": 35.6600, "lon": 139.7016,
+             "tags": {"amenity": "restaurant", "name": "うなぎ 松川", "name:en": "Matsukawa's Eel & Rice"}},
+        ]
+        nearby.fetch_places = lambda kind, lat, lon, radius: sample
+
+        at = AppTest.from_file(str(SCRIPTS_DIR / "app.py"), default_timeout=60)
+        at.run()
+        at.switch_page("prescripts/pages/nearby.py")
+        at.run()
+        assert not at.exception, at.exception
+        shown = [block.value for block in at.markdown if "<b class='place-name'>" in block.value]
+        assert "Lawson" in shown[0] and "すき家 · Sukiya" in shown[1], shown
+        # Punctuation in names shows as typed (an apostrophe once came out as &#x27;).
+        assert "Matsukawa's Eel &amp; Rice" in shown[2], shown
+        assert any("3 within 800 m of Shibuya Station" in caption.value for caption in at.caption)
+
+        def unreachable(*args):
+            raise urllib.error.URLError("down")
+        nearby.fetch_places = unreachable
+        at.run()
+        assert not at.exception, at.exception
+        assert any("Couldn't reach OpenStreetMap" in error.value for error in at.error)
+    """)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 def test_home_credits_only_the_quote_showing(app_copy):
     # The corner note names the one quote on screen (built-in or added), and
     # nothing when the prompt isn't a quote. Added quotes live outside the
@@ -290,6 +331,9 @@ def test_home_commands(app_copy):
         assert goes_to("wea") == "Weather"  # partial typing still works
         assert goes_to("spotify") == "Spotify"
         assert goes_to("日本語") == "Japanese"
+        assert goes_to("nearby") == "Nearby"
+        # "near me" is more specific than Meal Receipts' "food".
+        assert goes_to("food near me") == "Nearby"
 
         both = route_command("japanese food", PAGES)
         assert both["action"] == "choose", both
@@ -318,6 +362,7 @@ def test_page_addresses_stay_the_same(app_copy):
             "Overview": "overview",
             "Meal Receipts": "meal_receipts",
             "Weather": "weather",
+            "Nearby": "nearby",
             "Spotify": "spotify_page",
             "Japanese": "japanese",
         }, addresses

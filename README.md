@@ -9,6 +9,7 @@ A personal dashboard app for everyday life in Japan, themed on the Prescripts of
 | **Overview** | A summary tile from each of the other pages, all on one screen |
 | **Meal Receipts** | Log meals and spending against a daily or weekly budget |
 | **Weather** | Forecasts, warnings and live readings from the Japan Meteorological Agency |
+| **Nearby** | Food and things to do within walking distance of a station, an area, or where you are |
 | **Spotify** | See and control what's playing, with lyrics (needs a one-off setup, below) |
 | **Japanese** | Vocabulary and kanji flashcards with spaced-repetition reviews |
 
@@ -46,7 +47,7 @@ It started as one hand-written PowerShell script that makes a folder for each da
 - **Windows 10 or 11.** This is the tested setup. On a Mac or Linux, skip to [Not on Windows?](#not-on-windows).
 - **Python 3.12** (not a newer version). Download the [Python 3.12.10 Windows installer](https://www.python.org/ftp/python/3.12.10/python-3.12.10-amd64.exe) and run it. The installer's defaults are fine. The python.org download page now leads with Python 3.14 and the "Python install manager". If you already have the install manager, run `py install 3.12` in PowerShell instead.
 - **Git**, from [git-scm.com](https://git-scm.com/downloads). Optional: you can download a ZIP instead (step 2).
-- **An internet connection.** Weather, lyrics and Japanese word lookups fetch live data. Nothing needs an account or API key except Spotify.
+- **An internet connection.** Weather, Nearby, lyrics, and Japanese word lookups fetch live data. Nothing needs an account or API key except Spotify.
 
 To check Python is installed, open **PowerShell** (Start menu → type "PowerShell") and run:
 
@@ -160,6 +161,7 @@ Prescripts\
 ├── Meal Receipts\        ← created when you first log a meal
 ├── Japanese\             ← your flashcards
 ├── Weather\              ← your chosen forecast area (default: Tokyo)
+├── Nearby\               ← your saved area and walking distance
 ├── Spotify\              ← your Spotify keys + connection
 ├── quotes.json           ← quotes you add on Home
 └── app_settings.json     ← app-wide preferences, e.g. zoom level
@@ -184,7 +186,7 @@ The project has automated tests. They load every page and check the rules undern
 .venv\Scripts\python -m pytest
 ```
 
-It takes about two minutes and should finish with `24 passed`. Close the app first if it's running: installing packages while it's open can fail, because Windows locks files the app is using.
+It takes two to three minutes and should finish with `26 passed`. Close the app first if it's running: installing packages while it's open can fail, because Windows locks files the app is using.
 
 To check the code for mistakes like unused or undefined names, and for import order, run `.venv\Scripts\ruff check .` (add `--fix` to sort the imports for you). The settings are in `pyproject.toml`.
 
@@ -226,7 +228,7 @@ On Mac and Linux, the app runs in your web browser. The app window (`desktop_app
 
    As on Windows, press **Enter** if Streamlit asks for an email, and **Ctrl+C** to stop it.
 
-Everywhere else in this README, use `.venv/bin/python` in place of `.venv\Scripts\python`. The tests usually finish with `21 passed, 3 skipped`: the three skipped tests check PowerShell scripts, and they only run if PowerShell is installed.
+Everywhere else in this README, use `.venv/bin/python` in place of `.venv\Scripts\python`. The tests usually finish with `23 passed, 3 skipped`: the three skipped tests check PowerShell scripts, and they only run if PowerShell is installed.
 
 ## How it's built
 
@@ -238,11 +240,12 @@ app.py                       shared look, top bar, and navigation between pages
 prescripts/
 ├── common.py                what every page shares: the page list, the Prescripts styling, JST
 ├── spotify_widgets.py       Spotify controls used by both the Spotify page and Overview
-├── pages/                   home, overview, meal_receipts, weather, spotify, japanese
+├── pages/                   home, overview, meal_receipts, weather, nearby, spotify, japanese
 └── data/
     ├── home.py              → quotes.json
     ├── meal_receipts.py     → Meal Receipts\ (a receipts.csv per day)
     ├── weather.py           → JMA, MyMemory (translation)
+    ├── nearby.py            → OpenStreetMap (Nominatim for areas, Overpass for places)
     ├── spotify.py, lyrics.py → Spotify Web API, LRCLIB
     └── japanese/            → Japanese\cards.json, Jisho, kanjiapi.dev
                                (deck, lookups, typed answers, spelling check)
@@ -266,7 +269,7 @@ Some choices behind it:
 - The glitch when you arrive on Home was inspired by Limbus Company's [000] trailer ([YouTube](https://youtu.be/Y2-VkdfA2os)), without copying its style.
 - Colours, font choice and button style are taken from the fan site [prescript.neocities.org](https://prescript.neocities.org/).
 - Pixel font: [Galmuri](https://github.com/quiple/galmuri) by quiple, under the SIL Open Font License (`static/Galmuri-OFL.txt`).
-- Weather: [Japan Meteorological Agency](https://www.jma.go.jp/bosai/), with warning headlines translated by [MyMemory](https://mymemory.translated.net). Lyrics: [LRCLIB](https://lrclib.net). Word lookups: [Jisho](https://jisho.org) and [kanjiapi.dev](https://kanjiapi.dev).
+- Weather: [Japan Meteorological Agency](https://www.jma.go.jp/bosai/), with warning headlines translated by [MyMemory](https://mymemory.translated.net). Places: © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors. Lyrics: [LRCLIB](https://lrclib.net). Word lookups: [Jisho](https://jisho.org) and [kanjiapi.dev](https://kanjiapi.dev).
 
 ## Licence
 
