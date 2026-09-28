@@ -1,7 +1,7 @@
 # Home page: the first page, leading to every other Prescripts page. Its box
 # takes commands ("go to meal receipts", "what's the weather like") and
 # offers a web search for anything that isn't a page -- see
-# home_data.route_command. Getting to other pages otherwise happens via the
+# route_command in data/home.py. Getting to other pages otherwise happens via the
 # sidebar nav that st.navigation already renders (see app.py), so there's no
 # second page-link list here.
 import json
@@ -10,8 +10,8 @@ import time
 
 import streamlit as st
 
-from home_data import add_quote, load_quotes, quote_credit, remove_quote, route_command
-from prescripts_common import PAGES, PRIVATE_LOOK, SCRIPTS_DIR, show_logo, theme_colors, typewriter
+from prescripts.data.home import add_quote, load_quotes, quote_credit, remove_quote, route_command
+from prescripts.common import PAGES, PRIVATE_LOOK, SCRIPTS_DIR, show_logo, theme_colors, typewriter
 
 # Rotates like a search-portal prompt (Gemini-style) rather than always
 # asking the same thing. Picked once per session (below), not re-rolled on
@@ -28,7 +28,7 @@ FUNCTIONAL_PROMPTS = [
 
 # Partial/fragmentary song lines only (by design, not just by trimming).
 # Whichever quote is showing -- one of these or one the user added (see the
-# sidebar below, and home_data.py) -- gets credited in the corner note at the
+# sidebar below, and data/home.py) -- gets credited in the corner note at the
 # bottom of the page, just that one, so the note always matches the line on
 # screen.
 #

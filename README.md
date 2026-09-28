@@ -228,20 +228,24 @@ Everywhere else in this README, use `.venv/bin/python` in place of `.venv\Script
 
 ## How it's built
 
-The app is written in Python with [Streamlit](https://streamlit.io), which turns Python scripts into web pages, so there's no separate front end to build. Each page is split in two: a page file that lays out what you see, and a data file that does the work (reading and saving files, calling web services, and the rules like flashcard scheduling or budgets).
+The app is written in Python with [Streamlit](https://streamlit.io), which turns Python scripts into web pages, so there's no separate front end to build. Each page is split in two: a file in `prescripts/pages` that lays out what you see, and a file with the same name in `prescripts/data` that does the work (reading and saving files, calling web services, and the rules like flashcard scheduling or budgets).
 
 ```
 desktop_app.py               starts the Streamlit server and shows it in its own window (pywebview)
-└── app.py                   shared look, top bar, and navigation between pages
-    ├── home_page.py         → home_data.py                     → quotes.json
-    ├── overview_page.py     → reuses the data files below
-    ├── mealReceiptsApp_cV.py → meal_receipts_data.py           → Meal Receipts\ (a receipts.csv per day)
-    ├── weather_page.py      → weather_data.py                  → JMA, MyMemory (translation)
-    ├── spotify_page.py      → spotify_data.py, lyrics_data.py  → Spotify Web API, LRCLIB
-    └── japanese_page.py     → japanese_data.py                 → Japanese\cards.json, Jisho, kanjiapi.dev
+app.py                       shared look, top bar, and navigation between pages
+prescripts/
+├── common.py                what every page shares: the page list, the Prescripts styling, JST
+├── spotify_widgets.py       Spotify controls used by both the Spotify page and Overview
+├── pages/                   home, overview, meal_receipts, weather, spotify, japanese
+└── data/
+    ├── home.py              → quotes.json
+    ├── meal_receipts.py     → Meal Receipts\ (a receipts.csv per day)
+    ├── weather.py           → JMA, MyMemory (translation)
+    ├── spotify.py, lyrics.py → Spotify Web API, LRCLIB
+    └── japanese.py          → Japanese\cards.json, Jisho, kanjiapi.dev
 ```
 
-`prescripts_common.py` holds what every page shares: the page list, the Prescripts styling, and JST.
+Overview has no data file of its own: it reuses the others.
 
 Some choices behind it:
 

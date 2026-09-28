@@ -1,7 +1,7 @@
 # Streamlit widgets shared by the Spotify page and the Overview page's
 # Spotify tile (transport buttons, the seekable position slider). Lives
-# apart from spotify_data.py because that module deliberately has no
-# rendering calls, and apart from spotify_page.py because importing a page
+# apart from data/spotify.py because that module deliberately has no
+# rendering calls, and apart from pages/spotify.py because importing a page
 # script runs its whole UI.
 import datetime
 import time
@@ -9,7 +9,7 @@ import urllib.error
 
 import streamlit as st
 
-from spotify_data import (
+from prescripts.data.spotify import (
     NotInQueue,
     is_read_only,
     live_progress_ms,
@@ -20,7 +20,7 @@ from spotify_data import (
     previous_track,
     seek,
 )
-from spotify_log import log_event
+from prescripts.data.spotify_log import log_event
 
 
 def run_control(action, *, success=None, rerun=True, rerun_scope="app", **kwargs) -> bool:
@@ -151,7 +151,7 @@ def _to_ms(value: datetime.time) -> int:
 # lag between the server moving the slider and the browser having caught up.
 _RECENT_POSITION_WINDOW_S = 12
 
-# The fragment ticks about once a second (see spotify_page.py's now_playing);
+# The fragment ticks about once a second (see pages/spotify.py's now_playing);
 # a gap much wider than that means it didn't run for a while -- most likely
 # the tab was backgrounded (switched away to another app, or just left in a
 # background tab -- confirmed 2026-09-21: browsers throttle a backgrounded

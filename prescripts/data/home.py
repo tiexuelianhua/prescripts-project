@@ -1,5 +1,5 @@
 # Data for the Home page: quotes added by the user, which join the built-in
-# ones (home_page.BUILT_IN_QUOTES) in the rotating prompt and are credited in
+# ones (BUILT_IN_QUOTES in pages/home.py) in the rotating prompt and are credited in
 # the corner whenever one of them is showing. No Streamlit rendering here
 # (same data/page split as the other pages). Kept outside the repo like every
 # page's data.
@@ -8,7 +8,7 @@ import json
 import re
 import urllib.parse
 
-from prescripts_common import SCRIPTS_DIR
+from prescripts.common import SCRIPTS_DIR
 
 QUOTES_PATH = SCRIPTS_DIR.parent / "quotes.json"
 

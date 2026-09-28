@@ -8,7 +8,7 @@ from datetime import datetime
 import pandas as pd
 import streamlit as st
 
-from meal_receipts_data import (
+from prescripts.data.meal_receipts import (
     append_entry,
     budget_settings,
     counted_total,
@@ -31,7 +31,7 @@ from meal_receipts_data import (
     week_bounds,
     week_total_so_far,
 )
-from prescripts_common import (
+from prescripts.common import (
     JST,
     inject_body_fade_in,
     keep_typed_selectbox_text,

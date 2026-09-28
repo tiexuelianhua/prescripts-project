@@ -53,13 +53,13 @@ def seed_sample_data(copy: Path) -> None:
     # data functions write the copy's data folders, in exactly the format
     # the app itself writes.
     sys.path.insert(0, str(copy))
-    import prescripts_common
+    import prescripts.common as prescripts_common
 
     assert prescripts_common.SCRIPTS_DIR == copy, "not running on the copy"
     assert not prescripts_common.PRIVATE_LOOK, "the copy should be in the public look"
 
-    from japanese_data import add_card, load_deck, review_card, save_deck, today_jst
-    from meal_receipts_data import append_entry, day_folder_for, load_settings, save_settings
+    from prescripts.data.japanese import add_card, load_deck, review_card, save_deck, today_jst
+    from prescripts.data.meal_receipts import append_entry, day_folder_for, load_settings, save_settings
 
     random.seed(7)
     today = today_jst()

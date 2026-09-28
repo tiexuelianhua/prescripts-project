@@ -1,7 +1,7 @@
 # Spotify page: currently playing + remote playback control (play/pause/
 # skip/volume/shuffle on whichever device is already active elsewhere),
 # lyrics, recently played (replay / add to queue), and playlists (embedded)
-# -- via Spotify's plain Web API, not the Web Playback SDK (see spotify_data.py's
+# -- via Spotify's plain Web API, not the Web Playback SDK (see data/spotify.py's
 # module docstring for why).
 import html
 import time
@@ -9,10 +9,10 @@ import urllib.error
 
 import streamlit as st
 
-from lyrics_data import current_line_index, lyrics_status
-from play_history import merge_with_api
-from prescripts_common import inject_body_fade_in, render_page_title, show_logo, theme_colors
-from spotify_data import (
+from prescripts.data.lyrics import current_line_index, lyrics_status
+from prescripts.data.play_history import merge_with_api
+from prescripts.common import inject_body_fade_in, render_page_title, show_logo, theme_colors
+from prescripts.data.spotify import (
     add_to_queue,
     authorize_url,
     current_playback,
@@ -36,8 +36,8 @@ from spotify_data import (
     skip_to_queued,
     unsave_item,
 )
-from spotify_log import log_event, log_slow
-from spotify_widgets import (
+from prescripts.data.spotify_log import log_event, log_slow
+from prescripts.spotify_widgets import (
     inject_seek_slider_styles,
     page_is_locked,
     render_seek_slider,
@@ -332,7 +332,7 @@ with st.container(key="main_body"):
             queue_view()
 
         # Lyrics come from LRCLIB (Spotify's API has none), looked up on a
-        # background thread -- see lyrics_data.py -- so this only ever polls.
+        # background thread -- see data/lyrics.py -- so this only ever polls.
         # Ticks every second like Now playing so the current line follows the
         # song; the expander lives inside the fragment (state survives the
         # refreshes) and nothing is looked up while it's collapsed.
@@ -424,7 +424,7 @@ with st.container(key="main_body"):
                     try:
                         # Spotify's list omits some plays its own apps show
                         # (e.g. skipped tracks); the app fills those in from
-                        # what it saw play. See play_history.py.
+                        # what it saw play. See data/play_history.py.
                         recent_items = merge_with_api(recently_played())
                         recent_failed = False
                     except (urllib.error.URLError, TimeoutError):

@@ -1,6 +1,6 @@
 # Lyrics for the Spotify page, from LRCLIB (https://lrclib.net) -- a free,
 # keyless, community-maintained lyrics database. Spotify's own Web API has no
-# lyrics endpoint at all. Like spotify_data.py, no Streamlit rendering calls.
+# lyrics endpoint at all. Like data/spotify.py, no Streamlit rendering calls.
 #
 # Lookups run on a background thread and are polled, never awaited: LRCLIB is
 # slow and flaky (4-10s per uncached request was typical when this was
@@ -20,7 +20,7 @@ import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 
-from spotify_log import log_event
+from prescripts.data.spotify_log import log_event
 
 API_BASE = "https://lrclib.net/api"
 # LRCLIB asks clients to identify themselves.

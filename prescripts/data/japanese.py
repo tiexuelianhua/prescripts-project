@@ -1,8 +1,8 @@
 # Data/business logic for the Japanese page -- the user's own vocab and kanji
 # flashcards and their spaced-repetition (SRS) schedule. No Streamlit
-# rendering calls here, same split as meal_receipts_data.py/weather_data.py,
+# rendering calls here, same split as data/meal_receipts.py and data/weather.py,
 # so the Overview page can import this for its "Japanese practice" tile
-# without running japanese_page.py's UI.
+# without running pages/japanese.py's UI.
 #
 # Cards are words/kanji the user already knows, entered by hand:
 # - vocab: front = the word as written (kanji), back = reading (hiragana) + meaning
@@ -24,7 +24,7 @@ from datetime import date, datetime, timedelta
 import pandas as pd
 import streamlit as st
 
-from prescripts_common import JST, SCRIPTS_DIR
+from prescripts.common import JST, SCRIPTS_DIR
 
 JAPANESE_DIR = SCRIPTS_DIR.parent / "Japanese"
 CARDS_PATH = JAPANESE_DIR / "cards.json"

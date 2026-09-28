@@ -3,7 +3,7 @@
 # *rendering* calls (st.cache_data is fine, it's just a caching decorator
 # with no UI output). That separation means other pages (e.g. an Overview
 # page wanting today's conditions) can import and call these directly
-# without accidentally triggering weather_page.py's own UI as a side effect
+# without accidentally triggering pages/weather.py's own UI as a side effect
 # of the import.
 import json
 import re
@@ -11,14 +11,15 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime
+from pathlib import Path
 
 import streamlit as st
 
-from prescripts_common import JST, SCRIPTS_DIR
+from prescripts.common import JST, SCRIPTS_DIR
 
 WEATHER_DIR = SCRIPTS_DIR.parent / "Weather"
 SETTINGS_PATH = WEATHER_DIR / "settings.json"
-WEATHER_CODES_PATH = SCRIPTS_DIR / "weather_codes.json"
+WEATHER_CODES_PATH = Path(__file__).resolve().parent / "weather_codes.json"
 DEFAULT_OFFICE_CODE = "130000"
 DEFAULT_OFFICE_NAME = "Tokyo"
 
@@ -40,7 +41,7 @@ TRANSLATE_URL = "https://api.mymemory.translated.net/get?q={text}&langpair=ja|en
 # the hundreds level) mapped to a plain emoji -- SVG icons exist too, but
 # they'd mean hosting/downloading JMA's image assets for what a single
 # character already conveys at a glance in this app's minimal style. Lives
-# here (not just in weather_page.py) so any other page rendering a weather
+# here (not just in pages/weather.py) so any other page rendering a weather
 # tile shows the same icon for the same category.
 CATEGORY_EMOJI = {"100": "☀️", "200": "☁️", "300": "🌧️", "400": "❄️"}
 

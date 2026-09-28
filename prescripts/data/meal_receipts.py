@@ -3,7 +3,7 @@
 # st.cache_data is fine, it's just a caching decorator with no UI output).
 # That separation means other pages (e.g. an Overview page wanting today's
 # total) can import and call these directly without accidentally triggering
-# mealReceiptsApp_cV.py's own UI as a side effect of the import.
+# pages/meal_receipts.py's own UI as a side effect of the import.
 import calendar
 import json
 import subprocess
@@ -14,7 +14,7 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
-from prescripts_common import JST, SCRIPTS_DIR
+from prescripts.common import JST, SCRIPTS_DIR
 
 MEAL_RECEIPTS_DIR = SCRIPTS_DIR.parent / "Meal Receipts"
 SETTINGS_PATH = MEAL_RECEIPTS_DIR / "settings.json"
@@ -54,7 +54,7 @@ def get_today_folder() -> Path:
         check=True,
         # Without this, Windows pops a real console window for PowerShell
         # every time this runs -- and this is called on every rerun of the
-        # Meal Receipts page (mealReceiptsApp_cV.py's module-level call), so
+        # Meal Receipts page (pages/meal_receipts.py's module-level call), so
         # that's most widget interactions on that page. capture_output above
         # already redirects stdout/stderr through pipes regardless, so this
         # doesn't change what the call returns, only whether a window shows.

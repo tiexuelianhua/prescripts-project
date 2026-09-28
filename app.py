@@ -1,10 +1,10 @@
 # Entry point for the whole Prescripts app. Ties every page together under
 # one shared look (font, colors, button style) via st.navigation -- adding a
 # new page from here on just means adding one entry to
-# prescripts_common.PAGES plus dropping in its script file.
+# PAGES in prescripts/common.py plus dropping in its script file.
 import streamlit as st
 
-from prescripts_common import (
+from prescripts.common import (
     LOGO_PATH,
     PAGES,
     inject_button_style,
@@ -26,8 +26,10 @@ inject_button_style()
 inject_input_style()
 inject_toast_style()
 
-home_page = st.Page("home_page.py", title="Home", icon="🏠", default=True)
-other_pages = [st.Page(page["path"], title=page["title"], icon=page["icon"]) for page in PAGES]
+home_page = st.Page("prescripts/pages/home.py", title="Home", icon="🏠", default=True)
+other_pages = [
+    st.Page(page["path"], title=page["title"], icon=page["icon"], url_path=page["url_path"]) for page in PAGES
+]
 
 current_page = st.navigation([home_page, *other_pages])
 # Which page the previous run was on, so a page can tell "just arrived here"

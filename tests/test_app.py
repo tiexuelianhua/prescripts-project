@@ -15,13 +15,13 @@ from conftest import run_in
 # one, so they still load either way.
 _RUN_EVERY_PAGE = """
     from streamlit.testing.v1 import AppTest
-    from prescripts_common import PAGES, SCRIPTS_DIR
+    from prescripts.common import PAGES, SCRIPTS_DIR
 
     failures = []
-    for path in ["home_page.py", *[page["path"] for page in PAGES]]:
+    for path in ["prescripts/pages/home.py", *[page["path"] for page in PAGES]]:
         at = AppTest.from_file(str(SCRIPTS_DIR / "app.py"), default_timeout=120)
         at.run()
-        if path != "home_page.py":
+        if path != "prescripts/pages/home.py":
             at.switch_page(path)
             at.run()
         for error in at.exception:
@@ -52,7 +52,7 @@ def test_new_store_and_item_are_suggested_straight_away(app_copy):
     # The Store/Item suggestions are cached; adding an entry must refresh
     # them, not leave a new store/item missing for a minute.
     result = run_in(app_copy, """
-        from meal_receipts_data import append_entry, day_folder_for, known_values
+        from prescripts.data.meal_receipts import append_entry, day_folder_for, known_values
         from datetime import date
 
         assert known_values("store") == [] and known_values("item") == []
@@ -73,15 +73,15 @@ def test_store_can_be_left_blank(app_copy):
     result = run_in(app_copy, """
         from datetime import date
         from streamlit.testing.v1 import AppTest
-        from meal_receipts_data import append_entry, day_folder_for, get_today_folder, known_values, load_entries
-        from prescripts_common import SCRIPTS_DIR
+        from prescripts.data.meal_receipts import append_entry, day_folder_for, get_today_folder, known_values, load_entries
+        from prescripts.common import SCRIPTS_DIR
 
         folder = day_folder_for(date(2026, 8, 1))
         folder.mkdir(parents=True)
         append_entry(folder / "receipts.csv", "2026-08-01 12:00:00", None, "Onigiri", 150)
         assert known_values("store") == [], known_values("store")
 
-        at = AppTest.from_file(str(SCRIPTS_DIR / "mealReceiptsApp_cV.py"), default_timeout=60)
+        at = AppTest.from_file(str(SCRIPTS_DIR / "prescripts/pages/meal_receipts.py"), default_timeout=60)
         at.run()
         at.selectbox(key="add_entry_item").set_value("Onigiri")
         at.run()
@@ -103,8 +103,8 @@ def test_meal_receipts_works_without_powershell(app_copy):
     result = run_in(app_copy, """
         import types
         from streamlit.testing.v1 import AppTest
-        import meal_receipts_data
-        from prescripts_common import SCRIPTS_DIR
+        import prescripts.data.meal_receipts as meal_receipts_data
+        from prescripts.common import SCRIPTS_DIR
 
         # Pages share this already-imported module, so the patches below
         # reach them too.
@@ -117,7 +117,7 @@ def test_meal_receipts_works_without_powershell(app_copy):
 
         assert meal_receipts_data.get_today_folder() == from_powershell
         assert from_powershell.is_dir()
-        for page in ["mealReceiptsApp_cV.py", "overview_page.py"]:
+        for page in ["prescripts/pages/meal_receipts.py", "prescripts/pages/overview.py"]:
             at = AppTest.from_file(str(SCRIPTS_DIR / "app.py"), default_timeout=120)
             at.run()
             at.switch_page(page)
@@ -133,8 +133,8 @@ def test_home_credits_only_the_quote_showing(app_copy):
     # code, and their typed-in text can't break the note's HTML.
     result = run_in(app_copy, """
         from streamlit.testing.v1 import AppTest
-        from home_data import QUOTES_PATH, add_quote, load_quotes, remove_quote
-        from prescripts_common import SCRIPTS_DIR
+        from prescripts.data.home import QUOTES_PATH, add_quote, load_quotes, remove_quote
+        from prescripts.common import SCRIPTS_DIR
 
         assert QUOTES_PATH.parent == SCRIPTS_DIR.parent  # beside the code, not in it
         add_quote("Stay a while.", "A <Book> & More", "Someone", "")
@@ -171,7 +171,7 @@ def test_month_comparisons(app_copy):
     # receipts. "Today" is fixed so the numbers are exact.
     result = run_in(app_copy, """
         from datetime import date
-        from meal_receipts_data import append_entry, day_folder_for, month_comparison, monthly_history, signed_yen
+        from prescripts.data.meal_receipts import append_entry, day_folder_for, month_comparison, monthly_history, signed_yen
 
         assert (signed_yen(175), signed_yen(-10400), signed_yen(0)) == ("+¥175", "-¥10,400", "+¥0")
 
@@ -212,7 +212,7 @@ def test_home_button_goes_home(app_copy):
     # Every page but Home has the Home button (Ctrl+Shift+H presses it too).
     result = run_in(app_copy, """
         from streamlit.testing.v1 import AppTest
-        from prescripts_common import PAGES, SCRIPTS_DIR
+        from prescripts.common import PAGES, SCRIPTS_DIR
 
         at = AppTest.from_file(str(SCRIPTS_DIR / "app.py"), default_timeout=120)
         at.run()
@@ -230,8 +230,8 @@ def test_home_button_goes_home(app_copy):
 
 def test_home_commands(app_copy):
     result = run_in(app_copy, """
-        from home_data import route_command
-        from prescripts_common import PAGES
+        from prescripts.data.home import route_command
+        from prescripts.common import PAGES
 
         def goes_to(query):
             route = route_command(query, PAGES)
@@ -255,6 +255,27 @@ def test_home_commands(app_copy):
 
         cat = route_command("猫", PAGES)
         assert cat["links"][0] == ("Look it up on Jisho", "https://jisho.org/search/%E7%8C%AB"), cat
+    """)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_page_addresses_stay_the_same(app_copy):
+    # A page's address mustn't change when its file moves or is renamed:
+    # bookmarks would break, and Spotify only accepts the exact redirect
+    # address registered in the user's own developer app.
+    result = run_in(app_copy, """
+        from prescripts.common import PAGES
+        from prescripts.data.spotify import REDIRECT_URI
+
+        addresses = {page["title"]: page["url_path"] for page in PAGES}
+        assert addresses == {
+            "Overview": "overview_page",
+            "Meal Receipts": "mealReceiptsApp_cV",
+            "Weather": "weather_page",
+            "Spotify": "spotify_page",
+            "Japanese": "japanese_page",
+        }, addresses
+        assert REDIRECT_URI == "http://127.0.0.1:8501/" + addresses["Spotify"], REDIRECT_URI
     """)
     assert result.returncode == 0, result.stdout + result.stderr
 

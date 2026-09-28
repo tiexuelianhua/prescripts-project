@@ -10,7 +10,9 @@ from pathlib import Path
 
 import streamlit as st
 
-SCRIPTS_DIR = Path(__file__).resolve().parent
+# The repo's own folder (this file is in prescripts/ inside it). Every page's
+# data lives in folders beside it, e.g. SCRIPTS_DIR.parent / "Meal Receipts".
+SCRIPTS_DIR = Path(__file__).resolve().parent.parent
 JST = timezone(timedelta(hours=9))
 
 # Two looks. The public one (what the repo ships) uses the forget-me-not
@@ -35,35 +37,44 @@ ACCENT_COLOR_LIGHT = "#6b6ead"
 # Every non-home page in the app, in one place -- app.py's st.navigation()
 # and the Home page's tile grid / search both read this, so adding a page
 # means adding one entry here rather than touching multiple files.
+# "url_path" is each page's address (e.g. 127.0.0.1:8501/spotify_page). They
+# were the old file names, kept when the files moved into prescripts/pages so
+# links and Spotify's registered redirect address (REDIRECT_URI in
+# data/spotify.py) keep working.
 PAGES = [
     {
         "title": "Overview",
         "icon": "🎛️",
-        "path": "overview_page.py",
+        "path": "prescripts/pages/overview.py",
+        "url_path": "overview_page",
         "keywords": ["overview", "summary", "today", "control center", "dashboard"],
     },
     {
         "title": "Meal Receipts",
         "icon": "🧾",
-        "path": "mealReceiptsApp_cV.py",
+        "path": "prescripts/pages/meal_receipts.py",
+        "url_path": "mealReceiptsApp_cV",
         "keywords": ["meal", "receipt", "receipts", "food", "budget"],
     },
     {
         "title": "Weather",
         "icon": "🌤️",
-        "path": "weather_page.py",
+        "path": "prescripts/pages/weather.py",
+        "url_path": "weather_page",
         "keywords": ["weather", "forecast", "typhoon", "rain", "temperature", "advisory"],
     },
     {
         "title": "Spotify",
         "icon": "🎧",
-        "path": "spotify_page.py",
+        "path": "prescripts/pages/spotify.py",
+        "url_path": "spotify_page",
         "keywords": ["spotify", "music", "playlist", "song", "playback"],
     },
     {
         "title": "Japanese",
         "icon": "🈁",
-        "path": "japanese_page.py",
+        "path": "prescripts/pages/japanese.py",
+        "url_path": "japanese_page",
         "keywords": ["japanese", "vocab", "vocabulary", "kanji", "flashcard", "flashcards", "srs", "study", "日本語"],
     },
 ]
@@ -156,7 +167,7 @@ def render_top_bar() -> None:
     )
     with st.container(key="top_bar", horizontal=True):
         if st.button("🏠", key="go_home", help="Home (Ctrl+Shift+H)"):
-            st.switch_page("home_page.py")
+            st.switch_page("prescripts/pages/home.py")
         st.button("−", key="zoom_out", help="Zoom out", on_click=_step_zoom, args=(-1,), disabled=zoom <= ZOOM_LEVELS[0])
         st.button(f"{zoom:.0%}", key="zoom_reset", help="Reset zoom to 100%", on_click=_step_zoom, args=(0,))
         st.button("+", key="zoom_in", help="Zoom in", on_click=_step_zoom, args=(1,), disabled=zoom >= ZOOM_LEVELS[-1])

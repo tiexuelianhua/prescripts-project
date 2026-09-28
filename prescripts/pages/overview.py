@@ -15,7 +15,7 @@ from datetime import datetime
 
 import streamlit as st
 
-from japanese_data import (
+from prescripts.data.japanese import (
     KIND_LABELS,
     card_by_id as japanese_card_by_id,
     display_readings as japanese_display_readings,
@@ -23,17 +23,17 @@ from japanese_data import (
     practice_summary as japanese_practice_summary,
     random_card as japanese_random_card,
 )
-from meal_receipts_data import today_summary as meal_receipts_today_summary
-from prescripts_common import JST, inject_body_fade_in, render_page_title, show_logo, theme_colors
-from spotify_data import (
+from prescripts.data.meal_receipts import today_summary as meal_receipts_today_summary
+from prescripts.common import JST, inject_body_fade_in, render_page_title, show_logo, theme_colors
+from prescripts.data.spotify import (
     current_playback as spotify_current_playback,
     describe_item as spotify_describe_item,
     is_configured as spotify_is_configured,
     is_connected as spotify_is_connected,
 )
-from spotify_log import log_event, log_slow
-from spotify_widgets import inject_seek_slider_styles, page_is_locked, render_seek_slider, render_transport_controls
-from weather_data import (
+from prescripts.data.spotify_log import log_event, log_slow
+from prescripts.spotify_widgets import inject_seek_slider_styles, page_is_locked, render_seek_slider, render_transport_controls
+from prescripts.data.weather import (
     CATEGORY_EMOJI,
     format_condition,
     key_events_headline,
@@ -113,7 +113,7 @@ def render_meal_receipts_tile() -> None:
         st.progress(min(data["total_yen"] / data["budget_amount"], 1.0))
     else:
         st.metric("Today's total", f"¥{data['total_yen']:,.0f}")
-    st.page_link("mealReceiptsApp_cV.py", label="Open Meal Receipts", icon="🧾")
+    st.page_link("prescripts/pages/meal_receipts.py", label="Open Meal Receipts", icon="🧾")
 
 
 def render_weather_tile() -> None:
@@ -162,7 +162,7 @@ def render_weather_tile() -> None:
             translated = None
         st.warning(translated or headline)
 
-    st.page_link("weather_page.py", label="Open Weather", icon="🌤️")
+    st.page_link("prescripts/pages/weather.py", label="Open Weather", icon="🌤️")
 
 
 # Its own fragment so just this tile ticks every second (the position slider
@@ -202,7 +202,7 @@ def render_spotify_tile() -> None:
         st.caption("Not connected yet -- connect your account on the Spotify page.")
     else:
         render_spotify_player()
-    st.page_link("spotify_page.py", label="Open Spotify", icon="🎵")
+    st.page_link("prescripts/pages/spotify.py", label="Open Spotify", icon="🎵")
 
 
 def render_japanese_tile() -> None:
@@ -239,7 +239,7 @@ def render_japanese_tile() -> None:
             " · ".join(f"{KIND_LABELS[kind]}: {data['due'][kind]} due of {data['total'][kind]}" for kind in data["total"])
         )
         st.caption(f"Reviewed today: {data['reviewed_today']}")
-    st.page_link("japanese_page.py", label="Open Japanese", icon="🈁")
+    st.page_link("prescripts/pages/japanese.py", label="Open Japanese", icon="🈁")
 
 
 # Two columns, each tile placed in whichever is currently shorter -- so a

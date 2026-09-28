@@ -8,8 +8,8 @@ from datetime import datetime
 
 import streamlit as st
 
-from prescripts_common import JST, inject_body_fade_in, render_page_title, show_logo, theme_colors
-from weather_data import (
+from prescripts.common import JST, inject_body_fade_in, render_page_title, show_logo, theme_colors
+from prescripts.data.weather import (
     CATEGORY_EMOJI,
     DEFAULT_OFFICE_CODE,
     format_condition,

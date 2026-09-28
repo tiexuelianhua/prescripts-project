@@ -3,7 +3,7 @@
 # (st.cache_data is fine, it's just a caching decorator with no UI output).
 # That separation means other pages (e.g. an Overview page wanting "what's
 # playing") can import and call these directly without accidentally
-# triggering spotify_page.py's own UI as a side effect of the import.
+# triggering pages/spotify.py's own UI as a side effect of the import.
 #
 # Remote control, not in-page streaming: this only ever calls the plain Web
 # API (including its /me/player control endpoints), never the Web Playback
@@ -21,9 +21,9 @@ import urllib.request
 
 import streamlit as st
 
-from play_history import record_observation
-from prescripts_common import SCRIPTS_DIR
-from spotify_log import SLOW_THRESHOLD_S, log_event
+from prescripts.data.play_history import record_observation
+from prescripts.common import SCRIPTS_DIR
+from prescripts.data.spotify_log import SLOW_THRESHOLD_S, log_event
 
 SPOTIFY_DIR = SCRIPTS_DIR.parent / "Spotify"
 SETTINGS_PATH = SPOTIFY_DIR / "settings.json"
@@ -40,7 +40,7 @@ API_BASE = "https://api.spotify.com/v1"
 # only this page's script ever looks at st.query_params for the OAuth
 # callback, so landing on the bare root silently drops the code. The path
 # itself ("spotify_page") is inferred by Streamlit from this file's name
-# (spotify_page.py); this must be kept in sync if the file is ever renamed.
+# (pages/spotify.py); this must be kept in sync if the file is ever renamed.
 REDIRECT_URI = "http://127.0.0.1:8501/spotify_page"
 # Least-privilege: only what this page (currently playing, playback control,
 # queue, recently played, playlists, liked songs) actually uses.
@@ -210,7 +210,7 @@ def current_playback() -> dict | None:
         # reported position is, and a cache hit shouldn't reset that clock.
         playback["fetched_at"] = time.time()
         # Runs once per real fetch (this function is cached), so plays are
-        # captured whichever page is open. See play_history.py.
+        # captured whichever page is open. See data/play_history.py.
         record_observation(playback)
     return playback
 

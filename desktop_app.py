@@ -18,13 +18,13 @@ from pathlib import Path
 import webview
 
 SCRIPTS_DIR = Path(__file__).resolve().parent
-# Must match REDIRECT_URI in spotify_data.py and Port in
+# Must match REDIRECT_URI in prescripts/data/spotify.py and Port in
 # LauncherSrc/ThePrescriptsLauncher.cs.
 PORT = 8501
 URL = f"http://127.0.0.1:{PORT}"
 # Not committed (see .gitignore) -- purely local runtime state.
 PID_FILE = SCRIPTS_DIR / ".desktop_app.pid"
-# Same check as PRIVATE_LOOK in prescripts_common.py (not imported from
+# Same check as PRIVATE_LOOK in prescripts/common.py (not imported from
 # there, since that pulls in all of Streamlit): the original author's own
 # logo, kept outside the repo, picks their private look over the public one.
 _IMAGES_DIR = SCRIPTS_DIR.parent / "Images"
@@ -44,7 +44,7 @@ else:
 
 # .streamlit/config.toml holds the public look's colors; the private look
 # overrides them at launch (flags beat the config file). Must match
-# ACCENT_COLOR in prescripts_common.py. The private look is also dark-only
+# ACCENT_COLOR in prescripts/common.py. The private look is also dark-only
 # (the sky blue is unreadable on white), while the public one keeps light
 # mode for anyone who wants it. theme.base can't force that -- with both
 # [theme.light] and [theme.dark] defined, the viewer's light/dark preference

@@ -32,7 +32,7 @@ def run_in(copy: Path, code: str) -> subprocess.CompletedProcess:
     guard = textwrap.dedent(f"""
         import sys
         sys.path.insert(0, {str(copy)!r})
-        import prescripts_common
+        import prescripts.common as prescripts_common
         assert str(prescripts_common.SCRIPTS_DIR) == {str(copy)!r}, prescripts_common.SCRIPTS_DIR
     """)
     return subprocess.run(

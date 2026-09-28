@@ -5,9 +5,9 @@
 # tracks appeared), and the docs say nothing about which plays are omitted.
 #
 # Every fresh /me/player fetch calls record_observation() (see
-# spotify_data.current_playback), so plays are captured whichever page is
+# current_playback in data/spotify.py), so plays are captured whichever page is
 # open. Only plays seen while the app was running and polling are recorded --
-# this fills gaps, it isn't a complete history. Like spotify_data.py, no
+# this fills gaps, it isn't a complete history. Like data/spotify.py, no
 # Streamlit rendering calls.
 #
 # Stored in Spotify/observed_plays.json next to the credentials (outside the
@@ -17,7 +17,7 @@ import json
 import threading
 import time
 
-from prescripts_common import SCRIPTS_DIR
+from prescripts.common import SCRIPTS_DIR
 
 HISTORY_PATH = SCRIPTS_DIR.parent / "Spotify" / "observed_plays.json"
 MAX_ENTRIES = 200

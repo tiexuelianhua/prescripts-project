@@ -33,7 +33,7 @@ using System.Threading;
 
 class ThePrescriptsLauncher
 {
-    // Must match REDIRECT_URI in spotify_data.py.
+    // Must match REDIRECT_URI in prescripts/data/spotify.py.
     const int Port = 8501;
     // The exe is built into the repo folder itself (see the csc command in
     // the commit history), so everything is found relative to where it sits.

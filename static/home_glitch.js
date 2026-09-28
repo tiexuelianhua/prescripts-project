@@ -1,6 +1,6 @@
 // Home's arrival glitch: the screen breaks into flat horizontal blocks, which
 // melt into streaky TV static that clears as the prompt starts typing (see
-// home_page.py, which inlines this file and calls playHomeGlitch()). Drawn on
+// prescripts/pages/home.py, which inlines this file and calls playHomeGlitch()). Drawn on
 // a canvas laid over the page and removed when it's done, so nothing is left
 // running afterwards. Inspired by the glitches in Limbus Company's [000]
 // trailer, not copied from it.

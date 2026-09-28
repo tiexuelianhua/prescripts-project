@@ -2,7 +2,7 @@
 # reviewed on a spaced-repetition (SRS) schedule -- either revealed and
 # self-graded, or typed and checked (realkana-style) -- plus a lookup of the
 # whole deck. New cards can be filled in from Jisho / kanjiapi.dev. Grammar
-# is planned for later. All data/scheduling lives in japanese_data.py (no UI
+# is planned for later. All data/scheduling lives in data/japanese.py (no UI
 # there), so the Overview tile can read it too.
 import html
 import random
@@ -12,7 +12,7 @@ import uuid
 import pandas as pd
 import streamlit as st
 
-from japanese_data import (
+from prescripts.data.japanese import (
     GRADE_LABELS,
     GRADES,
     KIND_LABELS,
@@ -39,7 +39,7 @@ from japanese_data import (
     today_jst,
     update_card,
 )
-from prescripts_common import inject_body_fade_in, render_page_title, show_logo, theme_colors, typewriter
+from prescripts.common import inject_body_fade_in, render_page_title, show_logo, theme_colors, typewriter
 
 TEXT_COLOR, ACCENT_COLOR = theme_colors()
 PAGE_TITLE = "Japanese"

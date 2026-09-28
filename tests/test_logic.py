@@ -16,7 +16,7 @@ def test_flashcard_schedule(app_copy):
     # least a day past Good.
     _check(app_copy, """
         from datetime import timedelta
-        from japanese_data import MINIMUM_EASE, add_card, load_deck, next_schedule, review_card, today_jst
+        from prescripts.data.japanese import MINIMUM_EASE, add_card, load_deck, next_schedule, review_card, today_jst
 
         deck = load_deck()
         card = add_card(deck, "vocab", "勉強", "べんきょう", "study")
@@ -49,7 +49,7 @@ def test_regrade_replaces_the_last_review(app_copy):
     # A typed answer marked wrong over a typo can be regraded: the "Again"
     # is undone, not stacked under the new grade.
     _check(app_copy, """
-        from japanese_data import add_card, load_deck, regrade, review_card, today_jst
+        from prescripts.data.japanese import add_card, load_deck, regrade, review_card, today_jst
 
         deck = load_deck()
         card = add_card(deck, "kanji", "学", "", "study", onyomi="ガク", kunyomi="まな.ぶ")
@@ -67,7 +67,7 @@ def test_due_card_order(app_copy):
     # Shuffling keeps the misses at the back and is stable for one seed.
     _check(app_copy, """
         from datetime import timedelta
-        from japanese_data import due_cards, today_jst
+        from prescripts.data.japanese import due_cards, today_jst
 
         today = today_jst()
         def card(front, due, last_reviewed=None):
@@ -90,7 +90,7 @@ def test_due_card_order(app_copy):
 
 def test_romaji_and_kana(app_copy):
     _check(app_copy, """
-        from japanese_data import normalize_kana, romaji_to_kana
+        from prescripts.data.japanese import normalize_kana, romaji_to_kana
 
         cases = {
             "konnichiha": "こんにちは",   # nn before a vowel: the second n starts the next syllable
@@ -115,7 +115,7 @@ def test_romaji_and_kana(app_copy):
 
 def test_typed_answers(app_copy):
     _check(app_copy, """
-        from japanese_data import answer_steps, check_step
+        from prescripts.data.japanese import answer_steps, check_step
 
         vocab = {"kind": "vocab", "front": "勉強", "reading": "べんきょう", "meaning": "to study; diligence (work)"}
         assert answer_steps(vocab) == ["reading", "meaning"]
@@ -166,7 +166,7 @@ def test_excluded_entries_never_count(app_copy):
     _check(app_copy, """
         from datetime import date
         import pandas as pd
-        from meal_receipts_data import (
+        from prescripts.data.meal_receipts import (
             append_entry, counted_total, day_folder_for, load_entries, week_bounds, week_total_so_far,
             with_excluded_column,
         )
@@ -215,7 +215,7 @@ def test_editing_a_date_moves_the_entry(app_copy):
     _check(app_copy, """
         from datetime import date
         import pandas as pd
-        from meal_receipts_data import append_entry, day_folder_for, load_entries, relocate_edited_entries
+        from prescripts.data.meal_receipts import append_entry, day_folder_for, load_entries, relocate_edited_entries
 
         target = day_folder_for(date(2026, 8, 2))
         target.mkdir(parents=True)
@@ -235,7 +235,7 @@ def test_editing_a_date_moves_the_entry(app_copy):
 
 def test_budget_settings(app_copy):
     _check(app_copy, """
-        from meal_receipts_data import allowance_for_days, budget_settings
+        from prescripts.data.meal_receipts import allowance_for_days, budget_settings
 
         assert budget_settings({}) == (0, "daily")
         assert budget_settings({"daily_budget": 1200}) == (1200, "daily")  # pre-2026-09-21 settings.json
@@ -247,7 +247,7 @@ def test_budget_settings(app_copy):
 
 def test_synced_lyrics(app_copy):
     _check(app_copy, """
-        from lyrics_data import current_line_index, parse_synced
+        from prescripts.data.lyrics import current_line_index, parse_synced
 
         lines = parse_synced("[00:12.00][00:45.50] chorus\\n[00:30.00] verse\\nno timestamp here\\n")
         assert lines == [(12000, "chorus"), (30000, "verse"), (45500, "chorus")], lines
@@ -263,8 +263,8 @@ def test_play_history_fills_spotify_gaps(app_copy):
     # A play the app watched is added to Spotify's list unless Spotify already
     # has it (same track, end times close). Stopping early shows where.
     _check(app_copy, """
-        import play_history
-        from play_history import _iso, merge_with_api, record_observation
+        import prescripts.data.play_history as play_history
+        from prescripts.data.play_history import _iso, merge_with_api, record_observation
 
         def seen(uri, name, at, progress_s, duration_s=200):
             record_observation({"fetched_at": at, "progress_ms": progress_s * 1000, "item": {

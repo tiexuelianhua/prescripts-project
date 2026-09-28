@@ -11,7 +11,7 @@ import functools
 import threading
 import time
 
-from prescripts_common import SCRIPTS_DIR
+from prescripts.common import SCRIPTS_DIR
 
 LOG_PATH = SCRIPTS_DIR.parent / "Spotify" / "page_log.txt"
 # Once the file passes MAX_BYTES, only the newest KEEP_BYTES are kept.
