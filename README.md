@@ -38,7 +38,7 @@ Personal portfolio project developed with the help of PeaceWorks K.K. and ORBWEV
 ## What you need
 
 - **Windows 10 or 11.** This is the tested setup. (Mac/Linux: see [Not on Windows?](#not-on-windows))
-- **Python 3.12** from [python.org/downloads](https://www.python.org/downloads/). The installer's defaults are fine.
+- **Python 3.12** (not a newer version). Download the [Python 3.12.10 Windows installer](https://www.python.org/ftp/python/3.12.10/python-3.12.10-amd64.exe) and run it. The installer's defaults are fine. The python.org download page now leads with Python 3.14 and the "Python install manager". If you already have the install manager, run `py install 3.12` in PowerShell instead.
 - **Git**, from [git-scm.com](https://git-scm.com/downloads). Optional: you can download a ZIP instead (step 2).
 - **An internet connection.** Weather, lyrics and Japanese word lookups fetch live data. Nothing needs an account or API key except Spotify.
 
@@ -68,7 +68,7 @@ git clone https://github.com/tiexuelianhua/prescripts-project.git
 cd prescripts-project
 ```
 
-No Git? On the [GitHub page](https://github.com/tiexuelianhua/prescripts-project), click **Code → Download ZIP**, extract it into `$HOME\Prescripts`, and `cd` into the extracted folder instead.
+No Git? On the [GitHub page](https://github.com/tiexuelianhua/prescripts-project), click **Code → Download ZIP** and extract it into `$HOME\Prescripts`. The extracted folder is called `prescripts-project-main`: rename it to `prescripts-project` (the rest of this README uses that name), make sure it isn't nested inside another folder of the same name, and `cd prescripts-project`.
 
 **3. Create a virtual environment.** This is a private copy of Python just for this app, so nothing it installs affects the rest of your computer.
 
@@ -102,7 +102,7 @@ After a few seconds, a window titled **The Prescripts** opens on the Home page. 
 .venv\Scripts\python -m streamlit run app.py
 ```
 
-Press **Ctrl+C** in PowerShell to stop it.
+The first time you do this, Streamlit asks for an email address in PowerShell. It's optional: press **Enter** to skip it, and the browser tab opens. Press **Ctrl+C** in PowerShell to stop it.
 
 ### Optional: a desktop shortcut
 
@@ -177,7 +177,7 @@ The project has automated tests. They load every page and check the rules undern
 .venv\Scripts\python -m pytest
 ```
 
-It takes about a minute and should finish with `19 passed`. Close the app first if it's running: installing packages while it's open can fail, because Windows locks files the app is using.
+It takes about two minutes and should finish with `21 passed`. Close the app first if it's running: installing packages while it's open can fail, because Windows locks files the app is using.
 
 ### Updating the screenshots
 
