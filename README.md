@@ -229,3 +229,7 @@ Everywhere else in this README, use `.venv/bin/python` in place of `.venv\Script
 - Colours, font choice and button style are taken from the fan site [prescript.neocities.org](https://prescript.neocities.org/).
 - Pixel font: [Galmuri](https://github.com/quiple/galmuri) by quiple, under the SIL Open Font License (`static/Galmuri-OFL.txt`).
 - Weather: [Japan Meteorological Agency](https://www.jma.go.jp/bosai/). Lyrics: [LRCLIB](https://lrclib.net). Word lookups: [Jisho](https://jisho.org) and [kanjiapi.dev](https://kanjiapi.dev).
+
+## Licence
+
+The code and the forget-me-not logo are under the [MIT License](LICENSE). The Galmuri font keeps its own licence (`static/Galmuri-OFL.txt`). The Prescripts, The Index, and Project Moon's games belong to Project Moon. This is an unofficial fan project.
