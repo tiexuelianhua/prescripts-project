@@ -1,5 +1,7 @@
 # The Prescripts
 
+[![Tests](https://github.com/tiexuelianhua/prescripts-project/actions/workflows/tests.yml/badge.svg)](https://github.com/tiexuelianhua/prescripts-project/actions/workflows/tests.yml)
+
 A personal dashboard app for everyday life in Japan, themed on the Prescripts of [The Index](https://library-of-ruina.fandom.com/wiki/The_Index), from Project Moon's games. It runs on your own computer in its own window and keeps all its data in plain files next to the code.
 
 | Page | What it does |
@@ -179,6 +181,8 @@ The project has automated tests. They load every page and check the rules undern
 
 It takes about two minutes and should finish with `22 passed`. Close the app first if it's running: installing packages while it's open can fail, because Windows locks files the app is using.
 
+The same tests also run on GitHub on Windows, Mac, and Linux after every push. The badge at the top of this page shows the latest result.
+
 ### Updating the screenshots
 
 The screenshots above can be retaken with one command. It needs Chrome or Edge installed:
@@ -215,7 +219,7 @@ On Mac and Linux, the app runs in your web browser. The app window (`desktop_app
 
    As on Windows, press **Enter** if Streamlit asks for an email, and **Ctrl+C** to stop it.
 
-Everywhere else in this README, use `.venv/bin/python` in place of `.venv\Scripts\python`. The tests finish with `19 passed, 3 skipped`: the three skipped tests check PowerShell scripts that only exist on Windows.
+Everywhere else in this README, use `.venv/bin/python` in place of `.venv\Scripts\python`. The tests usually finish with `19 passed, 3 skipped`: the three skipped tests check PowerShell scripts, and they only run if PowerShell is installed.
 
 ## Credits
 
