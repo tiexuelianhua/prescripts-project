@@ -196,9 +196,7 @@ def advance_practice() -> None:
     st.session_state["japanese_practice"]["position"] += 1
 
 
-deck = load_deck()
-
-with st.container(key="main_body"):
+def render_review(deck: dict) -> None:
     # Review: the page's primary content, so always visible (house style --
     # secondary sections go in expanders below).
     st.subheader("Review")
@@ -400,6 +398,8 @@ with st.container(key="main_body"):
                         st.session_state.pop("japanese_revealed", None)
                         st.rerun()
 
+
+def render_add_cards(deck: dict) -> None:
     # Adding cards: open by default only while the deck is still empty.
     with st.expander("Add cards", expanded=not deck["cards"]):
         add_kind = st.segmented_control(
@@ -567,6 +567,8 @@ with st.container(key="main_body"):
             if pending_confirmation:
                 typewriter(pending_confirmation)
 
+
+def render_your_cards(deck: dict) -> None:
     # Lookup of everything already in the deck, editable in place.
     with st.expander("Your cards"):
         search_columns = st.columns([3, 2], vertical_alignment="bottom")
@@ -654,3 +656,11 @@ with st.container(key="main_body"):
                     message += f" Skipped renaming to {', '.join(clashes)} (already in your cards)."
                 st.toast(message)
                 st.rerun()
+
+
+deck = load_deck()
+
+with st.container(key="main_body"):
+    render_review(deck)
+    render_add_cards(deck)
+    render_your_cards(deck)
