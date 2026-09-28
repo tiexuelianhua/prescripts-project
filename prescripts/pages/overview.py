@@ -305,10 +305,15 @@ def render_activities_tile() -> None:
 
 # Two columns, each tile placed in whichever is currently shorter -- so a
 # short tile (Meal Receipts) gets the next one stacked under it instead of
-# leaving a gap beside a tall one (Weather). Weights are rough relative
-# heights, not measurements: Streamlit can't see rendered heights, and tiles
-# vary (e.g. a weather warning adds a line), so this only has to be close.
-# A new page's tile = one more (render function, weight, live) entry.
+# leaving a gap beside a tall one (Weather). Streamlit can't see rendered
+# heights, so each tile has an estimate, in tens of pixels, measured in a
+# browser with sample data (2026-09-28). Tiles whose height swings with what
+# they show are estimated from that: Weather is ~250px taller with a warning,
+# and Japanese and Activities are short until they have cards / an area. So
+# on a warning day tiles can sit in different columns than on a quiet one --
+# chosen over a fixed layout, which left a big gap on one kind of day.
+# A new page's tile = one more (render function, height, live) entry, the
+# height a number or a function returning one.
 #
 # "live" marks a tile showing something that moves in real time (the Spotify
 # position slider). Those are filled in LAST: the page loads over the
@@ -317,12 +322,29 @@ def render_activities_tile() -> None:
 # jumps once the next refresh lands. Drawn last, it's current the moment the
 # load finishes. Each tile's spot is reserved (container) in layout order
 # first, so filling them in a different order doesn't change where they show.
+def _weather_height() -> int:
+    # The same cached warnings lookup the tile itself makes, so no extra cost.
+    try:
+        return 57 if key_events_headline(weather_load_settings()["office_code"]) else 32
+    except (urllib.error.URLError, TimeoutError):
+        return 38  # the tile shows an error box instead
+
+
+def _japanese_height() -> int:
+    return 45 if sum(japanese_practice_summary()["total"].values()) else 15
+
+
+def _activities_height() -> int:
+    return 28 if activities_load_settings().get("area") else 15
+
+
 TILES = [
-    (render_meal_receipts_tile, 3, False),
-    (render_weather_tile, 4, False),
-    (render_japanese_tile, 5, False),
-    (render_activities_tile, 3, False),
-    (render_spotify_tile, 4, True),
+    (render_meal_receipts_tile, 33, False),
+    (render_weather_tile, _weather_height, False),
+    (render_japanese_tile, _japanese_height, False),
+    (render_activities_tile, _activities_height, False),
+    # ~19 idle, ~30 playing: in between, rather than ask Spotify first.
+    (render_spotify_tile, 25, True),
 ]
 
 # Each tile is outlined in the theme's accent blue (the same blue as the
@@ -397,9 +419,9 @@ with st.container(key="main_body"):
     columns = st.columns(2, gap=0)
     column_heights = [0, 0]
     placements = []
-    for tile_number, (render_tile, weight, live) in enumerate(TILES):
+    for tile_number, (render_tile, height, live) in enumerate(TILES):
         shorter = 0 if column_heights[0] <= column_heights[1] else 1
-        column_heights[shorter] += weight
+        column_heights[shorter] += height() if callable(height) else height
         spot = columns[shorter].container(key=f"overview_tile_{tile_number}")
         placements.append((render_tile, spot, live))
 
