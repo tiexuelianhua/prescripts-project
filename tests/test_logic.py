@@ -333,6 +333,18 @@ def test_nearby_places(app_copy):
         assert places[0]["hours"] == "24/7" and places[0]["category"] == "convenience"
         assert places[0]["id"] == "node/2" and places[2]["id"] == "way/3"
         assert category_of("food", {"shop": "supermarket"}) == "supermarket"
+        # A konbini chain tagged as a supermarket (a mapping slip) still counts as a konbini.
+        assert category_of("food", {"shop": "supermarket", "name": "ファミリーマート 渋谷店"}) == "convenience"
+        assert category_of("food", {"shop": "supermarket", "name": "Lawson Store 100"}) == "convenience"
+
+        # One shop mapped twice (point + building outline) shows once, as the nearer entry.
+        twice = [
+            {"type": "node", "id": 7, "lat": 35.6590, "lon": 139.7016, "tags": {"shop": "convenience", "name": "FamilyMart"}},
+            {"type": "way", "id": 8, "center": {"lat": 35.6591, "lon": 139.7016},
+             "tags": {"shop": "supermarket", "name": "FamilyMart"}},
+            {"type": "node", "id": 9, "lat": 35.6620, "lon": 139.7016, "tags": {"shop": "convenience", "name": "FamilyMart"}},
+        ]
+        assert [p["id"] for p in parse_places("food", twice, *here)] == ["node/7", "node/9"]
         assert round(places[0]["distance"]) == 11
 
         assert category_of("things", {"amenity": "place_of_worship", "religion": "shinto"}) == "shrine_temple"

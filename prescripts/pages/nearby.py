@@ -23,8 +23,9 @@ from prescripts.data.nearby import (
 
 PAGE_TITLE = "Nearby"
 # Results shown at first, and added by each "Show more": a busy area like
-# Shibuya has hundreds of places within a 10-minute walk.
-PAGE_SIZE = 30
+# Shibuya has hundreds of places within a 10-minute walk, and the nearest
+# few are usually what's wanted.
+PAGE_SIZE = 5
 KINDS = {"food": "Food", "things": "Things to do"}
 CATEGORY_ICONS = {
     "convenience": "🏪", "supermarket": "🛒", "restaurant": "🍽️", "cafe": "☕", "fast_food": "🍔",

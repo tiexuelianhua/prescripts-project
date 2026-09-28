@@ -10,6 +10,7 @@
 # second -- lookups here only happen on an explicit search, and are cached.
 import json
 import math
+import re
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -120,9 +121,24 @@ def distance_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     return 2 * radius_m * math.asin(math.sqrt(a))
 
 
+# Convenience-store chains, by name or brand. OSM is edited by volunteers, so
+# the odd branch is tagged a supermarket (seen with FamilyMart, Lawson Store
+# 100 and 7-Eleven); a konbini chain's name overrides that.
+_KONBINI_CHAINS = re.compile(
+    r"ファミリーマート|familymart|ファミマ|セブン-?イレブン|7-eleven|ローソン|lawson|ミニストップ|ministop"
+    r"|デイリーヤマザキ|daily yamazaki|newdays|セイコーマート|seicomart|ポプラ|poplar",
+    re.IGNORECASE,
+)
+# Two entries with the same name this close are one place mapped twice
+# (e.g. as a point and as its building's outline).
+_SAME_PLACE_M = 30
+
+
 def category_of(kind: str, tags: dict) -> str | None:
     for category, (_label, rules) in CATEGORIES[kind].items():
         if all(tags.get(key) in values for key, values in rules):
+            if category == "supermarket" and _KONBINI_CHAINS.search(f"{tags.get('name', '')} {tags.get('brand', '')}"):
+                return "convenience"
             return category
     return None
 
@@ -132,6 +148,7 @@ def parse_places(kind: str, elements: list[dict], lat: float, lon: float) -> lis
     # "name_en", "category", "cuisine", "hours", "distance", "lat", "lon"}
     # ("id" is OSM's own, e.g. "node/123").
     # Unnamed ones are dropped: "a restaurant" with no name can't be found.
+    # A place mapped twice shows once, as its nearer entry.
     places = []
     for element in elements:
         tags = element.get("tags", {})
@@ -152,7 +169,15 @@ def parse_places(kind: str, elements: list[dict], lat: float, lon: float) -> lis
             "lat": point["lat"],
             "lon": point["lon"],
         })
-    return sorted(places, key=lambda place: place["distance"])
+    kept = []
+    for place in sorted(places, key=lambda place: place["distance"]):
+        if not any(
+            other["name"].casefold() == place["name"].casefold()
+            and distance_m(other["lat"], other["lon"], place["lat"], place["lon"]) < _SAME_PLACE_M
+            for other in kept
+        ):
+            kept.append(place)
+    return kept
 
 
 def map_link(place: dict) -> str:
