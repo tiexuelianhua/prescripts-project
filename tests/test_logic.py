@@ -387,6 +387,51 @@ def test_activities_wishes(app_copy):
         assert found("karaoke") == []
     """)
 
+
+def test_activities_close_matches(app_copy):
+    # Plurals and near-miss typos still match, but a word inside a longer
+    # one doesn't ("bar" isn't "barber"); the new groups narrow by type.
+    _check(app_copy, """
+        from prescripts.data.activities import matches_wish, parse_wish
+
+        def place(name, category, type_, name_en="", cuisine=""):
+            return {"name": name, "name_en": name_en, "category": category, "type": type_,
+                    "cuisine": cuisine, "religion": ""}
+
+        bar = place("Bar Trench", "nightlife", "bar")
+        club = place("WOMB", "nightlife", "nightclub")
+        karaoke = place("カラオケ館", "nightlife", "karaoke_box")
+        barber = place("Barber Shop Ken", "other", "hairdresser")
+        animate = place("アニメイト", "shopping", "anime")
+        books = place("Kinokuniya", "shopping", "books")
+        arcade = place("GiGO", "games_sports", "amusement_arcade")
+        everything = [bar, club, karaoke, barber, animate, books, arcade]
+
+        def found(text):
+            wish = parse_wish(text)
+            return [p["name"] for p in everything if matches_wish(p, wish)]
+
+        assert found("bar") == ["Bar Trench"] and found("bars") == ["Bar Trench"]
+        assert found("clubs") == ["WOMB"]
+        assert found("go clubbing") == ["WOMB"]
+        assert found("karaoke") == ["カラオケ館"]
+        assert found("anime merch") == ["アニメイト"]
+        assert found("bookstores") == ["Kinokuniya"]
+        assert found("game center") == ["GiGO"]
+        # A near-miss typo of a kind of place still picks it.
+        assert parse_wish("resturant")["category"] == "restaurant"
+        # ...and of a name: "starbuks" finds Starbucks.
+        cafe = place("スターバックス", "cafe", "cafe", name_en="Starbucks")
+        assert matches_wish(cafe, parse_wish("starbuks"))
+        # Accents don't matter: "pokemon" finds "Pokémon".
+        center = place("ポケモンセンター", "shopping", "toys", name_en="Pokémon Center")
+        assert matches_wish(center, parse_wish("pokemon")) and matches_wish(center, parse_wish("ポケモン"))
+        # As a plain word, "bar" still doesn't match inside "Barber".
+        plain = {"kind": None, "category": None, "types": None, "religion": None, "terms": ["bar"]}
+        assert not matches_wish(barber, plain) and matches_wish(bar, plain)
+    """)
+
+
 def test_overview_columns_end_level(app_copy):
     # Every split is tried, so the columns end as close to level as they can.
     # Placing tiles one at a time into the shorter column once left the

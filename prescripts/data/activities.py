@@ -8,10 +8,12 @@
 # README and Home's credits, as its licence asks. Both services ask for a
 # User-Agent naming the app, light use, and (Nominatim) at most one request a
 # second -- lookups here only happen on an explicit search, and are cached.
+import difflib
 import json
 import math
 import re
 import time
+import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -50,8 +52,21 @@ CATEGORIES = {
         "museum": ("Museums and galleries", [("tourism", ["museum", "gallery"])]),
         "viewpoint": ("Viewpoints", [("tourism", ["viewpoint"])]),
         "cinema_theatre": ("Cinemas and theatres", [("amenity", ["cinema", "theatre"])]),
+        "nightlife": ("Nightlife", [("amenity", ["bar", "pub", "nightclub", "karaoke_box"])]),
+        "shopping": ("Shopping and hobbies", [("shop", [
+            "anime", "games", "video_games", "books", "music", "toys", "model", "hobby", "electronics",
+            "second_hand", "mall", "department_store",
+        ])]),
+        "games_sports": ("Games and sports", [("leisure", [
+            "amusement_arcade", "bowling_alley", "escape_game", "sports_centre", "fitness_centre",
+        ])]),
+        "bath": ("Baths and onsen", [("amenity", ["public_bath"])]),
+        "zoo_theme_park": ("Zoos, aquariums and theme parks", [("tourism", ["zoo", "aquarium", "theme_park"])]),
     },
 }
+# Anything else a search turns up (see fetch_named): shown with its own type.
+OTHER = "other"
+_TYPE_KEYS = ["shop", "amenity", "leisure", "tourism", "craft", "office", "historic"]
 
 
 def load_settings() -> dict:
@@ -103,7 +118,10 @@ def fetch_places(kind: str, lat: float, lon: float, radius: int) -> list[dict]:
     # rarely change, and Overpass is a shared service that can be slow.
     # Callers round lat/lon (see place_spot) so a location that wobbles by a
     # few metres still hits the cache.
-    query = overpass_query(kind, lat, lon, radius)
+    return _overpass(overpass_query(kind, lat, lon, radius))
+
+
+def _overpass(query: str) -> list[dict]:
     body = urllib.parse.urlencode({"data": query}).encode()
     try:
         return _get_json(OVERPASS_URL, data=body, timeout=40)["elements"]
@@ -144,18 +162,26 @@ _SAME_PLACE_M = 30
 
 
 def category_of(kind: str, tags: dict) -> str | None:
-    for category, (_label, rules) in CATEGORIES[kind].items():
-        if all(tags.get(key) in values for key, values in rules):
-            if category == "supermarket" and _KONBINI_CHAINS.search(f"{tags.get('name', '')} {tags.get('brand', '')}"):
-                return "convenience"
-            return category
-    return None
+    # kind "any" (a search by name, see fetch_named) checks every kind, and
+    # anything that fits none of them is OTHER rather than dropped.
+    for each_kind in ["food", "things"] if kind == "any" else [kind]:
+        for category, (_label, rules) in CATEGORIES[each_kind].items():
+            if all(tags.get(key) in values for key, values in rules):
+                if category == "supermarket" and _KONBINI_CHAINS.search(f"{tags.get('name', '')} {tags.get('brand', '')}"):
+                    return "convenience"
+                return category
+    return OTHER if kind == "any" else None
+
+
+def place_type(tags: dict) -> str:
+    # The place's own OSM type, e.g. "anime", "bar", "karaoke_box".
+    return next((tags[key] for key in _TYPE_KEYS if tags.get(key) not in (None, "", "yes")), "")
 
 
 def parse_places(kind: str, elements: list[dict], lat: float, lon: float) -> list[dict]:
     # Named places of a known category, nearest first, each {"id", "name",
-    # "name_en", "category", "cuisine", "hours", "distance", "lat", "lon"}
-    # ("id" is OSM's own, e.g. "node/123").
+    # "name_en", "category", "type", "cuisine", "hours", "religion",
+    # "distance", "lat", "lon"} ("id" is OSM's own, e.g. "node/123").
     # Unnamed ones are dropped: "a restaurant" with no name can't be found.
     # A place mapped twice shows once, as its nearer entry.
     places = []
@@ -172,6 +198,7 @@ def parse_places(kind: str, elements: list[dict], lat: float, lon: float) -> lis
             "name": name,
             "name_en": english if english != name else "",
             "category": category,
+            "type": place_type(tags),
             "cuisine": tags.get("cuisine", "").replace("_", " ").replace(";", ", "),
             "hours": tags.get("opening_hours", ""),
             "religion": tags.get("religion", ""),
@@ -191,36 +218,95 @@ def parse_places(kind: str, elements: list[dict], lat: float, lon: float) -> lis
 
 
 # "What do you feel like?": plain keyword matching, no language model.
-# Words naming a kind of place pick its category (and, for shrines and
-# temples, the religion: temples are Buddhist, shrines Shinto). Longest
-# phrases are checked first, so "fast food" wins over "food".
+# Words naming a kind of place pick its category -- and, where they're more
+# specific than that, its OSM types ("karaoke" within Nightlife) or, for
+# shrines and temples, the religion (temples Buddhist, shrines Shinto).
+# Longest phrases are checked first, so "fast food" wins over "food".
+_MERCH = {"anime", "games", "toys", "model", "hobby"}
 _PLACE_WORDS = {
-    "convenience store": ("food", "convenience", None), "konbini": ("food", "convenience", None),
-    "コンビニ": ("food", "convenience", None), "supermarket": ("food", "supermarket", None),
-    "groceries": ("food", "supermarket", None), "grocery": ("food", "supermarket", None),
-    "スーパー": ("food", "supermarket", None), "restaurant": ("food", "restaurant", None),
-    "cafe": ("food", "cafe", None), "café": ("food", "cafe", None), "coffee": ("food", "cafe", None),
-    "カフェ": ("food", "cafe", None), "fast food": ("food", "fast_food", None),
-    "eat": ("food", None, None), "food": ("food", None, None), "hungry": ("food", None, None),
-    "meal": ("food", None, None), "lunch": ("food", None, None), "dinner": ("food", None, None),
-    "park": ("things", "park", None), "garden": ("things", "park", None), "公園": ("things", "park", None),
-    "shrine": ("things", "shrine_temple", "shinto"), "jinja": ("things", "shrine_temple", "shinto"),
-    "神社": ("things", "shrine_temple", "shinto"), "temple": ("things", "shrine_temple", "buddhist"),
-    "寺": ("things", "shrine_temple", "buddhist"), "museum": ("things", "museum", None),
-    "gallery": ("things", "museum", None), "art": ("things", "museum", None),
-    "exhibition": ("things", "museum", None), "美術館": ("things", "museum", None),
-    "博物館": ("things", "museum", None), "view": ("things", "viewpoint", None),
-    "viewpoint": ("things", "viewpoint", None), "scenery": ("things", "viewpoint", None),
-    "cinema": ("things", "cinema_theatre", None), "movie": ("things", "cinema_theatre", None),
-    "film": ("things", "cinema_theatre", None), "theatre": ("things", "cinema_theatre", None),
-    "theater": ("things", "cinema_theatre", None), "映画": ("things", "cinema_theatre", None),
+    # Food
+    "convenience store": ("food", "convenience", None, None), "konbini": ("food", "convenience", None, None),
+    "コンビニ": ("food", "convenience", None, None), "supermarket": ("food", "supermarket", None, None),
+    "groceries": ("food", "supermarket", None, None), "grocery": ("food", "supermarket", None, None),
+    "スーパー": ("food", "supermarket", None, None), "restaurant": ("food", "restaurant", None, None),
+    "cafe": ("food", "cafe", None, None), "café": ("food", "cafe", None, None),
+    "coffee": ("food", "cafe", None, None), "coffee shop": ("food", "cafe", None, None),
+    "カフェ": ("food", "cafe", None, None), "fast food": ("food", "fast_food", None, None),
+    "eat": ("food", None, None, None), "food": ("food", None, None, None), "hungry": ("food", None, None, None),
+    "meal": ("food", None, None, None), "lunch": ("food", None, None, None), "dinner": ("food", None, None, None),
+    # Sights
+    "park": ("things", "park", None, None), "garden": ("things", "park", None, None),
+    "公園": ("things", "park", None, None),
+    "shrine": ("things", "shrine_temple", "shinto", None), "jinja": ("things", "shrine_temple", "shinto", None),
+    "神社": ("things", "shrine_temple", "shinto", None), "temple": ("things", "shrine_temple", "buddhist", None),
+    "寺": ("things", "shrine_temple", "buddhist", None),
+    "museum": ("things", "museum", None, {"museum"}), "gallery": ("things", "museum", None, {"gallery"}),
+    "art": ("things", "museum", None, None), "exhibition": ("things", "museum", None, None),
+    "美術館": ("things", "museum", None, None), "博物館": ("things", "museum", None, {"museum"}),
+    "view": ("things", "viewpoint", None, None), "viewpoint": ("things", "viewpoint", None, None),
+    "scenery": ("things", "viewpoint", None, None),
+    "cinema": ("things", "cinema_theatre", None, {"cinema"}), "movie": ("things", "cinema_theatre", None, {"cinema"}),
+    "film": ("things", "cinema_theatre", None, {"cinema"}), "映画": ("things", "cinema_theatre", None, {"cinema"}),
+    "theatre": ("things", "cinema_theatre", None, {"theatre"}),
+    "theater": ("things", "cinema_theatre", None, {"theatre"}),
+    # Nightlife
+    "nightlife": ("things", "nightlife", None, None), "drink": ("things", "nightlife", None, None),
+    "drinking": ("things", "nightlife", None, None),
+    "bar": ("things", "nightlife", None, {"bar", "pub"}), "pub": ("things", "nightlife", None, {"pub", "bar"}),
+    "バー": ("things", "nightlife", None, {"bar", "pub"}),
+    "club": ("things", "nightlife", None, {"nightclub"}), "nightclub": ("things", "nightlife", None, {"nightclub"}),
+    "clubbing": ("things", "nightlife", None, {"nightclub"}), "クラブ": ("things", "nightlife", None, {"nightclub"}),
+    "karaoke": ("things", "nightlife", None, {"karaoke_box"}),
+    "カラオケ": ("things", "nightlife", None, {"karaoke_box"}),
+    # Shopping and hobbies
+    "shopping": ("things", "shopping", None, None),
+    "anime": ("things", "shopping", None, {"anime"}), "manga": ("things", "shopping", None, {"anime", "books"}),
+    "merch": ("things", "shopping", None, _MERCH), "merchandise": ("things", "shopping", None, _MERCH),
+    "figure": ("things", "shopping", None, _MERCH), "goods": ("things", "shopping", None, _MERCH),
+    "games": ("things", "shopping", None, {"games", "video_games"}),
+    "video game": ("things", "shopping", None, {"video_games", "games"}),
+    "board game": ("things", "shopping", None, {"games"}),
+    "book": ("things", "shopping", None, {"books"}), "bookstore": ("things", "shopping", None, {"books"}),
+    "bookshop": ("things", "shopping", None, {"books"}), "本屋": ("things", "shopping", None, {"books"}),
+    "record": ("things", "shopping", None, {"music"}), "music store": ("things", "shopping", None, {"music"}),
+    "toy": ("things", "shopping", None, {"toys", "model", "hobby"}),
+    "hobby": ("things", "shopping", None, {"hobby", "model", "toys"}),
+    "electronics": ("things", "shopping", None, {"electronics"}), "家電": ("things", "shopping", None, {"electronics"}),
+    "thrift": ("things", "shopping", None, {"second_hand"}), "second hand": ("things", "shopping", None, {"second_hand"}),
+    "secondhand": ("things", "shopping", None, {"second_hand"}), "vintage": ("things", "shopping", None, {"second_hand"}),
+    "mall": ("things", "shopping", None, {"mall", "department_store"}),
+    "department store": ("things", "shopping", None, {"department_store", "mall"}),
+    "デパート": ("things", "shopping", None, {"department_store", "mall"}),
+    # Games and sports
+    "arcade": ("things", "games_sports", None, {"amusement_arcade"}),
+    "game center": ("things", "games_sports", None, {"amusement_arcade"}),
+    "game centre": ("things", "games_sports", None, {"amusement_arcade"}),
+    "ゲームセンター": ("things", "games_sports", None, {"amusement_arcade"}),
+    "ゲーセン": ("things", "games_sports", None, {"amusement_arcade"}),
+    "bowling": ("things", "games_sports", None, {"bowling_alley"}),
+    "escape room": ("things", "games_sports", None, {"escape_game"}),
+    "escape game": ("things", "games_sports", None, {"escape_game"}),
+    "gym": ("things", "games_sports", None, {"fitness_centre", "sports_centre"}),
+    "fitness": ("things", "games_sports", None, {"fitness_centre", "sports_centre"}),
+    "workout": ("things", "games_sports", None, {"fitness_centre", "sports_centre"}),
+    "sports": ("things", "games_sports", None, None),
+    # Baths, zoos and theme parks
+    "onsen": ("things", "bath", None, None), "sento": ("things", "bath", None, None),
+    "bath": ("things", "bath", None, None), "spa": ("things", "bath", None, None),
+    "温泉": ("things", "bath", None, None), "銭湯": ("things", "bath", None, None),
+    "zoo": ("things", "zoo_theme_park", None, {"zoo"}), "動物園": ("things", "zoo_theme_park", None, {"zoo"}),
+    "aquarium": ("things", "zoo_theme_park", None, {"aquarium"}),
+    "水族館": ("things", "zoo_theme_park", None, {"aquarium"}),
+    "theme park": ("things", "zoo_theme_park", None, {"theme_park"}),
+    "amusement park": ("things", "zoo_theme_park", None, {"theme_park"}),
+    "遊園地": ("things", "zoo_theme_park", None, {"theme_park"}),
 }
 # Ignored: they say how, not what ("go to a", "I want some").
 _FILLER = {
     "a", "an", "the", "some", "any", "go", "going", "to", "see", "visit", "want", "wanna", "i", "i'd",
     "get", "grab", "find", "for", "at", "in", "on", "me", "like", "feel", "something", "somewhere",
     "place", "places", "near", "nearby", "around", "here", "have", "let's", "lets", "with", "and", "or",
-    "of", "maybe", "please", "good", "nice", "quiet", "fancy",
+    "of", "maybe", "please", "good", "nice", "quiet", "fancy", "shop", "shops", "store", "stores", "spot",
 }
 # A few foods whose Japanese name is more likely in a place's name than the
 # English one is in its cuisine tag.
@@ -229,32 +315,109 @@ _ALSO_MEANS = {
     "udon": ["うどん"], "soba": ["そば", "蕎麦"], "tonkatsu": ["とんかつ"], "yakiniku": ["焼肉"],
     "izakaya": ["居酒屋"], "gyudon": ["牛丼"], "tempura": ["天ぷら", "天麩羅"], "okonomiyaki": ["お好み焼"],
 }
+# How alike two words must be to count as a typo of each other (difflib's
+# ratio), for words long enough that this doesn't just match anything.
+_CLOSE_ENOUGH = 0.85
+_MIN_FUZZY_LENGTH = 5
+
+
+def _forms(word: str) -> set[str]:
+    # The word and its likely singular forms: "bars" and "bar" meet at "bar",
+    # "galleries" and "gallery" at "gallery", while "barber" stays apart.
+    forms = {word}
+    if word.endswith("ies"):
+        forms.add(word[:-3] + "y")
+    if word.endswith("es"):
+        forms.add(word[:-2])
+    if word.endswith("s"):
+        forms.add(word[:-1])
+    return forms
+
+
+def _is_japanese(text: str) -> bool:
+    return re.search(r"[^\x00-\x7f]", text) is not None
+
+
+def _close(a: str, b: str) -> bool:
+    if _forms(a) & _forms(b):
+        return True
+    return (min(len(a), len(b)) >= _MIN_FUZZY_LENGTH
+            and difflib.SequenceMatcher(None, a, b).ratio() >= _CLOSE_ENOUGH)
+
+
+def _take_place_word(wish: dict, phrase: str) -> None:
+    kind, category, religion, types = _PLACE_WORDS[phrase]
+    if wish["kind"] is None or (category and wish["category"] is None):
+        wish.update(kind=kind, category=category or wish["category"], religion=religion or wish["religion"])
+    if types and wish["types"] is None and category == wish["category"]:
+        wish["types"] = set(types)
 
 
 def parse_wish(text: str) -> dict:
-    # {"kind": "food"/"things"/None, "category": ... or None, "religion":
-    # ... or None, "terms": [words to find in a place's cuisine or name]}.
+    # {"kind": "food"/"things"/None, "category": ... or None, "types": OSM
+    # types or None, "religion": ... or None, "terms": [words to find in a
+    # place's name, cuisine or type]}.
     rest = f" {text.casefold().strip()} "
-    wish = {"kind": None, "category": None, "religion": None, "terms": []}
+    wish = {"kind": None, "category": None, "types": None, "religion": None, "terms": []}
     for phrase in sorted(_PLACE_WORDS, key=len, reverse=True):
         # Whole words for English (plurals too); anywhere for Japanese.
-        pattern = re.escape(phrase) if re.search(r"[^\x00-\x7f]", phrase) else rf"\b{re.escape(phrase)}(e?s)?\b"
+        pattern = re.escape(phrase) if _is_japanese(phrase) else rf"\b{re.escape(phrase)}(e?s)?\b"
         if re.search(pattern, rest):
-            kind, category, religion = _PLACE_WORDS[phrase]
-            if wish["kind"] is None or (category and wish["category"] is None):
-                wish.update(kind=kind, category=category or wish["category"], religion=religion or wish["religion"])
+            _take_place_word(wish, phrase)
             rest = re.sub(pattern, " ", rest)
-    wish["terms"] = [word for word in re.split(r"[\s,.!?、。]+", rest) if word and word not in _FILLER]
+    single_words = [phrase for phrase in _PLACE_WORDS if " " not in phrase and not _is_japanese(phrase)]
+    for word in re.split(r"[\s,.!?、。]+", rest):
+        if not word or word in _FILLER:
+            continue
+        # A near miss on a kind of place ("resturant") counts as that kind.
+        typo_of = next((phrase for phrase in single_words if _close(word, phrase)), None)
+        if typo_of:
+            _take_place_word(wish, typo_of)
+        else:
+            wish["terms"].append(word)
     return wish
+
+
+def _fold(text: str) -> str:
+    # Lower case without accents, so "pokemon" finds "Pokémon". Only for
+    # Latin text: decomposing Japanese would split ポ into ホ and its mark.
+    decomposed = unicodedata.normalize("NFKD", text.casefold())
+    return "".join(character for character in decomposed if not unicodedata.combining(character))
+
+
+def _term_found(term: str, place: dict) -> bool:
+    names = f"{place['name']} {place['name_en']}"
+    if _is_japanese(term) and not _is_japanese(_fold(term)):
+        term = _fold(term)  # accented Latin, e.g. "café"
+    if _is_japanese(term):
+        return term in names
+    if any(alias in names for alias in _ALSO_MEANS.get(term, [])):
+        return True
+    words = re.findall(r"[a-z0-9']+", _fold(f"{names} {place['cuisine']} {place.get('type', '')}").replace("_", " "))
+    return any(_close(term, word) for word in words)
 
 
 def matches_wish(place: dict, wish: dict) -> bool:
     if wish["category"] and place["category"] != wish["category"]:
         return False
+    if wish.get("types") and place.get("type") not in wish["types"]:
+        return False
     if wish["religion"] and place["religion"] != wish["religion"]:
         return False
-    text = f"{place['name']} {place['name_en']} {place['cuisine']}".casefold()
-    return all(any(form in text for form in [term, *_ALSO_MEANS.get(term, [])]) for term in wish["terms"])
+    return all(_term_found(term, place) for term in wish["terms"])
+
+
+@st.cache_data(ttl=24 * 3600, show_spinner=False)
+def fetch_named(term: str, lat: float, lon: float, radius: int) -> list[dict]:
+    # For a word no category covers ("pokemon", "batting"): any named place
+    # whose name has it in, or whose own type is it. Raw Overpass elements,
+    # parsed with kind "any".
+    safe = re.sub(r"[^\w\- ]", "", term)  # nothing that could break the query
+    around = f"(around:{radius},{lat},{lon})"
+    type_value = min(_forms(safe.casefold()), key=len).replace(" ", "_")
+    parts = [f'nwr["name"~"{safe}",i]{around};', f'nwr["name:en"~"{safe}",i]{around};']
+    parts += [f'nwr["{key}"="{type_value}"]["name"]{around};' for key in ("shop", "amenity", "leisure", "tourism")]
+    return _overpass(f"[out:json][timeout:25];({''.join(parts)});out center tags;")
 
 
 def search_link(text: str, lat: float, lon: float) -> str:

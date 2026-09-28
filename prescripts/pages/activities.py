@@ -10,7 +10,9 @@ import streamlit as st
 from prescripts.common import inject_body_fade_in, render_page_title, show_logo
 from prescripts.data.activities import (
     CATEGORIES,
+    OTHER,
     RADII,
+    fetch_named,
     fetch_places,
     find_area,
     load_settings,
@@ -33,6 +35,17 @@ KINDS = {"food": "Food", "things": "Things to do"}
 CATEGORY_ICONS = {
     "convenience": "🏪", "supermarket": "🛒", "restaurant": "🍽️", "cafe": "☕", "fast_food": "🍔",
     "park": "🌳", "shrine_temple": "⛩️", "museum": "🏛️", "viewpoint": "🌄", "cinema_theatre": "🎭",
+    "nightlife": "🍸", "shopping": "🛍️", "games_sports": "🎳", "bath": "♨️", "zoo_theme_park": "🎡",
+    OTHER: "📌",
+}
+# How a place's own OSM type reads in its row, where it says more than the
+# category does (food rows show their cuisine instead). Others read as the
+# tag itself, e.g. "sports centre".
+TYPE_LABELS = {
+    "karaoke_box": "karaoke", "amusement_arcade": "arcade", "bowling_alley": "bowling",
+    "escape_game": "escape room", "fitness_centre": "gym", "second_hand": "second-hand shop",
+    "video_games": "video games", "anime": "anime and manga", "place_of_worship": "",
+    "department_store": "department store", "public_bath": "",
 }
 FETCH_ERRORS = (urllib.error.URLError, TimeoutError, ValueError, KeyError)
 
@@ -237,6 +250,17 @@ def render_wish(text: str, origin: dict, radius: int) -> None:
         found = [place for place in places if matches_wish(place, wish)]
         if found:
             break
+    if not found and wish["terms"] and not wish["kind"]:
+        # Nothing in any category: look for the word in any place's name or
+        # own type ("pokemon", "batting"), whatever kind of place it is.
+        term = max(wish["terms"], key=len)
+        try:
+            with st.spinner("Looking further…"):
+                elements = fetch_named(term, *place_spot(origin["lat"], origin["lon"]), radius)
+            found = [place for place in parse_places("any", elements, origin["lat"], origin["lon"])
+                     if matches_wish(place, wish)]
+        except FETCH_ERRORS:
+            pass  # the "nothing matching" note below still offers Google Maps
     if not found:
         st.caption(f"Nothing matching that within {format_distance(radius)} of {origin['label']}. "
                    "A wider distance may help, or other words.")
@@ -253,7 +277,13 @@ def render_list(places: list[dict], list_key: str) -> None:
     for place in places[:limit]:
         name = _plain(place["name"]) + (f" · {_plain(place['name_en'])}" if place["name_en"] else "")
         details = [format_distance(place["distance"])]
+        if place["category"] == "shrine_temple":
+            details.append({"shinto": "Shinto shrine", "buddhist": "Buddhist temple"}.get(place["religion"], ""))
+        elif place["category"] not in CATEGORIES["food"]:
+            kind_of_place = TYPE_LABELS.get(place["type"], place["type"].replace("_", " "))
+            details.append(_plain(kind_of_place))
         details += [_plain(detail) for detail in (place["cuisine"], place["hours"]) if detail]
+        details = [detail for detail in details if detail]
         text_column, map_column = st.columns([6, 1], vertical_alignment="center")
         text_column.markdown(
             f"{CATEGORY_ICONS[place['category']]} <b class='place-name'>{name}</b>  \n"
