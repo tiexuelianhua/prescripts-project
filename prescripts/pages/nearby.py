@@ -14,6 +14,7 @@ from prescripts.data.nearby import (
     fetch_places,
     find_area,
     load_settings,
+    map_embed,
     map_link,
     parse_places,
     place_spot,
@@ -26,7 +27,7 @@ PAGE_TITLE = "Nearby"
 PAGE_SIZE = 30
 KINDS = {"food": "Food", "things": "Things to do"}
 CATEGORY_ICONS = {
-    "convenience": "🏪", "restaurant": "🍽️", "cafe": "☕", "fast_food": "🍔",
+    "convenience": "🏪", "supermarket": "🛒", "restaurant": "🍽️", "cafe": "☕", "fast_food": "🍔",
     "park": "🌳", "shrine_temple": "⛩️", "museum": "🏛️", "viewpoint": "🌄", "cinema_theatre": "🎭",
 }
 FETCH_ERRORS = (urllib.error.URLError, TimeoutError, ValueError, KeyError)
@@ -181,6 +182,13 @@ def render_location(settings: dict) -> dict | None:
     return None
 
 
+def _toggle_map(place_id: str) -> None:
+    # One map open at a time, under its place: opening another closes the
+    # last, and pressing the same one again closes it.
+    current = st.session_state.get("_nearby_open_map")
+    st.session_state["_nearby_open_map"] = None if current == place_id else place_id
+
+
 def render_places(kind: str, origin: dict, radius: int) -> None:
     categories = CATEGORIES[kind]
     chosen = st.pills(
@@ -205,15 +213,25 @@ def render_places(kind: str, origin: dict, radius: int) -> None:
 
     limit_key = f"_nearby_{kind}_limit"
     limit = st.session_state.get(limit_key, PAGE_SIZE)
+    open_map = st.session_state.get("_nearby_open_map")
     for place in places[:limit]:
         name = _plain(place["name"]) + (f" · {_plain(place['name_en'])}" if place["name_en"] else "")
         details = [format_distance(place["distance"])]
         details += [_plain(detail) for detail in (place["cuisine"], place["hours"]) if detail]
-        st.markdown(
+        text_column, map_column = st.columns([6, 1], vertical_alignment="center")
+        text_column.markdown(
             f"{CATEGORY_ICONS[place['category']]} <b class='place-name'>{name}</b>  \n"
-            f"<small>{' · '.join(details)} · <a href='{map_link(place)}' target='_blank'>Map</a></small>",
+            f"<small>{' · '.join(details)} · "
+            f"<a href='{map_link(place)}' target='_blank'>Directions</a></small>",
             unsafe_allow_html=True,
         )
+        is_open = open_map == place["id"]
+        map_column.button(
+            "Hide" if is_open else "Map", key=f"nearby_map_{kind}_{place['id']}", width="stretch",
+            on_click=_toggle_map, args=(place["id"],),
+        )
+        if is_open:
+            st.iframe(map_embed(place), height=320)
     if len(places) > limit and st.button("Show more", key=f"nearby_{kind}_more"):
         st.session_state[limit_key] = limit + PAGE_SIZE
         st.rerun()

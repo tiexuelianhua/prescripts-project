@@ -37,6 +37,7 @@ DEFAULT_RADIUS = 800
 CATEGORIES = {
     "food": {
         "convenience": ("Convenience stores", [("shop", ["convenience"])]),
+        "supermarket": ("Supermarkets", [("shop", ["supermarket"])]),
         "restaurant": ("Restaurants", [("amenity", ["restaurant", "food_court"])]),
         "cafe": ("Cafés", [("amenity", ["cafe"])]),
         "fast_food": ("Fast food", [("amenity", ["fast_food"])]),
@@ -127,8 +128,9 @@ def category_of(kind: str, tags: dict) -> str | None:
 
 
 def parse_places(kind: str, elements: list[dict], lat: float, lon: float) -> list[dict]:
-    # Named places of a known category, nearest first, each {"name",
-    # "name_en", "category", "cuisine", "hours", "distance", "lat", "lon"}.
+    # Named places of a known category, nearest first, each {"id", "name",
+    # "name_en", "category", "cuisine", "hours", "distance", "lat", "lon"}
+    # ("id" is OSM's own, e.g. "node/123").
     # Unnamed ones are dropped: "a restaurant" with no name can't be found.
     places = []
     for element in elements:
@@ -140,6 +142,7 @@ def parse_places(kind: str, elements: list[dict], lat: float, lon: float) -> lis
             continue
         english = tags.get("name:en", "")
         places.append({
+            "id": f"{element.get('type', 'node')}/{element.get('id', '')}",
             "name": name,
             "name_en": english if english != name else "",
             "category": category,
@@ -153,5 +156,16 @@ def parse_places(kind: str, elements: list[dict], lat: float, lon: float) -> lis
 
 
 def map_link(place: dict) -> str:
-    # Opens the spot in Google Maps -- a plain link, no API or key involved.
+    # Opens the spot in Google Maps, for directions -- a plain link, no API
+    # or key involved.
     return "https://www.google.com/maps/search/?api=1&query=" + urllib.parse.quote(f"{place['lat']},{place['lon']}")
+
+
+def map_embed(place: dict, span: float = 0.003) -> str:
+    # OpenStreetMap's own embeddable map (free, no key), pinned on the place
+    # and about 600 m across. Made for embedding, so light use like this
+    # sits within OSM's tile usage policy.
+    lat, lon = place["lat"], place["lon"]
+    bbox = f"{lon - span},{lat - span},{lon + span},{lat + span}"
+    return ("https://www.openstreetmap.org/export/embed.html?"
+            + urllib.parse.urlencode({"bbox": bbox, "layer": "mapnik", "marker": f"{lat},{lon}"}))

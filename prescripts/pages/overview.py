@@ -9,6 +9,7 @@
 # that list -- with only a handful of pages, a heavier plugin mechanism
 # would be solving a problem this doesn't have yet.
 import html
+import random
 import time
 import urllib.error
 from datetime import datetime
@@ -27,6 +28,15 @@ from prescripts.data.japanese.deck import (
     random_card as japanese_random_card,
 )
 from prescripts.data.meal_receipts import today_summary as meal_receipts_today_summary
+from prescripts.data.nearby import (
+    CATEGORIES as NEARBY_CATEGORIES,
+    DEFAULT_RADIUS as NEARBY_DEFAULT_RADIUS,
+    fetch_places as nearby_fetch_places,
+    load_settings as nearby_load_settings,
+    map_link as nearby_map_link,
+    parse_places as nearby_parse_places,
+    place_spot as nearby_place_spot,
+)
 from prescripts.data.spotify import (
     current_playback as spotify_current_playback,
     describe_item as spotify_describe_item,
@@ -249,6 +259,50 @@ def render_japanese_tile() -> None:
     st.page_link("prescripts/pages/japanese.py", label="Open Japanese", icon="🈁")
 
 
+def render_nearby_tile() -> None:
+    settings = nearby_load_settings()
+    area = settings.get("area")
+    st.subheader(f"📍 Nearby -- {area}" if area else "📍 Nearby")
+    if not area:
+        st.caption("No area saved yet -- pick one on the Nearby page.")
+    else:
+        # Food only: it's the quick lookup (things to do can take 15s+ when
+        # OSM is busy, which would hold up the whole page), and cached a day.
+        radius = settings.get("radius", NEARBY_DEFAULT_RADIUS)
+        try:
+            elements = nearby_fetch_places("food", *nearby_place_spot(settings["lat"], settings["lon"]), radius)
+            places = nearby_parse_places("food", elements, settings["lat"], settings["lon"])
+        except (urllib.error.URLError, TimeoutError, ValueError, KeyError):
+            places = None
+            st.caption("Couldn't reach OpenStreetMap's place search right now.")
+        if places == []:
+            st.caption("No food places found within walking distance.")
+        elif places:
+            # A random pick, like the Japanese tile's word: new each time
+            # Overview is opened, kept while staying here (a Spotify button
+            # press reruns the page), or re-rolled with the button.
+            just_arrived = st.session_state.get("_previous_page") != st.session_state.get("_current_page")
+            chosen_id = None if just_arrived else st.session_state.get("overview_nearby_place")
+            place = next((place for place in places if place["id"] == chosen_id), None) or random.choice(places)
+            st.session_state["overview_nearby_place"] = place["id"]
+            english = f" · {html.escape(place['name_en'])}" if place["name_en"] else ""
+            details = [NEARBY_CATEGORIES["food"][place["category"]][0].removesuffix("s"),
+                       f"{place['distance']:.0f} m away" if place["distance"] < 1000
+                       else f"{place['distance'] / 1000:.1f} km away"]
+            details += [html.escape(detail) for detail in (place["cuisine"], place["hours"]) if detail]
+            st.markdown(
+                f'<div class="overview-place-name" lang="ja">{html.escape(place["name"])}{english}</div>'
+                f"<small>{' · '.join(details)} · "
+                f"<a href='{nearby_map_link(place)}' target='_blank'>Map</a></small>",
+                unsafe_allow_html=True,
+            )
+            if st.button("🎲 Another", key="overview_nearby_another"):
+                others = [other for other in places if other["id"] != place["id"]] or places
+                st.session_state["overview_nearby_place"] = random.choice(others)["id"]
+                st.rerun()
+    st.page_link("prescripts/pages/nearby.py", label="Open Nearby", icon="📍")
+
+
 # Two columns, each tile placed in whichever is currently shorter -- so a
 # short tile (Meal Receipts) gets the next one stacked under it instead of
 # leaving a gap beside a tall one (Weather). Weights are rough relative
@@ -267,6 +321,7 @@ TILES = [
     (render_meal_receipts_tile, 3, False),
     (render_weather_tile, 4, False),
     (render_japanese_tile, 5, False),
+    (render_nearby_tile, 3, False),
     (render_spotify_tile, 4, True),
 ]
 
@@ -323,6 +378,12 @@ st.markdown(
     }}
     .overview-word-meaning {{
         margin-top: 0.25rem;
+    }}
+    /* The Nearby tile's pick, in the same Japanese font for the same reason. */
+    .overview-place-name {{
+        font-family: "Yu Gothic UI", "Yu Gothic", "Meiryo", "Hiragino Sans", sans-serif;
+        font-size: 1.3rem;
+        font-weight: bold;
     }}
     [data-testid="stColumn"]:has([class*="st-key-overview_tile_"]) > [data-testid="stVerticalBlock"] > [data-testid="stLayoutWrapper"]:last-child {{
         flex-grow: 1;

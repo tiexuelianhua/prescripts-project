@@ -204,9 +204,35 @@ def test_nearby_page(app_copy):
         assert "Matsukawa's Eel &amp; Rice" in shown[2], shown
         assert any("3 within 800 m of Shibuya Station" in caption.value for caption in at.caption)
 
+        # "Map" opens OpenStreetMap's map of that place under it; again closes it.
+        at.button(key="nearby_map_food_node/2").click()
+        at.run()
+        frames = at.get("iframe")
+        assert len(frames) == 1 and "marker=35.6581" in frames[0].proto.src, frames
+        at.button(key="nearby_map_food_node/2").click()
+        at.run()
+        assert not at.get("iframe")
+
+        # Overview's tile: one of the places, and "Another" picks a different one.
+        at.switch_page("prescripts/pages/overview.py")
+        at.run()
+        assert not at.exception, at.exception
+        def picked():
+            return next(block.value for block in at.markdown if "overview-place-name" in block.value
+                        and "<div" in block.value)
+        first = picked()
+        assert any(name in first for name in ("Lawson", "すき家", "うなぎ")), first
+        at.button(key="overview_nearby_another").click()
+        at.run()
+        assert picked() != first
+
         def unreachable(*args):
             raise urllib.error.URLError("down")
         nearby.fetch_places = unreachable
+        at.run()  # Overview first: a quiet note in the tile, no error screen
+        assert not at.exception, at.exception
+        assert any("Couldn't reach OpenStreetMap" in caption.value for caption in at.caption)
+        at.switch_page("prescripts/pages/nearby.py")
         at.run()
         assert not at.exception, at.exception
         assert any("Couldn't reach OpenStreetMap" in error.value for error in at.error)

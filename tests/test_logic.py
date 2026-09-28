@@ -331,6 +331,8 @@ def test_nearby_places(app_copy):
         assert places[0]["name_en"] == ""  # same as the name, so not repeated
         assert places[1]["name_en"] == "Sukiya" and places[1]["cuisine"] == "beef bowl, japanese"
         assert places[0]["hours"] == "24/7" and places[0]["category"] == "convenience"
+        assert places[0]["id"] == "node/2" and places[2]["id"] == "way/3"
+        assert category_of("food", {"shop": "supermarket"}) == "supermarket"
         assert round(places[0]["distance"]) == 11
 
         assert category_of("things", {"amenity": "place_of_worship", "religion": "shinto"}) == "shrine_temple"
