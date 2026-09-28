@@ -251,6 +251,33 @@ def test_activities_page(app_copy):
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+def test_overview_translates_last(app_copy):
+    # The Weather tile's warning shows in Japanese at first and is swapped for
+    # English only after every tile has drawn, so the translation service
+    # doesn't hold the others up. Stand-ins replace the network lookups.
+    result = run_in(app_copy, """
+        from streamlit.testing.v1 import AppTest
+        import prescripts.data.spotify as spotify
+        import prescripts.data.weather as weather
+        from prescripts.common import SCRIPTS_DIR
+
+        calls = []
+        weather.key_events_headline = lambda office: "大雨注意報"
+        weather.translate_to_english = lambda text: calls.append("translate") or "Heavy rain advisory"
+        is_configured = spotify.is_configured
+        spotify.is_configured = lambda: calls.append("spotify") or is_configured()
+
+        at = AppTest.from_file(str(SCRIPTS_DIR / "app.py"), default_timeout=120)
+        at.run()
+        at.switch_page("prescripts/pages/overview.py")
+        at.run()
+        assert not at.exception, at.exception
+        assert any(w.value == "Heavy rain advisory" for w in at.warning), [w.value for w in at.warning]
+        assert calls[-1] == "translate" and "spotify" in calls, calls  # the Spotify tile (drawn last) came first
+    """)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 def test_home_credits_only_the_quote_showing(app_copy):
     # The corner note names the one quote on screen (built-in or added), and
     # nothing when the prompt isn't a quote. Added quotes live outside the

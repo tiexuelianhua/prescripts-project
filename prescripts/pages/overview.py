@@ -68,6 +68,9 @@ from prescripts.spotify_widgets import (
 )
 
 run_started = time.time()
+# (placeholder, Japanese text) for translations deferred until every tile
+# has loaded -- see the Weather tile and the end of this page.
+pending_translations = []
 TEXT_COLOR, ACCENT_COLOR = theme_colors()
 PAGE_TITLE = "Overview"
 
@@ -180,11 +183,12 @@ def render_weather_tile() -> None:
     if events_failed:
         st.error("Couldn't reach JMA's warnings feed right now.")
     elif headline:
-        try:
-            translated = translate_to_english(headline)
-        except (urllib.error.URLError, TimeoutError):
-            translated = None
-        st.warning(translated or headline)
+        # Shown in the original Japanese for now; the English goes into the
+        # same spot once every tile has loaded (see the end of this page), so
+        # the translation service's lookup doesn't hold up the tiles below.
+        spot = st.empty()
+        spot.warning(headline)
+        pending_translations.append((spot, headline))
 
     st.page_link("prescripts/pages/weather.py", label="Open Weather", icon="🌤️")
 
@@ -438,6 +442,16 @@ with st.container(key="main_body"):
     for render_tile, spot, _ in sorted(placements, key=lambda placement: placement[2]):
         with spot:
             render_tile()
+
+    # Last, once every tile is showing: English for the warning(s) the
+    # Weather tile put up in Japanese. If it fails, the Japanese just stays.
+    for spot, headline in pending_translations:
+        try:
+            translated = translate_to_english(headline)
+        except (urllib.error.URLError, TimeoutError):
+            translated = None
+        if translated:
+            spot.warning(translated)
 
 if time.time() - run_started > 2.0:
     log_event(f"slow: Overview page full run took {time.time() - run_started:.2f}s")
