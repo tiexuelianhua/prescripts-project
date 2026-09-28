@@ -15,11 +15,13 @@ from datetime import datetime
 
 import streamlit as st
 
-from prescripts.data.japanese import (
-    KIND_LABELS,
-    card_by_id as japanese_card_by_id,
+from prescripts.data.japanese.answers import (
     display_readings as japanese_display_readings,
     has_distinct_reading as japanese_has_distinct_reading,
+)
+from prescripts.data.japanese.deck import (
+    KIND_LABELS,
+    card_by_id as japanese_card_by_id,
     practice_summary as japanese_practice_summary,
     random_card as japanese_random_card,
 )

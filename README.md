@@ -242,7 +242,8 @@ prescripts/
     ├── meal_receipts.py     → Meal Receipts\ (a receipts.csv per day)
     ├── weather.py           → JMA, MyMemory (translation)
     ├── spotify.py, lyrics.py → Spotify Web API, LRCLIB
-    └── japanese.py          → Japanese\cards.json, Jisho, kanjiapi.dev
+    └── japanese/            → Japanese\cards.json, Jisho, kanjiapi.dev
+                               (deck, lookups, typed answers, spelling check)
 ```
 
 Overview has no data file of its own: it reuses the others.

@@ -58,7 +58,7 @@ def seed_sample_data(copy: Path) -> None:
     assert prescripts_common.SCRIPTS_DIR == copy, "not running on the copy"
     assert not prescripts_common.PRIVATE_LOOK, "the copy should be in the public look"
 
-    from prescripts.data.japanese import add_card, load_deck, review_card, save_deck, today_jst
+    from prescripts.data.japanese.deck import add_card, load_deck, review_card, save_deck, today_jst
     from prescripts.data.meal_receipts import append_entry, day_folder_for, load_settings, save_settings
 
     random.seed(7)

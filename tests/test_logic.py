@@ -16,7 +16,14 @@ def test_flashcard_schedule(app_copy):
     # least a day past Good.
     _check(app_copy, """
         from datetime import timedelta
-        from prescripts.data.japanese import MINIMUM_EASE, add_card, load_deck, next_schedule, review_card, today_jst
+        from prescripts.data.japanese.deck import (
+            MINIMUM_EASE,
+            add_card,
+            load_deck,
+            next_schedule,
+            review_card,
+            today_jst,
+        )
 
         deck = load_deck()
         card = add_card(deck, "vocab", "勉強", "べんきょう", "study")
@@ -49,7 +56,7 @@ def test_regrade_replaces_the_last_review(app_copy):
     # A typed answer marked wrong over a typo can be regraded: the "Again"
     # is undone, not stacked under the new grade.
     _check(app_copy, """
-        from prescripts.data.japanese import add_card, load_deck, regrade, review_card, today_jst
+        from prescripts.data.japanese.deck import add_card, load_deck, regrade, review_card, today_jst
 
         deck = load_deck()
         card = add_card(deck, "kanji", "学", "", "study", onyomi="ガク", kunyomi="まな.ぶ")
@@ -67,7 +74,7 @@ def test_due_card_order(app_copy):
     # Shuffling keeps the misses at the back and is stable for one seed.
     _check(app_copy, """
         from datetime import timedelta
-        from prescripts.data.japanese import due_cards, today_jst
+        from prescripts.data.japanese.deck import due_cards, today_jst
 
         today = today_jst()
         def card(front, due, last_reviewed=None):
@@ -90,7 +97,7 @@ def test_due_card_order(app_copy):
 
 def test_romaji_and_kana(app_copy):
     _check(app_copy, """
-        from prescripts.data.japanese import normalize_kana, romaji_to_kana
+        from prescripts.data.japanese.answers import normalize_kana, romaji_to_kana
 
         cases = {
             "konnichiha": "こんにちは",   # nn before a vowel: the second n starts the next syllable
@@ -115,7 +122,7 @@ def test_romaji_and_kana(app_copy):
 
 def test_typed_answers(app_copy):
     _check(app_copy, """
-        from prescripts.data.japanese import answer_steps, check_step
+        from prescripts.data.japanese.answers import answer_steps, check_step
 
         vocab = {"kind": "vocab", "front": "勉強", "reading": "べんきょう", "meaning": "to study; diligence (work)"}
         assert answer_steps(vocab) == ["reading", "meaning"]
