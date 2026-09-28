@@ -37,7 +37,7 @@ Personal portfolio project developed with the help of PeaceWorks K.K. and ORBWEV
 
 ## What you need
 
-- **Windows 10 or 11.** This is the tested setup. (Mac/Linux: see [Not on Windows?](#not-on-windows))
+- **Windows 10 or 11.** This is the tested setup. On a Mac or Linux, skip to [Not on Windows?](#not-on-windows).
 - **Python 3.12** (not a newer version). Download the [Python 3.12.10 Windows installer](https://www.python.org/ftp/python/3.12.10/python-3.12.10-amd64.exe) and run it. The installer's defaults are fine. The python.org download page now leads with Python 3.14 and the "Python install manager". If you already have the install manager, run `py install 3.12` in PowerShell instead.
 - **Git**, from [git-scm.com](https://git-scm.com/downloads). Optional: you can download a ZIP instead (step 2).
 - **An internet connection.** Weather, lyrics and Japanese word lookups fetch live data. Nothing needs an account or API key except Spotify.
@@ -177,7 +177,7 @@ The project has automated tests. They load every page and check the rules undern
 .venv\Scripts\python -m pytest
 ```
 
-It takes about two minutes and should finish with `21 passed`. Close the app first if it's running: installing packages while it's open can fail, because Windows locks files the app is using.
+It takes about two minutes and should finish with `22 passed`. Close the app first if it's running: installing packages while it's open can fail, because Windows locks files the app is using.
 
 ### Updating the screenshots
 
@@ -201,15 +201,21 @@ It runs a throwaway copy of the app in `C:\Prescripts`, filled with made-up samp
 
 ## Not on Windows?
 
-This hasn't been tested on Mac or Linux. The browser version should work there. Use `python3` in place of `py -3.12`, and `.venv/bin/python` in place of `.venv\Scripts\python`:
+On Mac and Linux, the app runs in your web browser. The app window (`desktop_app.py`) and the desktop shortcut are Windows-only. This setup is covered by an automated test on Windows but hasn't been tried on a real Mac or Linux machine yet.
 
-```bash
-python3 -m venv .venv
-.venv/bin/python -m pip install -r requirements.txt
-.venv/bin/python -m streamlit run app.py
-```
+1. **Install Python 3.12.** Mac: the [Python 3.12.10 macOS installer](https://www.python.org/ftp/python/3.12.10/python-3.12.10-macos11.pkg). Linux: `python3.12` from your package manager. Check it with `python3.12 --version`.
+2. **Get the code**, the same as on Windows ([step 2](#install)). On a Mac, the first `git` command may offer to install Apple's developer tools; accept, or use the ZIP instead.
+3. **Install and run**, in Terminal from the `prescripts-project` folder:
 
-The app window (`desktop_app.py`) and the desktop shortcut are Windows-only.
+   ```bash
+   python3.12 -m venv .venv
+   .venv/bin/python -m pip install -r requirements.txt
+   .venv/bin/python -m streamlit run app.py
+   ```
+
+   As on Windows, press **Enter** if Streamlit asks for an email, and **Ctrl+C** to stop it.
+
+Everywhere else in this README, use `.venv/bin/python` in place of `.venv\Scripts\python`. The tests finish with `19 passed, 3 skipped`: the three skipped tests check PowerShell scripts that only exist on Windows.
 
 ## Credits
 
