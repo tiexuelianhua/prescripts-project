@@ -159,6 +159,7 @@ Prescripts\
 ├── Japanese\             ← your flashcards
 ├── Weather\              ← your chosen forecast area (default: Tokyo)
 ├── Spotify\              ← your Spotify keys + connection
+├── quotes.json           ← quotes you add on Home
 └── app_settings.json     ← app-wide preferences, e.g. zoom level
 ```
 
@@ -223,6 +224,32 @@ On Mac and Linux, the app runs in your web browser. The app window (`desktop_app
 
 Everywhere else in this README, use `.venv/bin/python` in place of `.venv\Scripts\python`. The tests usually finish with `19 passed, 3 skipped`: the three skipped tests check PowerShell scripts, and they only run if PowerShell is installed.
 
+## How it's built
+
+The app is written in Python with [Streamlit](https://streamlit.io), which turns Python scripts into web pages, so there's no separate front end to build. Each page is split in two: a page file that lays out what you see, and a data file that does the work (reading and saving files, calling web services, and the rules like flashcard scheduling or budgets).
+
+```
+desktop_app.py               starts the Streamlit server and shows it in its own window (pywebview)
+└── app.py                   shared look, top bar, and navigation between pages
+    ├── home_page.py         → home_data.py                     → quotes.json
+    ├── overview_page.py     → reuses the data files below
+    ├── mealReceiptsApp_cV.py → meal_receipts_data.py           → Meal Receipts\ (a receipts.csv per day)
+    ├── weather_page.py      → weather_data.py                  → JMA, MyMemory (translation)
+    ├── spotify_page.py      → spotify_data.py, lyrics_data.py  → Spotify Web API, LRCLIB
+    └── japanese_page.py     → japanese_data.py                 → Japanese\cards.json, Jisho, kanjiapi.dev
+```
+
+`prescripts_common.py` holds what every page shares: the page list, the Prescripts styling, and JST.
+
+Some choices behind it:
+
+- **Data files never draw anything.** That's what lets Overview show a tile from every page without loading the pages themselves.
+- **Plain CSV and JSON files, not a database.** They're easy to read, back up, and fix by hand, and one person's data doesn't need more.
+- **Japan time everywhere.** Dates are worked out in JST directly, so they stay right when the computer's clock is set to another time zone.
+- **The original scripts are still used.** On Windows, Meal Receipts makes its day folders with the PowerShell scripts the project started from (`add*_cV.ps1`). On Mac and Linux it does the same thing in Python.
+- **Tests run against a copy.** `tests/` loads every page with Streamlit's `AppTest` and checks the rules directly, always in a temporary copy of the app so real data is never touched.
+- `LauncherSrc/` is a small C# launcher the author uses in place of the desktop shortcut.
+
 ## Credits
 
 - The Prescripts come from The Index, a faction in Project Moon's games: see The Index on the [Library of Ruina wiki](https://library-of-ruina.fandom.com/wiki/The_Index) and the [Limbus Company wiki](https://limbuscompany.wiki.gg/wiki/The_Index).
@@ -230,7 +257,7 @@ Everywhere else in this README, use `.venv/bin/python` in place of `.venv\Script
 - The glitch when you arrive on Home was inspired by Limbus Company's [000] trailer ([YouTube](https://youtu.be/Y2-VkdfA2os)), without copying its style.
 - Colours, font choice and button style are taken from the fan site [prescript.neocities.org](https://prescript.neocities.org/).
 - Pixel font: [Galmuri](https://github.com/quiple/galmuri) by quiple, under the SIL Open Font License (`static/Galmuri-OFL.txt`).
-- Weather: [Japan Meteorological Agency](https://www.jma.go.jp/bosai/). Lyrics: [LRCLIB](https://lrclib.net). Word lookups: [Jisho](https://jisho.org) and [kanjiapi.dev](https://kanjiapi.dev).
+- Weather: [Japan Meteorological Agency](https://www.jma.go.jp/bosai/), with warning headlines translated by [MyMemory](https://mymemory.translated.net). Lyrics: [LRCLIB](https://lrclib.net). Word lookups: [Jisho](https://jisho.org) and [kanjiapi.dev](https://kanjiapi.dev).
 
 ## Licence
 

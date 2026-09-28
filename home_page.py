@@ -234,7 +234,8 @@ _CREDITS_HTML = f"""
     Colours and button style:
     <a href="https://prescript.neocities.org/" target="_blank">prescript.neocities.org</a>.
     Font: <a href="https://github.com/quiple/galmuri" target="_blank">Galmuri</a> by quiple (OFL-1.1).
-    Weather: <a href="https://www.jma.go.jp/bosai/" target="_blank">JMA</a>.
+    Weather: <a href="https://www.jma.go.jp/bosai/" target="_blank">JMA</a>,
+    translated by <a href="https://mymemory.translated.net" target="_blank">MyMemory</a>.
     Lyrics: <a href="https://lrclib.net" target="_blank">LRCLIB</a>.
     Word lookups: <a href="https://jisho.org" target="_blank">Jisho</a>,
     <a href="https://kanjiapi.dev" target="_blank">kanjiapi.dev</a>.
