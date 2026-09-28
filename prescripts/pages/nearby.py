@@ -139,7 +139,7 @@ def render_location(settings: dict) -> dict | None:
             "Area", placeholder="A station or area, e.g. 渋谷駅 or Takadanobaba", key="nearby_area_query"
         )
     with locate_column:
-        if st.button("📍 My location", width="stretch", help="Look around where this computer is, for this visit"):
+        if st.button("📍 My location", width="stretch", help="Look around where this computer is for this visit"):
             st.session_state["_nearby_locating"] = True
     if st.session_state.get("_nearby_locating"):
         st.caption("Finding your location…")
