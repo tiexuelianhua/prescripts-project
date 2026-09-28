@@ -386,3 +386,21 @@ def test_activities_wishes(app_copy):
         assert parse_wish("fast food")["category"] == "fast_food"  # longer phrase wins over "food"
         assert found("karaoke") == []
     """)
+
+def test_overview_columns_end_level(app_copy):
+    # Every split is tried, so the columns end as close to level as they can.
+    # Placing tiles one at a time into the shorter column once left the
+    # Japanese tile stretched with ~250px of nothing under it.
+    _check(app_copy, """
+        from prescripts.common import balanced_columns
+
+        # Meal, Weather (warning), Japanese, Activities (no area), Spotify (connected).
+        heights = [33, 57, 45, 19, 30]
+        columns = balanced_columns(heights)
+        left = sum(h for h, c in zip(heights, columns) if c == 0)
+        right = sum(heights) - left
+        assert abs(left - right) == 4, (columns, left, right)  # one at a time gave 78 vs 106
+        assert columns[0] == 0  # Meal Receipts always top left
+        assert balanced_columns([]) == [] and balanced_columns([10]) == [0]
+        assert balanced_columns([10, 10]) == [0, 1]
+    """)

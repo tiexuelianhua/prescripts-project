@@ -98,6 +98,28 @@ APP_SETTINGS_PATH = SCRIPTS_DIR.parent / "app_settings.json"
 ZOOM_LEVELS = [0.8, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75]
 
 
+def balanced_columns(heights: list[float]) -> list[int]:
+    # Which of two columns (0 or 1) each tile goes in, so the columns end as
+    # close to level as possible. Every split is tried -- a handful of tiles
+    # is only a few dozen -- rather than filling whichever column is shorter
+    # so far, which can't look ahead and once left one tile stretched with
+    # ~250px of nothing. Tiles keep their order within each column, the
+    # first always goes left, and among equally even splits the earliest
+    # found wins, so the layout is stable from one visit to the next.
+    if not heights:
+        return []
+    best = None
+    for split in range(2 ** (len(heights) - 1)):
+        columns = [0] + [(split >> index) & 1 for index in range(len(heights) - 1)]
+        totals = [0.0, 0.0]
+        for column, height in zip(columns, heights):
+            totals[column] += height
+        gap = abs(totals[0] - totals[1])
+        if best is None or gap < best[0]:
+            best = (gap, columns)
+    return best[1]
+
+
 def show_logo(width: int) -> None:
     st.image(str(LOGO_PATH), width=width)
 

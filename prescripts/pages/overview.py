@@ -16,7 +16,14 @@ from datetime import datetime
 
 import streamlit as st
 
-from prescripts.common import JST, inject_body_fade_in, render_page_title, show_logo, theme_colors
+from prescripts.common import (
+    JST,
+    balanced_columns,
+    inject_body_fade_in,
+    render_page_title,
+    show_logo,
+    theme_colors,
+)
 from prescripts.data.activities import (
     CATEGORIES as ACTIVITIES_CATEGORIES,
     DEFAULT_RADIUS as ACTIVITIES_DEFAULT_RADIUS,
@@ -303,15 +310,14 @@ def render_activities_tile() -> None:
     st.page_link("prescripts/pages/activities.py", label="Open Activities", icon="📍")
 
 
-# Two columns, each tile placed in whichever is currently shorter -- so a
-# short tile (Meal Receipts) gets the next one stacked under it instead of
-# leaving a gap beside a tall one (Weather). Streamlit can't see rendered
-# heights, so each tile has an estimate, in tens of pixels, measured in a
-# browser with sample data (2026-09-28). Tiles whose height swings with what
-# they show are estimated from that: Weather is ~250px taller with a warning,
-# and Japanese and Activities are short until they have cards / an area. So
-# on a warning day tiles can sit in different columns than on a quiet one --
-# chosen over a fixed layout, which left a big gap on one kind of day.
+# Two columns, split so they end as level as possible (balanced_columns in
+# common.py). Streamlit can't see rendered heights, so each tile has an
+# estimate, in tens of pixels, measured in a browser with sample data
+# (2026-09-28). Tiles whose height swings with what they show are estimated
+# from that: Weather is ~250px taller with a warning, Spotify taller once
+# connected, and Japanese and Activities short until they have cards / an
+# area. So tiles can sit in different columns on different days -- chosen
+# over a fixed layout, which left a big gap on one kind of day.
 # A new page's tile = one more (render function, height, live) entry, the
 # height a number or a function returning one.
 #
@@ -331,11 +337,17 @@ def _weather_height() -> int:
 
 
 def _japanese_height() -> int:
-    return 45 if sum(japanese_practice_summary()["total"].values()) else 15
+    return 45 if sum(japanese_practice_summary()["total"].values()) else 19
 
 
 def _activities_height() -> int:
-    return 28 if activities_load_settings().get("area") else 15
+    return 28 if activities_load_settings().get("area") else 19
+
+
+def _spotify_height() -> int:
+    # Connected, it's usually showing a track with its slider and buttons;
+    # asking Spotify what's playing first would slow every Overview load.
+    return 30 if spotify_is_configured() and spotify_is_connected() else 19
 
 
 TILES = [
@@ -343,8 +355,7 @@ TILES = [
     (render_weather_tile, _weather_height, False),
     (render_japanese_tile, _japanese_height, False),
     (render_activities_tile, _activities_height, False),
-    # ~19 idle, ~30 playing: in between, rather than ask Spotify first.
-    (render_spotify_tile, 25, True),
+    (render_spotify_tile, _spotify_height, True),
 ]
 
 # Each tile is outlined in the theme's accent blue (the same blue as the
@@ -417,12 +428,10 @@ st.markdown(
 
 with st.container(key="main_body"):
     columns = st.columns(2, gap=0)
-    column_heights = [0, 0]
+    heights = [height() if callable(height) else height for _render, height, _live in TILES]
     placements = []
-    for tile_number, (render_tile, height, live) in enumerate(TILES):
-        shorter = 0 if column_heights[0] <= column_heights[1] else 1
-        column_heights[shorter] += height() if callable(height) else height
-        spot = columns[shorter].container(key=f"overview_tile_{tile_number}")
+    for tile_number, ((render_tile, _height, live), column) in enumerate(zip(TILES, balanced_columns(heights))):
+        spot = columns[column].container(key=f"overview_tile_{tile_number}")
         placements.append((render_tile, spot, live))
 
     # sorted() is stable, so non-live tiles keep their order among themselves.
