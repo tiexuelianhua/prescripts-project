@@ -1,0 +1,25 @@
+# Runs the test suite on every push, on all three systems the README covers.
+# Windows is the main target; Mac and Linux check the browser-only path
+# (the three PowerShell-script tests skip there).
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements*.txt
+      - run: python -m pip install -r requirements-dev.txt
+      - run: python -m pytest
