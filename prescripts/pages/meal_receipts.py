@@ -23,6 +23,8 @@ from prescripts.data.meal_receipts import (
     counted_total,
     day_folder_for,
     get_today_folder,
+    item_choice_label,
+    item_choices,
     known_exclusion_reasons,
     known_values,
     last_entry_for_item,
@@ -37,6 +39,7 @@ from prescripts.data.meal_receipts import (
     save_entries,
     save_settings,
     signed_yen,
+    split_item_choice,
     week_bounds,
     week_total_so_far,
 )
@@ -244,13 +247,19 @@ with st.container(key="main_body"):
     )
     # Typed text in these three survives clicking/tabbing away without Enter.
     keep_typed_selectbox_text("add_entry_item", "add_entry_store", "add_entry_excluded_reason")
-    item = st.selectbox(
-        "Item", options=known_values("item", exclude=excluded_items), index=None,
+    choices = item_choices(excluded_items, excluded_stores)
+    item_choice = st.selectbox(
+        "Item", options=choices, format_func=item_choice_label, index=None,
         accept_new_options=True, placeholder="Type or pick an item",
         key="add_entry_item",
     )
-    if item and st.session_state.get("_last_autofilled_item") != item:
-        last_entry = last_entry_for_item(item)
+    # A per-store choice typed out in full ("Onigiri (Lawson)") and entered
+    # as new text still means that choice, not a new item with that name.
+    if item_choice not in choices:
+        item_choice = {item_choice_label(choice): choice for choice in choices}.get(item_choice, item_choice)
+    item, choice_store = split_item_choice(item_choice) if item_choice else (None, None)
+    if item and st.session_state.get("_last_autofilled_item") != item_choice:
+        last_entry = last_entry_for_item(item, choice_store)
         if last_entry is not None:
             st.session_state["add_entry_cost"] = int(last_entry["cost_yen"])
             # Just a suggestion -- still an ordinary editable selectbox, so
@@ -258,7 +267,7 @@ with st.container(key="main_body"):
             # if the store was left blank last time too.
             last_store = last_entry["store"]
             st.session_state["add_entry_store"] = str(last_store) if pd.notna(last_store) else None
-        st.session_state["_last_autofilled_item"] = item
+        st.session_state["_last_autofilled_item"] = item_choice
 
     col1, col2 = st.columns(2)
     store = col1.selectbox(

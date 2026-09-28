@@ -242,13 +242,54 @@ def known_values(column: str, exclude: set[str] | None = None) -> list[str]:
     return sorted(values)
 
 
-def last_entry_for_item(item: str) -> pd.Series | None:
+# An item bought at more than one store is offered once per store in the Item
+# picker ("Onigiri (Lawson)", "Onigiri (FamilyMart)"), so picking one fills in
+# that store's own last price. Each of those choices is the item and store
+# joined by this separator -- a character nobody types -- and only the item
+# part is ever saved, so no "Onigiri (Lawson)" item gets created.
+_ITEM_STORE_SEPARATOR = "\x1f"
+
+
+def item_choices(exclude_items: set[str] | None = None, exclude_stores: set[str] | None = None) -> list[str]:
+    entries = all_entries()
+    choices = []
+    for item in known_values("item", exclude=exclude_items):
+        stores = entries.loc[entries["item"] == item, "store"]
+        # A blank store counts as its own variant ("" here), shown as the
+        # plain item name next to the named ones.
+        variants = sorted({"" if pd.isna(store) else str(store) for store in stores} - (exclude_stores or set()))
+        if len(variants) > 1:
+            choices += [item + _ITEM_STORE_SEPARATOR + store for store in variants]
+        else:
+            choices.append(item)
+    return choices
+
+
+def split_item_choice(choice: str) -> tuple[str, str | None]:
+    # (item, store) for a per-store choice, where a store of "" means "bought
+    # with no store given"; (item, None) for a plain item, meaning "whichever
+    # store it was last bought at".
+    item, separator, store = choice.partition(_ITEM_STORE_SEPARATOR)
+    return (item, store) if separator else (item, None)
+
+
+def item_choice_label(choice: str) -> str:
+    item, store = split_item_choice(choice)
+    return f"{item} ({store})" if store else item
+
+
+def last_entry_for_item(item: str, store: str | None = None) -> pd.Series | None:
     # Timestamps are "YYYY-MM-DD HH:MM:SS" strings, which sort correctly as
     # plain text -- no need to parse them as datetimes to find the latest.
     # Returns the whole row (not just cost) so the caller can also suggest
-    # the store it was last bought from.
+    # the store it was last bought from. With a store (see item_choices),
+    # only purchases from that store count; "" means ones with no store.
     matches = all_entries()
     matches = matches[matches["item"] == item]
+    if store == "":
+        matches = matches[matches["store"].isna()]
+    elif store is not None:
+        matches = matches[matches["store"] == store]
     if matches.empty:
         return None
     return matches.sort_values("timestamp").iloc[-1]

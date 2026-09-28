@@ -127,6 +127,52 @@ def test_meal_receipts_works_without_powershell(app_copy):
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+def test_item_bought_at_two_stores_is_offered_per_store(app_copy):
+    # The Item picker lists "Onigiri (Lawson)" and "Onigiri (FamilyMart)",
+    # each filling in its own store's last price, and still saves the item
+    # as plain "Onigiri" -- no new item named after the store.
+    result = run_in(app_copy, """
+        from datetime import date
+        from streamlit.testing.v1 import AppTest
+        from prescripts.common import SCRIPTS_DIR
+        from prescripts.data.meal_receipts import (
+            append_entry, day_folder_for, get_today_folder, item_choice_label, item_choices, load_entries,
+        )
+
+        folder = day_folder_for(date(2026, 8, 1))
+        folder.mkdir(parents=True)
+        append_entry(folder / "receipts.csv", "2026-08-01 08:00:00", "Lawson", "Onigiri", 150)
+        append_entry(folder / "receipts.csv", "2026-08-01 12:00:00", "FamilyMart", "Onigiri", 160)
+        append_entry(folder / "receipts.csv", "2026-08-01 13:00:00", "Lawson", "Tea", 100)
+
+        choices = item_choices()
+        labels = [item_choice_label(choice) for choice in choices]
+        assert labels == ["Onigiri (FamilyMart)", "Onigiri (Lawson)", "Tea"], labels
+        # A hidden store's variant goes, leaving the plain item.
+        hidden = [item_choice_label(choice) for choice in item_choices(exclude_stores={"FamilyMart"})]
+        assert hidden == ["Onigiri", "Tea"], hidden
+
+        at = AppTest.from_file(str(SCRIPTS_DIR / "prescripts/pages/meal_receipts.py"), default_timeout=60)
+        at.run()
+        # Lawson's price, not the more recent FamilyMart one.
+        at.selectbox(key="add_entry_item").set_value(choices[labels.index("Onigiri (Lawson)")])
+        at.run()
+        assert at.selectbox(key="add_entry_store").value == "Lawson"
+        assert at.number_input(key="add_entry_cost").value == 150
+        # Typing a choice out in full means that choice, not a new item.
+        at.selectbox(key="add_entry_item").set_value("Onigiri (FamilyMart)")
+        at.run()
+        assert at.selectbox(key="add_entry_store").value == "FamilyMart"
+        assert at.number_input(key="add_entry_cost").value == 160
+        next(button for button in at.button if button.label == "Add entry").click()
+        at.run()
+        assert not at.exception, at.exception
+        entries = load_entries(get_today_folder() / "receipts.csv")
+        assert list(entries["item"]) == ["Onigiri"] and list(entries["store"]) == ["FamilyMart"], entries
+    """)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 def test_home_credits_only_the_quote_showing(app_copy):
     # The corner note names the one quote on screen (built-in or added), and
     # nothing when the prompt isn't a quote. Added quotes live outside the
