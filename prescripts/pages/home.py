@@ -124,6 +124,11 @@ st.markdown(
         color: {TEXT_COLOR};
         opacity: 1;
         animation: blink-caret 1s step-start infinite;
+    }}
+    /* Once the box has focus (it's given it on arrival, below), the real
+       text cursor takes over from the fake one. */
+    .st-key-home_query input:focus::placeholder {{
+        color: transparent;
     }} {_HIDE_UNTIL_TYPED}
     </style>
     """,
@@ -281,3 +286,13 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
+# On arrival, the search box is ready to type into without clicking it
+# first. Sent last, so it runs once the typing is done and the box is fading
+# in. Only on arrival: a rerun while staying here (a sidebar button, say)
+# shouldn't pull the cursor away from wherever it was.
+if just_arrived:
+    st.html(
+        "<script>document.querySelector('.st-key-home_query input')?.focus();</script>",
+        unsafe_allow_javascript=True,
+    )
