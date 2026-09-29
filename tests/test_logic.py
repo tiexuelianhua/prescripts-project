@@ -1,7 +1,8 @@
 # The rules underneath the pages, tested directly rather than through the UI:
 # flashcard scheduling, typed answers and the typo check, what counts toward
 # a meal total, weather parsing, lyrics timing, the play history that fills
-# Spotify's gaps, and which places the Activities page shows. Same setup
+# Spotify's gaps and the guards on its controls, and which places the
+# Activities page shows. Same setup
 # as test_app.py -- each test runs in a temp copy of the code (conftest.py).
 from conftest import run_in
 
@@ -417,6 +418,73 @@ def test_play_history_fills_spotify_gaps(app_copy):
         merged = merge_with_api([api_item("spotify:track:A", start + 9), api_item("spotify:track:X", start - 60)])
         assert [m["track"]["uri"] for m in merged] == ["spotify:track:B", "spotify:track:A", "spotify:track:X"], merged
         assert merged[1]["played_at"] == _iso(start + 9)  # Spotify's copy, not ours
+    """)
+
+
+def test_spotify_control_guards(app_copy):
+    # The seek slider's value can come back from the browser seconds stale.
+    # A stale echo (a second the slider was recently placed at) and anything
+    # reported right after the page woke from a gap (a backgrounded tab) must
+    # not become a real seek -- that skipped songs live, 2026-09-21. A fresh
+    # position is a real seek. After a gap every control locks for a while.
+    _check(app_copy, """
+        import datetime
+        import prescripts.spotify_widgets as widgets
+
+        class FakeStreamlit:
+            session_state = {}
+            def toast(self, *args, **kwargs):
+                pass
+        class Clock:
+            now = 1_790_000_000.0
+            def time(self):
+                return self.now
+        widgets.st, widgets.time = FakeStreamlit(), Clock()
+        clock, state = widgets.time, widgets.st.session_state
+        seeks = []
+        widgets.seek = lambda position_ms: seeks.append(position_ms)
+        widgets.is_read_only = lambda: False
+        widgets.log_event = lambda text: None
+
+        def report(second):
+            state["slider"] = datetime.time(0, second // 60, second % 60)
+            widgets._on_seek("slider")
+
+        state["slider_last_render_at"] = clock.now - 1
+        state["slider_placed"] = [(30, clock.now - 2), (31, clock.now - 20)]
+        report(30)
+        assert seeks == []  # placed there 2s ago: an echo
+        report(31)
+        assert seeks == [31_000]  # placed there too long ago to be an echo
+        report(90)
+        assert seeks == [31_000, 90_000] and state["slider_seeked"] == (90_000, clock.now)
+
+        # Woken after a minute: ignored, and so is the rest of that wake-up.
+        state["slider_last_render_at"] = clock.now - 60
+        report(120)
+        state["slider_last_render_at"] = clock.now
+        clock.now += 5
+        report(150)
+        assert seeks == [31_000, 90_000]
+        clock.now += widgets._RECENT_POSITION_WINDOW_S
+        state["slider_last_render_at"] = clock.now - 1
+        report(150)
+        assert seeks[-1] == 150_000  # the guard has run out
+
+        # Every control: unlocked while ticking, locked for a while after a gap.
+        assert widgets.page_is_locked("tile") is False
+        clock.now += 1
+        assert widgets.page_is_locked("tile") is False
+        clock.now += 30
+        assert widgets.page_is_locked("tile") is True
+        ticks = []
+        for _ in range(widgets._RECENT_POSITION_WINDOW_S + 1):  # ticking once a second again
+            clock.now += 1
+            ticks.append(widgets.page_is_locked("tile"))
+        assert ticks[0] is True and ticks[-1] is False, ticks
+        widgets.is_read_only = lambda: True
+        assert widgets.page_is_locked("tile") is True
+        assert widgets.run_control(widgets.seek, position_ms=1) is False and seeks[-1] == 150_000
     """)
 
 

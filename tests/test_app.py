@@ -399,6 +399,33 @@ def test_month_comparisons(app_copy):
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+def test_overview_tiles_with_no_data_yet(app_copy):
+    # A fresh install: every tile says what's missing rather than failing,
+    # and a set budget with nothing logged reads as ¥0 of it.
+    result = run_in(app_copy, """
+        import json
+        from streamlit.testing.v1 import AppTest
+        from prescripts.common import SCRIPTS_DIR
+        from prescripts.data.meal_receipts import SETTINGS_PATH, get_today_folder
+
+        get_today_folder()  # makes the Meal Receipts folders, as opening the app does
+        SETTINGS_PATH.write_text(json.dumps({"budget_amount": 1500, "budget_period": "daily"}), encoding="utf-8")
+
+        at = AppTest.from_file(str(SCRIPTS_DIR / "app.py"), default_timeout=120)
+        at.run()
+        at.switch_page("prescripts/pages/overview.py")
+        at.run()
+        assert not at.exception, at.exception
+        captions = [caption.value for caption in at.caption]
+        for expected in ("No flashcards yet.", "No area saved yet -- pick one on the Activities page.",
+                         "Not connected yet -- connect your account on the Spotify page."):
+            assert expected in captions, (expected, captions)
+        [meal] = [metric for metric in at.metric if metric.label == "Today's total"]
+        assert meal.value == "¥0" and "vs ¥1,500 budget" in meal.delta, (meal.value, meal.delta)
+    """)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 def test_home_button_goes_home(app_copy):
     # Every page but Home has the Home button (Ctrl+Shift+H presses it too).
     result = run_in(app_copy, """
