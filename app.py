@@ -10,6 +10,8 @@ from prescripts.common import (
     inject_button_style,
     inject_input_style,
     inject_toast_style,
+    install_page_shortcuts,
+    render_overview_button,
     render_top_bar,
 )
 
@@ -39,7 +41,13 @@ current_page = st.navigation([home_page, *other_pages])
 st.session_state["_previous_page"] = st.session_state.get("_current_page")
 st.session_state["_current_page"] = current_page.url_path
 # Every page but Home gets the Home button and zoom controls -- Home stays
-# the plain Prescripts front door.
+# the plain Prescripts front door. Ctrl+Shift+O still works there, through an
+# Overview button kept out of sight.
 if current_page.url_path:
     render_top_bar()
+else:
+    st.markdown("<style>.st-key-home_shortcuts { display: none; }</style>", unsafe_allow_html=True)
+    with st.container(key="home_shortcuts"):
+        render_overview_button()
+        install_page_shortcuts()
 current_page.run()

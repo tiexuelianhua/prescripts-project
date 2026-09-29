@@ -419,6 +419,31 @@ def test_home_button_goes_home(app_copy):
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+def test_overview_button_goes_to_overview(app_copy):
+    # Every page but Overview has the Overview button (Ctrl+Shift+O presses
+    # it); on Home it's there but hidden, just for the shortcut.
+    result = run_in(app_copy, """
+        from streamlit.testing.v1 import AppTest
+        from prescripts.common import PAGES, SCRIPTS_DIR
+
+        def on_overview(at):
+            return any(header.value.startswith("🧾") for header in at.subheader)  # the Meal Receipts tile
+
+        at = AppTest.from_file(str(SCRIPTS_DIR / "app.py"), default_timeout=120)
+        for path in ["prescripts/pages/home.py", *[page["path"] for page in PAGES]]:
+            at.switch_page(path)
+            at.run()
+            if path.endswith("overview.py"):
+                assert not [b for b in at.button if b.key == "go_overview"], "Overview shouldn't have its own button"
+                continue
+            at.button(key="go_overview").click()
+            at.run()
+            assert not at.exception, (path, at.exception)
+            assert on_overview(at), path + " didn't go to Overview"
+    """)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 def test_home_commands(app_copy):
     result = run_in(app_copy, """
         from prescripts.data.home import route_command

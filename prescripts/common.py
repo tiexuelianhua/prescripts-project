@@ -200,30 +200,44 @@ def render_top_bar() -> None:
     with st.container(key="top_bar", horizontal=True):
         if st.button("🏠", key="go_home", help="Home (Ctrl+Shift+H)"):
             st.switch_page("prescripts/pages/home.py")
+        if st.session_state.get("_current_page") != "overview":
+            render_overview_button()
         st.button("−", key="zoom_out", help="Zoom out", on_click=_step_zoom, args=(-1,), disabled=zoom <= ZOOM_LEVELS[0])
         st.button(f"{zoom:.0%}", key="zoom_reset", help="Reset zoom to 100%", on_click=_step_zoom, args=(0,))
         st.button("+", key="zoom_in", help="Zoom in", on_click=_step_zoom, args=(1,), disabled=zoom >= ZOOM_LEVELS[-1])
-        # Ctrl+Shift+H presses the Home button -- a Ctrl combo that neither
-        # Chrome, Edge nor Windows already uses. Installed once per browser
-        # tab (the flag), so reruns and page switches don't stack up
-        # listeners. On Home itself there's no button, so it does nothing
-        # there. Inside the pinned bar, since anywhere in the page's own flow
-        # it adds an empty row above the title.
-        st.html(
-            """<script>
-            if (!window._homeShortcutInstalled) {
-                window._homeShortcutInstalled = true;
-                document.addEventListener("keydown", event => {
-                    if (!event.ctrlKey || !event.shiftKey || event.altKey || event.key.toLowerCase() !== "h") return;
-                    const button = document.querySelector(".st-key-go_home button");
-                    if (!button) return;
-                    event.preventDefault();
-                    button.click();
-                }, true);
-            }
-            </script>""",
-            unsafe_allow_javascript=True,
-        )
+        # Inside the pinned bar, since anywhere in the page's own flow it
+        # adds an empty row above the title.
+        install_page_shortcuts()
+
+
+def render_overview_button() -> None:
+    if st.button("🎛️", key="go_overview", help="Overview (Ctrl+Shift+O)"):
+        st.switch_page("prescripts/pages/overview.py")
+
+
+def install_page_shortcuts() -> None:
+    # Ctrl+Shift+H presses the Home button and Ctrl+Shift+O the Overview one
+    # -- Ctrl combos Windows doesn't use, and that a page may take over from
+    # Chrome and Edge. A key does nothing on a page without its button (Home
+    # on Home, Overview on Overview). Installed once per browser tab (the
+    # flag), so reruns and page switches don't stack up listeners.
+    st.html(
+        """<script>
+        if (!window._pageShortcutsInstalled) {
+            window._pageShortcutsInstalled = true;
+            const buttons = {h: ".st-key-go_home button", o: ".st-key-go_overview button"};
+            document.addEventListener("keydown", event => {
+                if (!event.ctrlKey || !event.shiftKey || event.altKey) return;
+                const selector = buttons[event.key.toLowerCase()];
+                const button = selector && document.querySelector(selector);
+                if (!button) return;
+                event.preventDefault();
+                button.click();
+            }, true);
+        }
+        </script>""",
+        unsafe_allow_javascript=True,
+    )
 
 
 def theme_colors() -> tuple[str, str]:
