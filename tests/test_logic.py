@@ -519,6 +519,52 @@ def test_activities_close_matches(app_copy):
     """)
 
 
+def test_activities_saved_answers(app_copy):
+    # Overpass answers are kept on disk: used as is for a day, after that
+    # only when Overpass can't be reached, and deleted after a month.
+    _check(app_copy, """
+        import json
+        import os
+        import time
+        import urllib.error
+        import prescripts.data.activities as activities
+
+        calls = []
+        def fetch(query):
+            calls.append(query)
+            if fetch.down:
+                raise urllib.error.URLError("Overpass is down")
+            return [{"id": len(calls)}]
+        fetch.down = False
+        activities._overpass_fetch = fetch
+
+        assert activities._overpass("q") == [{"id": 1}]
+        assert activities._overpass("q") == [{"id": 1}] and len(calls) == 1  # a restart wouldn't refetch
+
+        [path] = activities.CACHE_DIR.glob("*.json")
+        saved = json.loads(path.read_text(encoding="utf-8"))
+        saved["saved_at"] -= 2 * 24 * 3600
+        path.write_text(json.dumps(saved), encoding="utf-8")
+        fetch.down = True
+        assert activities._overpass("q") == [{"id": 1}] and len(calls) == 2  # old, but better than nothing
+        fetch.down = False
+        assert activities._overpass("q") == [{"id": 3}]  # old and reachable: fetched again
+
+        fetch.down = True
+        try:
+            activities._overpass("never asked before")
+            raise AssertionError("should have failed: nothing saved to fall back on")
+        except urllib.error.URLError:
+            pass
+
+        month_ago = time.time() - 31 * 24 * 3600
+        os.utime(path, (month_ago, month_ago))
+        fetch.down = False
+        activities._overpass("another")
+        assert not path.exists()
+    """)
+
+
 def test_overview_columns_end_level(app_copy):
     # Every split is tried, so the columns end as close to level as they can.
     # Placing tiles one at a time into the shorter column once left the

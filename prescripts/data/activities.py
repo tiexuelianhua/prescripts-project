@@ -9,6 +9,7 @@
 # User-Agent naming the app, light use, and (Nominatim) at most one request a
 # second -- lookups here only happen on an explicit search, and are cached.
 import difflib
+import hashlib
 import json
 import math
 import re
@@ -24,6 +25,9 @@ from prescripts.common import SCRIPTS_DIR
 
 ACTIVITIES_DIR = SCRIPTS_DIR.parent / "Activities"
 SETTINGS_PATH = ACTIVITIES_DIR / "settings.json"
+CACHE_DIR = ACTIVITIES_DIR / "cache"
+_CACHE_FRESH_S = 24 * 3600
+_CACHE_KEEP_S = 30 * 24 * 3600
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 OVERPASS_URL = "https://overpass-api.de/api/interpreter"
 _HEADERS = {"User-Agent": "The Prescripts (personal dashboard app)"}
@@ -122,6 +126,32 @@ def fetch_places(kind: str, lat: float, lon: float, radius: int) -> list[dict]:
 
 
 def _overpass(query: str) -> list[dict]:
+    # Answers are also saved to disk, so a restart doesn't mean waiting on
+    # Overpass again. A saved answer under a day old is used as is; an older
+    # one only when Overpass can't be reached, since slightly old places beat
+    # none. Answers saved over a month ago are deleted.
+    path = CACHE_DIR / (hashlib.sha1(query.encode()).hexdigest() + ".json")
+    try:
+        saved = json.loads(path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, ValueError):
+        saved = None
+    if saved and time.time() - saved["saved_at"] < _CACHE_FRESH_S:
+        return saved["elements"]
+    try:
+        elements = _overpass_fetch(query)
+    except (urllib.error.URLError, TimeoutError, ValueError, KeyError):
+        if saved:
+            return saved["elements"]
+        raise
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"saved_at": time.time(), "elements": elements}, ensure_ascii=False), encoding="utf-8")
+    for old in CACHE_DIR.glob("*.json"):
+        if time.time() - old.stat().st_mtime > _CACHE_KEEP_S:
+            old.unlink(missing_ok=True)
+    return elements
+
+
+def _overpass_fetch(query: str) -> list[dict]:
     body = urllib.parse.urlencode({"data": query}).encode()
     try:
         return _get_json(OVERPASS_URL, data=body, timeout=40)["elements"]
