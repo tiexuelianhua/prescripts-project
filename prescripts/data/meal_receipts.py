@@ -382,6 +382,39 @@ def budget_settings(settings: dict) -> tuple[int, str]:
     return amount, period
 
 
+def carried_over(settings: dict, today: date) -> int:
+    # With carry-over on (daily budgets only), every day from when it was
+    # switched on (or last started fresh) up to yesterday adds what it was
+    # under budget, or takes away what it was over. Nothing resets it on its
+    # own. A day with nothing logged counts as ¥0 spent. Uses today's budget
+    # amount for every day, so changing the amount changes the past too.
+    amount, period = budget_settings(settings)
+    since = settings.get("carry_over_since")
+    if not settings.get("carry_over") or period != "daily" or amount <= 0 or not since:
+        return 0
+    balance = 0
+    day = date.fromisoformat(since)
+    while day < today:
+        balance += amount - counted_total(load_entries(day_folder_for(day) / "receipts.csv"))
+        day += timedelta(days=1)
+    return balance
+
+
+# Bags and tax are logged as rows of their own beside the item (see the add
+# form), so a receipt's lines still add up to what was paid.
+BAG_ITEM = "Bag (袋)"
+TAX_ITEM = "Tax"
+DEFAULT_BAG_YEN = 3
+
+
+def bag_price(store: str | None) -> int:
+    # What a bag last cost at this store, else anywhere, else ¥3.
+    last = last_entry_for_item(BAG_ITEM, store) if store else None
+    if last is None:
+        last = last_entry_for_item(BAG_ITEM)
+    return int(last["cost_yen"]) if last is not None else DEFAULT_BAG_YEN
+
+
 def week_bounds(reference_date: date) -> tuple[date, date]:
     # Monday-start (ISO convention) week containing reference_date.
     week_start = reference_date - timedelta(days=reference_date.weekday())
@@ -413,6 +446,8 @@ def today_summary() -> dict:
         "budget_amount": budget_amount,
         "budget_period": budget_period,
         "has_entries": not entries.empty,
+        # Today's daily budget including anything carried over.
+        "today_budget_yen": budget_amount + carried_over(settings, datetime.now(JST).date()),
     }
     if budget_period == "weekly" and budget_amount > 0:
         today_date = datetime.now(JST).date()

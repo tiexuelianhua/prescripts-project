@@ -130,15 +130,17 @@ def render_meal_receipts_tile() -> None:
         st.progress(min(week_total / data["budget_amount"], 1.0))
         st.caption(f"Today so far: ¥{data['total_yen']:,.0f}")
     elif data["budget_amount"] > 0:
-        diff = data["total_yen"] - data["budget_amount"]
+        # Includes anything carried over from earlier days.
+        budget = data["today_budget_yen"]
+        diff = data["total_yen"] - budget
         diff_str = f"-¥{abs(diff):,.0f}" if diff < 0 else f"¥{diff:,.0f}"
         st.metric(
             "Today's total",
             f"¥{data['total_yen']:,.0f}",
-            delta=f"{diff_str} vs ¥{data['budget_amount']:,.0f} budget",
+            delta=f"{diff_str} vs ¥{budget:,.0f} budget",
             delta_color="inverse",
         )
-        st.progress(min(data["total_yen"] / data["budget_amount"], 1.0))
+        st.progress(min(data["total_yen"] / budget, 1.0) if budget > 0 else 1.0)
     else:
         st.metric("Today's total", f"¥{data['total_yen']:,.0f}")
     st.page_link("prescripts/pages/meal_receipts.py", label="Open Meal Receipts", icon="🧾")

@@ -186,6 +186,13 @@ _KONBINI_CHAINS = re.compile(
     r"|デイリーヤマザキ|daily yamazaki|newdays|セイコーマート|seicomart|ポプラ|poplar",
     re.IGNORECASE,
 )
+
+
+def is_konbini(name: str | None) -> bool:
+    # Also used by Meal Receipts, to tick "+ 袋" for a konbini store.
+    return bool(name) and _KONBINI_CHAINS.search(name) is not None
+
+
 # Two entries with the same name this close are one place mapped twice
 # (e.g. as a point and as its building's outline).
 _SAME_PLACE_M = 30

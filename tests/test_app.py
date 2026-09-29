@@ -96,6 +96,44 @@ def test_store_can_be_left_blank(app_copy):
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+def test_konbini_bag_and_tax_get_rows_of_their_own(app_copy):
+    # At a konbini the bag box ticks itself, at the bag's last price there;
+    # the bag and the receipt's tax line are logged beside the item.
+    result = run_in(app_copy, """
+        from datetime import date
+        from streamlit.testing.v1 import AppTest
+        from prescripts.data.meal_receipts import BAG_ITEM, TAX_ITEM, append_entry, day_folder_for, get_today_folder, load_entries
+        from prescripts.common import SCRIPTS_DIR
+
+        folder = day_folder_for(date(2026, 8, 1))
+        folder.mkdir(parents=True)
+        append_entry(folder / "receipts.csv", "2026-08-01 12:00:00", "Lawson", "Onigiri", 150)
+        append_entry(folder / "receipts.csv", "2026-08-01 12:00:00", "Lawson", BAG_ITEM, 5)
+        append_entry(folder / "receipts.csv", "2026-08-01 18:00:00", "Olympic", "Bread", 200)
+
+        at = AppTest.from_file(str(SCRIPTS_DIR / "prescripts/pages/meal_receipts.py"), default_timeout=60)
+        at.run()
+        at.selectbox(key="add_entry_item").set_value("Bread")
+        at.run()
+        assert at.checkbox(key="add_entry_bag").value is False  # Olympic isn't a konbini
+        at.selectbox(key="add_entry_item").set_value("Onigiri")
+        at.run()
+        bag = at.checkbox(key="add_entry_bag")
+        assert bag.value is True and "¥5" in bag.label, (bag.value, bag.label)
+        at.number_input(key="add_entry_tax").set_value(12)
+        next(button for button in at.button if button.label == "Add entry").click()
+        at.run()
+        assert not at.exception and not at.warning, (at.exception, at.warning)
+        entries = load_entries(get_today_folder() / "receipts.csv")
+        assert list(zip(entries["item"], entries["cost_yen"], entries["store"])) == [
+            ("Onigiri", 150, "Lawson"), (BAG_ITEM, 5, "Lawson"), (TAX_ITEM, 12, "Lawson"),
+        ], entries
+        # The form clears, bag box included.
+        assert at.checkbox(key="add_entry_bag").value is False and at.number_input(key="add_entry_tax").value == 0
+    """)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 def test_meal_receipts_works_without_powershell(app_copy):
     # Mac/Linux have no PowerShell, so today's folder is made in Python
     # there. It must be the same folder the .ps1 scripts give, and the page
@@ -164,6 +202,8 @@ def test_item_bought_at_two_stores_is_offered_per_store(app_copy):
         at.run()
         assert at.selectbox(key="add_entry_store").value == "FamilyMart"
         assert at.number_input(key="add_entry_cost").value == 160
+        at.checkbox(key="add_entry_bag").uncheck()  # ticked for a konbini, but no bag this time
+        at.run()
         next(button for button in at.button if button.label == "Add entry").click()
         at.run()
         assert not at.exception, at.exception

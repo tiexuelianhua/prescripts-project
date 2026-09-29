@@ -340,6 +340,33 @@ def test_budget_settings(app_copy):
     """)
 
 
+def test_budget_carry_over(app_copy):
+    # Leftovers and overspends add up from the day carry-over was switched
+    # on (a day with nothing logged is ¥0 spent), and only for daily budgets.
+    _check(app_copy, """
+        from datetime import date
+        from prescripts.data.meal_receipts import append_entry, carried_over, day_folder_for
+
+        def log(day, yen, **kw):
+            folder = day_folder_for(day)
+            folder.mkdir(parents=True, exist_ok=True)
+            append_entry(folder / "receipts.csv", f"{day} 12:00:00", "Lawson", "Onigiri", yen, **kw)
+        log(date(2026, 9, 1), 5000)  # before carry-over was on: doesn't count
+        log(date(2026, 9, 10), 800)   # 200 under
+        log(date(2026, 9, 11), 1500)  # 500 over
+        log(date(2026, 9, 11), 9000, excluded=True)
+        log(date(2026, 9, 13), 99999)  # today's own spending isn't carried yet
+
+        settings = {"budget_amount": 1000, "budget_period": "daily", "carry_over": True,
+                    "carry_over_since": "2026-09-10"}
+        today = date(2026, 9, 13)
+        assert carried_over(settings, today) == 200 - 500 + 1000  # the 12th: nothing logged
+        assert carried_over(dict(settings, carry_over=False), today) == 0
+        assert carried_over(dict(settings, budget_period="weekly"), today) == 0
+        assert carried_over(dict(settings, carry_over_since="2026-09-13"), today) == 0  # just started fresh
+    """)
+
+
 def test_synced_lyrics(app_copy):
     _check(app_copy, """
         from prescripts.data.lyrics import current_line_index, parse_synced

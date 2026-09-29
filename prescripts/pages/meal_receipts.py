@@ -17,9 +17,14 @@ from prescripts.common import (
     theme_colors,
     typewriter,
 )
+from prescripts.data.activities import is_konbini
 from prescripts.data.meal_receipts import (
+    BAG_ITEM,
+    TAX_ITEM,
     append_entry,
+    bag_price,
     budget_settings,
+    carried_over,
     counted_total,
     day_folder_for,
     get_today_folder,
@@ -92,6 +97,27 @@ with st.sidebar:
         # now that the new keys have taken over, rather than left stale.
         settings.pop("daily_budget", None)
         save_settings(settings)
+
+    today_jst = datetime.now(JST).date()
+    carry = 0
+    if budget_period == "daily" and budget_amount > 0:
+        carry_on = st.toggle(
+            "Carry leftover budget over", value=settings.get("carry_over", False),
+            help="What's left of each day's budget adds to the next day's, and going over takes it away. "
+            "Keeps adding up until you start fresh. A day with nothing logged counts as ¥0 spent.",
+        )
+        if carry_on != settings.get("carry_over", False):
+            settings["carry_over"] = carry_on
+            if carry_on:
+                settings["carry_over_since"] = today_jst.isoformat()
+            save_settings(settings)
+        if carry_on:
+            carry = carried_over(settings, today_jst)
+            st.caption(f"Carried over: {signed_yen(carry)} since {settings['carry_over_since']}")
+            if st.button("Start fresh from today", disabled=settings["carry_over_since"] == today_jst.isoformat()):
+                settings["carry_over_since"] = today_jst.isoformat()
+                save_settings(settings)
+                st.rerun()
 
     with st.expander("Manage suggestions"):
         # Hides a store/item name from the dropdown suggestions below without
@@ -226,6 +252,9 @@ with st.container(key="main_body"):
         st.session_state["add_entry_cost"] = 0
         st.session_state["add_entry_excluded"] = False
         st.session_state["add_entry_excluded_reason"] = None
+        st.session_state["add_entry_tax"] = 0
+        st.session_state["add_entry_bag"] = False
+        st.session_state["_bag_ticked_for_store"] = None
         st.session_state["_reset_add_entry_form"] = False
 
     # Not an st.form: Item needs to live-react to selection (to suggest a
@@ -278,6 +307,22 @@ with st.container(key="main_body"):
         key="add_entry_store",
     )
     cost_yen = col2.number_input("Cost (¥)", min_value=0, step=1, key="add_entry_cost")
+    # A bag and the receipt's tax line each go in as a row of their own. The
+    # bag box ticks itself whenever the store changes to a konbini (bags are
+    # usual there) and can still be unticked.
+    if store != st.session_state.get("_bag_ticked_for_store"):
+        st.session_state["add_entry_bag"] = is_konbini(store)
+        st.session_state["_bag_ticked_for_store"] = store
+    bag_yen = bag_price(store)
+    bag_column, tax_column = st.columns(2, vertical_alignment="bottom")
+    tax_yen = tax_column.number_input(
+        "Tax (¥)", min_value=0, step=1, key="add_entry_tax",
+        help="Optional -- the tax line from the receipt, when prices were before tax. Logged as its own row.",
+    )
+    with_bag = bag_column.checkbox(
+        f"+ 袋 bag (¥{bag_yen})", key="add_entry_bag",
+        help="Logs the bag as its own row, at what one last cost at this store. Change the price in Entries if it differs.",
+    )
     excluded = st.checkbox(
         "Don't count toward totals",
         help="Still logged, but left out of the day/week/month totals and budget -- "
@@ -313,10 +358,18 @@ with st.container(key="main_body"):
                 target_folder.mkdir(parents=True, exist_ok=True)
             target_csv = target_folder / "receipts.csv"
             timestamp = datetime.combine(entry_date, datetime.now(JST).time())
-            append_entry(
-                target_csv, timestamp.strftime("%Y-%m-%d %H:%M:%S"), store, item, cost_yen,
-                excluded, excluded_reason,
-            )
+            # The bag and tax share the item's time, store and exclusion: they
+            # were paid for together.
+            rows = [(item, cost_yen)]
+            if with_bag:
+                rows.append((BAG_ITEM, bag_yen))
+            if tax_yen:
+                rows.append((TAX_ITEM, tax_yen))
+            for row_item, row_yen in rows:
+                append_entry(
+                    target_csv, timestamp.strftime("%Y-%m-%d %H:%M:%S"), store, row_item, row_yen,
+                    excluded, excluded_reason,
+                )
             # No st.form here, so nothing clears itself automatically -- but
             # the actual field reset can't happen right here (Streamlit
             # forbids changing a widget's session_state after that widget's
@@ -334,7 +387,10 @@ with st.container(key="main_body"):
             if excluded:
                 excluded_note = f" (not counted: {excluded_reason})" if excluded_reason else " (not counted toward totals)"
             st.session_state["_add_entry_confirmation"] = (
-                f"[Logged {item}{f' at {store}' if store else ''} for ¥{cost_yen:,.0f}{excluded_note}]"
+                f"[Logged {item}{f' at {store}' if store else ''} for ¥{cost_yen:,.0f}"
+                + (f" + bag ¥{bag_yen:,.0f}" if with_bag else "")
+                + (f" + tax ¥{tax_yen:,.0f}" if tax_yen else "")
+                + f"{excluded_note}]"
             )
             st.rerun()
     else:
@@ -451,19 +507,23 @@ with st.container(key="main_body"):
             # to a weekly allowance would be misleading (see the separate
             # "This week's total" metric below for that case instead).
             if budget_period == "daily" and budget_amount > 0:
-                diff = day_total - budget_amount
+                # Carry-over only moves today's budget; a past day is judged
+                # against the plain amount.
+                day_budget = budget_amount + carry if is_today else budget_amount
+                diff = day_total - day_budget
                 # st.metric only reads a leading "-" to decide the arrow/color
                 # for a string delta, so the sign has to be the very first
                 # character -- "¥-500" (sign after the yen mark) gets
                 # misread as positive.
                 diff_str = f"-¥{abs(diff):,.0f}" if diff < 0 else f"¥{diff:,.0f}"
+                carry_note = f" ({signed_yen(carry)} carried over)" if is_today and carry else ""
                 st.metric(
                     total_label,
                     f"¥{day_total:,.0f}",
-                    delta=f"{diff_str} vs ¥{budget_amount:,.0f} budget",
+                    delta=f"{diff_str} vs ¥{day_budget:,.0f} budget{carry_note}",
                     delta_color="inverse",
                 )
-                st.progress(min(day_total / budget_amount, 1.0))
+                st.progress(min(day_total / day_budget, 1.0) if day_budget > 0 else 1.0)
             else:
                 st.metric(total_label, f"¥{day_total:,.0f}")
 
