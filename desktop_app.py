@@ -207,7 +207,9 @@ def main() -> None:
         # The Startup-folder shortcut passes --minimized (through
         # ThePrescriptsLauncher.exe), so at sign-in the window waits in the
         # taskbar instead of popping up over everything else starting.
-        # Launched by hand, it opens as normal.
+        # Launched by hand, it opens as normal. Not focus=False as well: on
+        # Windows that makes the window one that can never be activated, so
+        # no key presses reached it all session (Ctrl+Q, Ctrl+Shift+H).
         minimized = "--minimized" in sys.argv[1:]
         window = webview.create_window(
             "The Prescripts",
@@ -217,7 +219,6 @@ def main() -> None:
             min_size=(800, 600),
             js_api=api,
             minimized=minimized,
-            focus=not minimized,
         )
         api._window = window
         # Blocks until the window is closed -- that's the signal to tear the
