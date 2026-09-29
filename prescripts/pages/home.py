@@ -10,7 +10,16 @@ import time
 
 import streamlit as st
 
-from prescripts.common import PAGES, PRIVATE_LOOK, SCRIPTS_DIR, show_logo, theme_colors, typewriter
+from prescripts.common import (
+    GLITCH_SECONDS,
+    PAGES,
+    PRIVATE_LOOK,
+    SCRIPTS_DIR,
+    TYPE_AFTER_GLITCH_SECONDS,
+    show_logo,
+    theme_colors,
+    typewriter,
+)
 from prescripts.data.home import add_quote, load_quotes, quote_credit, remove_quote, route_command
 
 # Rotates like a search-portal prompt (Gemini-style) rather than always
@@ -190,8 +199,6 @@ if query.strip():
         for column, (label, url) in zip(st.columns(len(route["links"])), route["links"]):
             column.link_button(label, url, width="stretch")
 
-# Seconds the glitch runs for; the typing starts as its static clears.
-GLITCH_SECONDS = 1.0
 if just_arrived:
     # Played from the prompt's own spot, which the typing then writes over --
     # an element of its own would add an empty row to the page. The glitch
@@ -203,7 +210,7 @@ if just_arrived:
         + f"\nplayHomeGlitch({glitch_options});</script>",
         unsafe_allow_javascript=True,
     )
-    time.sleep(GLITCH_SECONDS * 0.85)
+    time.sleep(TYPE_AFTER_GLITCH_SECONDS)  # the typing starts as the static clears
     typewriter(
         st.session_state["_home_prompt"],
         markdown_wrap=":primary[{}]",

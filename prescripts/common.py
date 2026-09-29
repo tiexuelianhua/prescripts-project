@@ -210,9 +210,22 @@ def render_top_bar() -> None:
         install_page_shortcuts()
 
 
+# Seconds Home's arrival glitch (static/home_glitch.js) runs for, and how far
+# into it a page's title starts typing: as the static clears.
+GLITCH_SECONDS = 1.0
+TYPE_AFTER_GLITCH_SECONDS = GLITCH_SECONDS * 0.85
+
+
 def render_overview_button() -> None:
     if st.button("🎛️", key="go_overview", help="Overview (Ctrl+Shift+O)"):
+        # The glitch started in the browser with this click; Overview times
+        # its title and logo from it.
+        st.session_state["_overview_glitch_at"] = time.time()
         st.switch_page("prescripts/pages/overview.py")
+
+
+def wait_for_glitch(started_at: float) -> None:
+    time.sleep(max(0.0, started_at + TYPE_AFTER_GLITCH_SECONDS - time.time()))
 
 
 def install_page_shortcuts() -> None:
@@ -226,7 +239,7 @@ def install_page_shortcuts() -> None:
     # (static/home_glitch.js) over the switch. Its canvas sits on the page
     # itself, outside Streamlit's elements, so it carries on while the next
     # page draws. Going Home needs nothing here: arriving there plays it.
-    glitch_options = json.dumps({"accent": theme_colors()[1]})
+    glitch_options = json.dumps({"accent": theme_colors()[1], "seconds": GLITCH_SECONDS})
     st.html(
         "<script>"
         + (SCRIPTS_DIR / "static" / "home_glitch.js").read_text(encoding="utf-8")
@@ -393,7 +406,9 @@ def keep_typed_selectbox_text(*keys: str) -> None:
     )
 
 
-def inject_body_fade_in(container_key: str) -> None:
+def inject_body_fade_in(container_key: str, extra_css: str = "") -> None:
+    # extra_css: any other rules the page needs, sent in the same element --
+    # a style element of their own would add an empty row above the page.
     # Fades in every element inside st.container(key=container_key) --
     # scoped there (not the whole page) so a page's title isn't
     # double-animated by this rule too. Always immediate: render_page_title()
@@ -411,6 +426,7 @@ def inject_body_fade_in(container_key: str) -> None:
         .st-key-{container_key} [data-testid="stElementContainer"] {{
             animation: fadeIn 0.4s ease-out;
         }}
+        {extra_css}
         </style>
         """,
         unsafe_allow_html=True,

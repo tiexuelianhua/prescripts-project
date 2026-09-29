@@ -23,6 +23,8 @@ from prescripts.common import (
     render_page_title,
     show_logo,
     theme_colors,
+    typewriter,
+    wait_for_glitch,
 )
 from prescripts.data.activities import (
     CATEGORIES as ACTIVITIES_CATEGORIES,
@@ -76,13 +78,28 @@ TEXT_COLOR, ACCENT_COLOR = theme_colors()
 PAGE_TITLE = "Overview"
 
 is_first_load = "_overview_title_played" not in st.session_state
-inject_body_fade_in("main_body")
+# Arrived by the Overview shortcut, which plays Home's glitch: like Home, the
+# title types in as the static clears (every time, not just the first), and
+# the logo stays hidden until then, fading in once the title's typed.
+glitch_at = st.session_state.pop("_overview_glitch_at", None)
+inject_body_fade_in("main_body", ".st-key-overview_logo { opacity: 0; }" if glitch_at else "")
 
 header_logo, header_title, header_clock = st.columns([1, 3, 1.2], vertical_alignment="center")
-with header_logo:
+with header_logo, st.container(key="overview_logo"):
     show_logo(width=120)
 with header_title:
-    render_page_title(PAGE_TITLE, is_first_load)
+    if glitch_at:
+        wait_for_glitch(glitch_at)
+        title = st.empty()
+        typewriter(PAGE_TITLE, markdown_wrap="# {}", placeholder=title)
+        # In the title's own element, so the fade adds no empty row.
+        title.markdown(
+            f"# {PAGE_TITLE}\n\n<style>@keyframes overview-logo-in {{ from {{ opacity: 0; }} to {{ opacity: 1; }} }} "
+            ".st-key-overview_logo { animation: overview-logo-in 0.6s ease-out forwards; }</style>",
+            unsafe_allow_html=True,
+        )
+    else:
+        render_page_title(PAGE_TITLE, is_first_load)
 
 if is_first_load:
     st.session_state["_overview_title_played"] = True
