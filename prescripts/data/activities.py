@@ -247,6 +247,29 @@ def parse_places(kind: str, elements: list[dict], lat: float, lon: float) -> lis
     return kept
 
 
+# Places hidden with a row's ✕ -- joke or wrong entries (OSM is edited by
+# anyone). Kept in settings as {"id", "name"}, the name only so the list of
+# hidden places can say what each one was.
+def hidden_places(settings: dict) -> list[dict]:
+    return settings.get("hidden", [])
+
+
+def without_hidden(places: list[dict], settings: dict) -> list[dict]:
+    hidden = {entry["id"] for entry in hidden_places(settings)}
+    return [place for place in places if place["id"] not in hidden]
+
+
+def hide_place(settings: dict, place: dict) -> None:
+    if all(entry["id"] != place["id"] for entry in hidden_places(settings)):
+        settings["hidden"] = [*hidden_places(settings), {"id": place["id"], "name": place["name"]}]
+        save_settings(settings)
+
+
+def unhide_place(settings: dict, place_id: str) -> None:
+    settings["hidden"] = [entry for entry in hidden_places(settings) if entry["id"] != place_id]
+    save_settings(settings)
+
+
 # "What do you feel like?": plain keyword matching, no language model.
 # Words naming a kind of place pick its category -- and, where they're more
 # specific than that, its OSM types ("karaoke" within Nightlife) or, for

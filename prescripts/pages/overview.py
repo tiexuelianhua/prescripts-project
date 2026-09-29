@@ -32,6 +32,7 @@ from prescripts.data.activities import (
     map_link as activities_map_link,
     parse_places as activities_parse_places,
     place_spot as activities_place_spot,
+    without_hidden as activities_without_hidden,
 )
 from prescripts.data.japanese.answers import (
     display_readings as japanese_display_readings,
@@ -282,7 +283,9 @@ def render_activities_tile() -> None:
         radius = settings.get("radius", ACTIVITIES_DEFAULT_RADIUS)
         try:
             elements = activities_fetch_places("food", *activities_place_spot(settings["lat"], settings["lon"]), radius)
-            places = activities_parse_places("food", elements, settings["lat"], settings["lon"])
+            places = activities_without_hidden(
+                activities_parse_places("food", elements, settings["lat"], settings["lon"]), settings
+            )
         except (urllib.error.URLError, TimeoutError, ValueError, KeyError):
             places = None
             st.caption("Couldn't reach OpenStreetMap's place search right now.")

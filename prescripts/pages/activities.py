@@ -15,6 +15,8 @@ from prescripts.data.activities import (
     fetch_named,
     fetch_places,
     find_area,
+    hidden_places,
+    hide_place,
     load_settings,
     map_embed,
     map_link,
@@ -24,6 +26,8 @@ from prescripts.data.activities import (
     place_spot,
     save_settings,
     search_link,
+    unhide_place,
+    without_hidden,
 )
 
 PAGE_TITLE = "Activities"
@@ -206,6 +210,12 @@ def _toggle_map(place_id: str) -> None:
     st.session_state["_activities_open_map"] = None if current == place_id else place_id
 
 
+def _hide(place: dict) -> None:
+    hide_place(settings, place)
+    if st.session_state.get("_activities_open_map") == place["id"]:
+        st.session_state["_activities_open_map"] = None
+
+
 def load_places(kind: str, origin: dict, radius: int) -> list[dict] | None:
     # Every named place of that kind in range, or None (with a message and
     # a Try again button) if OpenStreetMap couldn't be reached.
@@ -220,7 +230,7 @@ def load_places(kind: str, origin: dict, radius: int) -> list[dict] | None:
                  "and is sometimes busy for a moment.")
         st.button("Try again", key=f"activities_{kind}_retry")
         return None
-    return parse_places(kind, elements, origin["lat"], origin["lon"])
+    return without_hidden(parse_places(kind, elements, origin["lat"], origin["lon"]), settings)
 
 
 def render_places(kind: str, origin: dict, radius: int) -> None:
@@ -257,7 +267,7 @@ def render_wish(text: str, origin: dict, radius: int) -> None:
         try:
             with st.spinner("Looking further…"):
                 elements = fetch_named(term, *place_spot(origin["lat"], origin["lon"]), radius)
-            found = [place for place in parse_places("any", elements, origin["lat"], origin["lon"])
+            found = [place for place in without_hidden(parse_places("any", elements, origin["lat"], origin["lon"]), settings)
                      if matches_wish(place, wish)]
         except FETCH_ERRORS:
             pass  # the "nothing matching" note below still offers Google Maps
@@ -284,7 +294,7 @@ def render_list(places: list[dict], list_key: str) -> None:
             details.append(_plain(kind_of_place))
         details += [_plain(detail) for detail in (place["cuisine"], place["hours"]) if detail]
         details = [detail for detail in details if detail]
-        text_column, map_column = st.columns([6, 1], vertical_alignment="center")
+        text_column, map_column, hide_column = st.columns([11, 2, 1], vertical_alignment="center")
         text_column.markdown(
             f"{CATEGORY_ICONS[place['category']]} <b class='place-name'>{name}</b>  \n"
             f"<small>{' · '.join(details)} · "
@@ -293,8 +303,13 @@ def render_list(places: list[dict], list_key: str) -> None:
         )
         is_open = open_map == place["id"]
         map_column.button(
-            "Hide" if is_open else "Map", key=f"activities_map_{list_key}_{place['id']}", width="stretch",
+            "Close" if is_open else "Map", key=f"activities_map_{list_key}_{place['id']}", width="stretch",
             on_click=_toggle_map, args=(place["id"],),
+        )
+        hide_column.button(
+            "✕", key=f"activities_hide_{list_key}_{place['id']}", width="stretch",
+            help="Hide this place (a joke or wrong entry). Undo under Hidden places.",
+            on_click=_hide, args=(place,),
         )
         if is_open:
             st.iframe(map_embed(place), height=320)
@@ -333,6 +348,15 @@ with st.container(key="main_body"):
                 key="activities_kind",
             )
             render_places(kind, origin, radius)
+
+    if hidden_places(settings):
+        with st.expander(f"Hidden places ({len(hidden_places(settings))})"):
+            for entry in hidden_places(settings):
+                name_column, undo_column = st.columns([3, 1], vertical_alignment="center")
+                name_column.markdown(f"<span class='place-name'>{_plain(entry['name'])}</span>",
+                                     unsafe_allow_html=True)
+                undo_column.button("Show again", key=f"activities_unhide_{entry['id']}", width="stretch",
+                                   on_click=unhide_place, args=(settings, entry["id"]))
 
     st.caption(
         "Places © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors. "

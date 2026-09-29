@@ -519,6 +519,24 @@ def test_activities_close_matches(app_copy):
     """)
 
 
+def test_activities_hidden_places(app_copy):
+    # A place hidden with ✕ drops out of every list until shown again, and
+    # survives a restart (it's in the saved settings).
+    _check(app_copy, """
+        from prescripts.data.activities import hidden_places, hide_place, load_settings, unhide_place, without_hidden
+
+        troll = {"id": "node/1", "name": "Definitely a real ramen shop"}
+        real = {"id": "node/2", "name": "一蘭"}
+        settings = load_settings()
+        hide_place(settings, troll)
+        hide_place(settings, troll)  # twice is still once
+        assert hidden_places(load_settings()) == [troll]
+        assert without_hidden([troll, real], load_settings()) == [real]
+        unhide_place(settings, "node/1")
+        assert without_hidden([troll, real], load_settings()) == [troll, real]
+    """)
+
+
 def test_activities_saved_answers(app_copy):
     # Overpass answers are kept on disk: used as is for a day, after that
     # only when Overpass can't be reached, and deleted after a month.
