@@ -1,7 +1,7 @@
 # The rules underneath the pages, tested directly rather than through the UI:
-# flashcard scheduling and typed answers, what counts toward a meal total,
-# lyrics timing, the play history that fills Spotify's gaps, and which
-# places the Activities page shows. Same setup
+# flashcard scheduling, typed answers and the typo check, what counts toward
+# a meal total, weather parsing, lyrics timing, the play history that fills
+# Spotify's gaps, and which places the Activities page shows. Same setup
 # as test_app.py -- each test runs in a temp copy of the code (conftest.py).
 from conftest import run_in
 
@@ -165,6 +165,93 @@ def test_typed_answers(app_copy):
 
         no_kunyomi = dict(kanji, kunyomi="")
         assert answer_steps(no_kunyomi) == ["meaning", "onyomi"]
+    """)
+
+
+def test_typo_check_when_adding_a_card(app_copy):
+    # Jisho and kanjiapi are faked, so this runs offline and doesn't depend on
+    # what either site returns today.
+    _check(app_copy, """
+        import prescripts.data.japanese.spelling as spelling
+        from prescripts.data.japanese.spelling import check_new_card
+
+        jisho = {
+            "勉強": [{"japanese": [{"word": "勉強", "reading": "べんきょう"}]}],
+            "ありがとお": [{"japanese": [{"reading": "ありがとう"}]}, {"japanese": [{"reading": "ありがと"}]}],
+            "これ": [{"japanese": [{"word": "此れ", "reading": "これ"}]}],
+        }
+        spelling.jisho_results = lambda query: jisho.get(query, [])
+        spelling.kanji_lookup = lambda query: [{"front": "学", "meaning": "study", "on": "ガク", "kun": "まな.ぶ"}]
+
+        assert check_new_card("vocab", "勉強", "benkyou", "", "") == []
+        assert check_new_card("vocab", "勉強", "", "", "") == []  # blanks are never flagged
+        [issue] = check_new_card("vocab", "勉強", "benkyo", "", "")
+        assert (issue["field"], issue["fix"]) == ("reading", "べんきょう"), issue
+        [issue] = check_new_card("vocab", "勉教", "", "", "")
+        assert issue["field"] == "front" and issue["fix"] is None, issue
+
+        # Kana-only: the word itself is checked, and ties go to Jisho's first result.
+        assert check_new_card("vocab", "これ", "", "", "") == []
+        [issue] = check_new_card("vocab", "ありがとお", "", "", "")
+        assert issue["fix"] == "ありがとう", issue
+
+        assert check_new_card("kanji", "学", "", "gaku", "manabu") == []
+        assert check_new_card("kanji", "学", "", "", "まな") == []  # stem alone is fine
+        [issue] = check_new_card("kanji", "学", "", "gyaku", "")
+        assert (issue["field"], issue["fix"]) == ("onyomi", "ガク"), issue
+    """)
+
+
+def test_weather_parsing(app_copy):
+    # JMA's feeds are faked with the fields the page reads. Only today's rain
+    # chances count, and a live reading JMA flags as unreliable is left out.
+    _check(app_copy, """
+        from datetime import datetime, timedelta
+        import prescripts.data.weather as weather
+        from prescripts.common import JST
+
+        today = datetime.now(JST).replace(hour=0, minute=0, second=0, microsecond=0)
+        tomorrow = today + timedelta(days=1)
+        forecast = [{"timeSeries": [
+            {"areas": [{"weatherCodes": ["201", "300"]}]},
+            {"timeDefines": [(today + timedelta(hours=h)).isoformat() for h in (12, 18)] + [tomorrow.isoformat()],
+             "areas": [{"pops": ["30", "", "90"]}]},
+            {"areas": [{"area": {"code": "44132"}}]},
+        ]}]
+        stations = {"44132": {"temp": [21.4, 0], "precipitation1h": [0.5, 1]}}
+
+        def fake_fetch_json(url):
+            if "forecast" in url:
+                return forecast
+            if "amedas/data/map/20260928113000" in url:
+                return stations
+            if "warning" in url:
+                return {"headlineText": "  "}
+            raise AssertionError(url)
+
+        weather._fetch_json = fake_fetch_json
+        weather._fetch_text = lambda url: "2026-09-28T11:30:00+09:00"
+
+        now = weather.today_conditions("130000")
+        assert now == {"weather_code": "201", "pop": 30, "temp": 21.4, "precip_last_hour": None,
+                       "live_fetch_failed": False}, now
+        assert weather.key_events_headline("130000") is None  # blank headline = no warnings
+
+        assert weather.format_condition("RAIN,CLOUDY LATER") == "Rain, cloudy later"
+        assert weather.CATEGORY_EMOJI[now["weather_code"][0] + "00"] == "☁️"
+    """)
+
+
+def test_quote_credit(app_copy):
+    # The Home corner credit. Typed-in text is escaped, since it goes into HTML.
+    _check(app_copy, """
+        from prescripts.data.home import quote_credit
+
+        assert quote_credit({"line": "Just a line"}) == ""
+        assert quote_credit({"source": "Hero", "by": "Mili"}) == 'This line is from "Hero" by Mili.'
+        assert quote_credit({"by": "Someone", "note": "paraphrased"}) == "This line is from a work by Someone (paraphrased)."
+        assert quote_credit({"source": "<b>Tom & Jerry</b>"}) == 'This line is from "&lt;b&gt;Tom &amp; Jerry&lt;/b&gt;".'
+        assert quote_credit({"source": "<i>Hero</i>"}, escape=False) == 'This line is from "<i>Hero</i>".'
     """)
 
 
