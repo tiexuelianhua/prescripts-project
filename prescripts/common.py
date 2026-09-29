@@ -221,8 +221,16 @@ def install_page_shortcuts() -> None:
     # Chrome and Edge. A key does nothing on a page without its button (Home
     # on Home, Overview on Overview). Installed once per browser tab (the
     # flag), so reruns and page switches don't stack up listeners.
+    #
+    # Going to Overview, by key or button, plays Home's arrival glitch
+    # (static/home_glitch.js) over the switch. Its canvas sits on the page
+    # itself, outside Streamlit's elements, so it carries on while the next
+    # page draws. Going Home needs nothing here: arriving there plays it.
+    glitch_options = json.dumps({"accent": theme_colors()[1]})
     st.html(
-        """<script>
+        "<script>"
+        + (SCRIPTS_DIR / "static" / "home_glitch.js").read_text(encoding="utf-8")
+        + """
         if (!window._pageShortcutsInstalled) {
             window._pageShortcutsInstalled = true;
             const buttons = {h: ".st-key-go_home button", o: ".st-key-go_overview button"};
@@ -234,8 +242,11 @@ def install_page_shortcuts() -> None:
                 event.preventDefault();
                 button.click();
             }, true);
+            document.addEventListener("click", event => {
+                if (event.target.closest(".st-key-go_overview button")) window.playHomeGlitch(GLITCH_OPTIONS);
+            }, true);
         }
-        </script>""",
+        </script>""".replace("GLITCH_OPTIONS", glitch_options),
         unsafe_allow_javascript=True,
     )
 
