@@ -80,9 +80,10 @@ PAGE_TITLE = "Overview"
 is_first_load = "_overview_title_played" not in st.session_state
 # Arrived by the Overview shortcut, which plays Home's glitch: like Home, the
 # title types in as the static clears (every time, not just the first), and
-# the logo stays hidden until then, fading in once the title's typed.
+# the logo and top bar stay hidden until then, fading in once the title's typed.
 glitch_at = st.session_state.pop("_overview_glitch_at", None)
-inject_body_fade_in("main_body", ".st-key-overview_logo { opacity: 0; }" if glitch_at else "")
+# The top bar's buttons (🏠, zoom) wait and fade in with the logo.
+inject_body_fade_in("main_body", ".st-key-overview_logo, .st-key-top_bar { opacity: 0; }" if glitch_at else "")
 
 header_logo, header_title, header_clock = st.columns([1, 3, 1.2], vertical_alignment="center")
 with header_logo, st.container(key="overview_logo"):
@@ -95,7 +96,7 @@ with header_title:
         # In the title's own element, so the fade adds no empty row.
         title.markdown(
             f"# {PAGE_TITLE}\n\n<style>@keyframes overview-logo-in {{ from {{ opacity: 0; }} to {{ opacity: 1; }} }} "
-            ".st-key-overview_logo { animation: overview-logo-in 0.6s ease-out forwards; }</style>",
+            ".st-key-overview_logo, .st-key-top_bar { animation: overview-logo-in 0.6s ease-out forwards; }</style>",
             unsafe_allow_html=True,
         )
     else:

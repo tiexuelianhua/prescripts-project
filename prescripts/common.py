@@ -160,6 +160,10 @@ def render_top_bar() -> None:
     # controls live inside it -- Streamlit has no other place to put
     # widgets -- so they're zoomed back by the inverse to stay put.
     zoom = load_app_settings().get("zoom", 1.0)
+    # Arriving on Overview by its shortcut, the buttons wait hidden until
+    # Overview fades them in (see pages/overview.py). Hidden here too, since
+    # this bar is drawn before Overview's own styles arrive.
+    arriving_hide = ".st-key-top_bar { opacity: 0; }" if "_overview_glitch_at" in st.session_state else ""
     st.markdown(
         f"""
         <style>
@@ -193,6 +197,7 @@ def render_top_bar() -> None:
             padding: 0 0.6rem;
             line-height: 1.6;
         }}
+        {arriving_hide}
         </style>
         """,
         unsafe_allow_html=True,

@@ -10,7 +10,7 @@ window.playHomeGlitch = function ({ accent, seconds = 1.0, amount = 1.0, blockSh
 
   const canvas = document.createElement("canvas");
   canvas.id = "home-glitch";
-  canvas.style.cssText = "position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:999990";
+  canvas.style.cssText = "position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:999992";  // over the top bar's buttons too
   canvas.width = innerWidth;
   canvas.height = innerHeight;
   document.body.appendChild(canvas);
