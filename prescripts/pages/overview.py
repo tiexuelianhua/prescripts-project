@@ -412,6 +412,9 @@ def render_activities_tile() -> None:
     st.session_state.pop("_overview_activities_reroll", None)
 
     if area or coming_up:
+        # Takes up some of any room the column leaves spare (see its style),
+        # moving the button and link down, but only so far.
+        st.markdown("<div class='overview-activities-spacer'></div>", unsafe_allow_html=True)
         st.button("🎲 Another", key="overview_activities_another",
                   on_click=lambda: st.session_state.update(_overview_activities_reroll=True))
     st.page_link("prescripts/pages/activities.py", label="Open Activities", icon="📍")
@@ -555,11 +558,13 @@ st.markdown(
         opacity: 0.7;
         font-size: 0.7rem;
     }}
-    /* The button and the link under it sit at the tile's bottom when the
-       column leaves it room to spare, and at least 1rem below the event. */
-    .st-key-overview_activities_another {{
-        margin-top: auto;
-        padding-top: 1rem;
+    /* The spacer above the Activities button grows into room the column
+       leaves spare, up to a limit, so the button and link move down a little
+       but never far from the event. Any more space stays under the link. */
+    [data-testid="stElementContainer"]:has(.overview-activities-spacer) {{
+        flex: 1 1 0;
+        min-height: 0;
+        max-height: 4rem;
     }}
     [data-testid="stColumn"]:has([class*="st-key-overview_tile_"]) > [data-testid="stVerticalBlock"] > [data-testid="stLayoutWrapper"]:last-child {{
         flex-grow: 1;
