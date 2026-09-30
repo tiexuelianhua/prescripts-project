@@ -375,6 +375,27 @@ def test_budget_carry_over(app_copy):
     """)
 
 
+def test_meals_group_rows(app_copy):
+    # Rows logged together (same time and store) are one meal, in the order
+    # logged, a blank store included; excluded rows don't count in its total.
+    _check(app_copy, """
+        import pandas as pd
+        from prescripts.data.meal_receipts import meals
+
+        entries = pd.DataFrame({
+            "timestamp": ["2026-09-30 08:00:00", "2026-09-30 08:00:00", "2026-09-30 12:30:00", "2026-09-30 12:30:00"],
+            "store": ["Lawson", "Lawson", None, None],
+            "item": ["Onigiri", "Tax", "Ramen", "Beer"],
+            "cost_yen": [150, 12, 900, 500],
+            "excluded": [False, False, False, True],
+        })
+        found = meals(entries)
+        assert [(meal["time"][11:16], meal["store"], meal["total"], len(meal["rows"])) for meal in found] == [
+            ("08:00", "Lawson", 162, 2), ("12:30", "", 900, 2)], found
+        assert meals(entries.iloc[0:0]) == []
+    """)
+
+
 def test_synced_lyrics(app_copy):
     _check(app_copy, """
         from prescripts.data.lyrics import current_line_index, parse_synced

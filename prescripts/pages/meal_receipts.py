@@ -3,6 +3,8 @@
 # and its error logging stay in one place.
 # Made by: Claude (cV)
 
+import html
+import time
 from datetime import datetime
 
 import pandas as pd
@@ -35,6 +37,7 @@ from prescripts.data.meal_receipts import (
     last_entry_for_item,
     load_entries,
     load_settings,
+    meals,
     month_comparison,
     month_excluded_by_reason,
     month_summary,
@@ -271,39 +274,47 @@ with st.container(key="main_body"):
     # reset happens here, at the very top of whatever run comes next, before
     # any of these widgets exist yet in that run.
     if st.session_state.get("_reset_add_entry_form"):
-        st.session_state["add_entry_item"] = None
-        st.session_state["_last_autofilled_item"] = None
         st.session_state["add_entry_day"] = today_date
         st.session_state["add_entry_store"] = None
-        st.session_state["add_entry_cost"] = 0
         st.session_state["add_entry_excluded"] = False
         st.session_state["add_entry_excluded_reason"] = None
         st.session_state["add_entry_tax"] = 0
+        st.session_state["_tax_suggested"] = 0
         st.session_state["add_entry_bag"] = False
         st.session_state["_bag_ticked_for_store"] = None
+        st.session_state["_meal_basket"] = []
+        st.session_state["_reset_add_item"] = True
         st.session_state["_reset_add_entry_form"] = False
+    # Just the item and its cost, after "+ Add item" puts them in the meal.
+    if st.session_state.get("_reset_add_item"):
+        st.session_state["add_entry_item"] = None
+        st.session_state["_last_autofilled_item"] = None
+        st.session_state["add_entry_cost"] = 0
+        st.session_state["_reset_add_item"] = False
+    # A meal is logged whole: its items gather here, each {"id", "item",
+    # "cost"}, until "Log meal" saves them together.
+    basket = st.session_state.setdefault("_meal_basket", [])
 
     # Not an st.form: Item needs to live-react to selection (to suggest a
     # price below) and st.form batches every widget inside it, only reading
     # values on submit -- there'd be no way to react to "which item was just
-    # picked" before submission if it were in one. Rather than have Item live
-    # outside a form while Day/Store/Cost sit inside one (an inconsistent
-    # mix), all four are plain widgets with a plain button, so the whole
-    # section behaves the same way.
+    # picked" before submission if it were in one. So the whole section is
+    # plain widgets with plain buttons, and behaves the same way throughout.
     #
-    # Day is positioned before Item here purely for a more natural reading
-    # order ("when" before "what") -- it doesn't participate in the price
-    # suggestion below, so its position relative to Item is otherwise free.
-    # The one real ordering constraint is Item before Store/Cost: the
-    # suggestion writes to their session_state in between, and both have to
-    # be created after that write to pick it up within the same run.
-    entry_date = st.date_input(
+    # The meal's day and store come first, then its items one at a time. The
+    # one real ordering constraint is Item before Store/Cost: the suggestion
+    # writes to their session_state in between, and both have to be created
+    # after that write to pick it up within the same run -- so Store sits
+    # beside Day but is drawn after Item, via columns made up front.
+    day_column, store_column = st.columns(2)
+    entry_date = day_column.date_input(
         "Day", value=today_date, max_value=today_date, key="add_entry_day"
     )
     # Typed text in these three survives clicking/tabbing away without Enter.
     keep_typed_selectbox_text("add_entry_item", "add_entry_store", "add_entry_excluded_reason")
+    item_column, cost_column, add_column = st.columns([5, 2, 2], vertical_alignment="bottom")
     choices = item_choices(excluded_items, excluded_stores)
-    item_choice = st.selectbox(
+    item_choice = item_column.selectbox(
         "Item", options=choices, format_func=item_choice_label, index=None,
         accept_new_options=True, placeholder="Type or pick an item",
         key="add_entry_item",
@@ -317,38 +328,73 @@ with st.container(key="main_body"):
         last_entry = last_entry_for_item(item, choice_store)
         if last_entry is not None:
             st.session_state["add_entry_cost"] = int(last_entry["cost_yen"])
-            # Just a suggestion -- still an ordinary editable selectbox, so
-            # it can be confirmed or changed before submitting. Left blank
-            # if the store was left blank last time too.
+            # Just a suggestion -- still an ordinary editable selectbox. Only
+            # for the meal's first item: after that the store is the meal's.
+            # Left blank if the store was left blank last time too.
             last_store = last_entry["store"]
-            st.session_state["add_entry_store"] = str(last_store) if pd.notna(last_store) else None
+            if not basket:
+                st.session_state["add_entry_store"] = str(last_store) if pd.notna(last_store) else None
         st.session_state["_last_autofilled_item"] = item_choice
 
-    col1, col2 = st.columns(2)
-    store = col1.selectbox(
+    store = store_column.selectbox(
         "Store", options=known_values("store", exclude=excluded_stores), index=None,
         accept_new_options=True, placeholder="Optional -- type or pick a store",
         # Optional, for a store whose name can't be recalled (or read) at
         # the time -- it can be filled in later from Entries.
         key="add_entry_store",
     )
-    cost_yen = col2.number_input("Cost (¥)", min_value=0, step=1, key="add_entry_cost")
+    cost_yen = cost_column.number_input("Cost (¥)", min_value=0, step=1, key="add_entry_cost")
+    # Never greyed out: a click can land before an item just typed has
+    # registered, and a greyed-out button would swallow it.
+    if add_column.button("+ Add item", width="stretch"):
+        if item:
+            basket.append({"id": time.time_ns(), "item": item, "cost": int(cost_yen)})
+            st.session_state["_reset_add_item"] = True
+            st.rerun()
+        st.caption("Type or pick an item first.")
+
+    for index, line in enumerate(basket):
+        name_column, price_column, remove_column = st.columns([7, 2, 1], vertical_alignment="center")
+        name_column.write(line["item"])
+        price_column.write(f"¥{line['cost']:,}")
+        remove_column.button("✕", key=f"meal_remove_{line['id']}", help="Take this item out of the meal",
+                             on_click=basket.pop, args=(index,))
+
+    # An item picked but not added yet still goes in when the meal's logged:
+    # a single item needs no "+ Add item" first.
+    pending = [(item, int(cost_yen))] if item else []
+    items = [(line["item"], line["cost"]) for line in basket] + pending
+    subtotal = sum(cost for _item, cost in items)
+
     # A bag and the receipt's tax line each go in as a row of their own. The
     # bag box ticks itself whenever the store changes to a konbini (bags are
     # usual there) and can still be unticked.
     if store != st.session_state.get("_bag_ticked_for_store"):
         st.session_state["add_entry_bag"] = is_konbini(store)
         st.session_state["_bag_ticked_for_store"] = store
+    # Tax starts at 8% of the items (food's reduced rate, rounded down) and
+    # follows them as they change, until it's typed over to match the
+    # receipt -- stores round differently.
+    suggested_tax = subtotal * 8 // 100
+    if st.session_state.get("add_entry_tax", 0) == st.session_state.get("_tax_suggested", 0):
+        st.session_state["add_entry_tax"] = suggested_tax
+    st.session_state["_tax_suggested"] = suggested_tax
     bag_yen = bag_price(store)
     bag_column, tax_column = st.columns(2, vertical_alignment="bottom")
     tax_yen = tax_column.number_input(
         "Tax (¥)", min_value=0, step=1, key="add_entry_tax",
-        help="Optional -- the tax line from the receipt, when prices were before tax. Logged as its own row.",
+        help="Starts at 8% of the items -- change it to the receipt's tax line, or 0 if prices included tax. "
+        "Logged as its own row.",
     )
     with_bag = bag_column.checkbox(
         f"+ 袋 bag (¥{bag_yen})", key="add_entry_bag",
         help="Logs the bag as its own row, at what one last cost at this store. Change the price in Entries if it differs.",
     )
+    meal_total = subtotal + (bag_yen if with_bag else 0) + tax_yen
+    item_word = "item" if len(items) == 1 else "items"
+    st.markdown(f"**Total: ¥{meal_total:,}** <small>({len(items)} {item_word}"
+                + (f", bag ¥{bag_yen:,}" if with_bag else "") + (f", tax ¥{tax_yen:,}" if tax_yen else "")
+                + ")</small>", unsafe_allow_html=True)
     excluded = st.checkbox(
         "Don't count toward totals",
         help="Still logged, but left out of the day/week/month totals and budget -- "
@@ -366,59 +412,51 @@ with st.container(key="main_body"):
             accept_new_options=True, placeholder="Optional -- pick or type a reason",
             key="add_entry_excluded_reason",
         )
-    st.caption("Click **Add entry** to submit")
-    submitted = st.button("Add entry")
-    if submitted:
-        if not item:
-            st.warning("Item is required.")
+    log_clicked = st.button("Log meal")
+    if log_clicked and not items:
+        st.warning("Add an item first.")
+    elif log_clicked:
+        if entry_date == today_date:
+            target_folder = today_folder
         else:
-            if entry_date == today_date:
-                target_folder = today_folder
-            else:
-                # Past folders should normally already exist, but a day that
-                # was never opened in the app yet (e.g. logging a forgotten
-                # meal from a day the app wasn't run) won't -- the PowerShell
-                # scripts only ever create *today's* chain, so this is
-                # created directly instead.
-                target_folder = day_folder_for(entry_date)
-                target_folder.mkdir(parents=True, exist_ok=True)
-            target_csv = target_folder / "receipts.csv"
-            timestamp = datetime.combine(entry_date, datetime.now(JST).time())
-            # The bag and tax share the item's time, store and exclusion: they
-            # were paid for together.
-            rows = [(item, cost_yen)]
-            if with_bag:
-                rows.append((BAG_ITEM, bag_yen))
-            if tax_yen:
-                rows.append((TAX_ITEM, tax_yen))
-            for row_item, row_yen in rows:
-                append_entry(
-                    target_csv, timestamp.strftime("%Y-%m-%d %H:%M:%S"), store, row_item, row_yen,
-                    excluded, excluded_reason,
-                )
-            # No st.form here, so nothing clears itself automatically -- but
-            # the actual field reset can't happen right here (Streamlit
-            # forbids changing a widget's session_state after that widget's
-            # already been instantiated in this run). Both this flag and the
-            # confirmation message below are instead picked up on the very
-            # next run, forced immediately (st.rerun()) rather than waiting
-            # on whatever the user happens to interact with next -- fields
-            # should read as cleared the moment "Add entry" is clicked, not
-            # one click later. Stashing the message for that next run (rather
-            # than calling typewriter() right here) is what makes that safe:
-            # this run ends at the rerun below without ever painting it, so
-            # showing it here would just mean it's never seen at all.
-            st.session_state["_reset_add_entry_form"] = True
-            excluded_note = ""
-            if excluded:
-                excluded_note = f" (not counted: {excluded_reason})" if excluded_reason else " (not counted toward totals)"
-            st.session_state["_add_entry_confirmation"] = (
-                f"[Logged {item}{f' at {store}' if store else ''} for ¥{cost_yen:,.0f}"
-                + (f" + bag ¥{bag_yen:,.0f}" if with_bag else "")
-                + (f" + tax ¥{tax_yen:,.0f}" if tax_yen else "")
-                + f"{excluded_note}]"
+            # Past folders should normally already exist, but a day that
+            # was never opened in the app yet (e.g. logging a forgotten
+            # meal from a day the app wasn't run) won't -- the PowerShell
+            # scripts only ever create *today's* chain, so this is
+            # created directly instead.
+            target_folder = day_folder_for(entry_date)
+            target_folder.mkdir(parents=True, exist_ok=True)
+        target_csv = target_folder / "receipts.csv"
+        timestamp = datetime.combine(entry_date, datetime.now(JST).time())
+        # Every row shares the meal's time, store and exclusion: that's what
+        # groups them back into one meal under Entries.
+        rows = list(items)
+        if with_bag:
+            rows.append((BAG_ITEM, bag_yen))
+        if tax_yen:
+            rows.append((TAX_ITEM, tax_yen))
+        for row_item, row_yen in rows:
+            append_entry(
+                target_csv, timestamp.strftime("%Y-%m-%d %H:%M:%S"), store, row_item, row_yen,
+                excluded, excluded_reason,
             )
-            st.rerun()
+        # No st.form here, so nothing clears itself automatically -- but the
+        # actual field reset can't happen right here (Streamlit forbids
+        # changing a widget's session_state after that widget's already been
+        # instantiated in this run). Both this flag and the confirmation
+        # message below are picked up on the very next run, forced
+        # immediately with st.rerun(), so the form reads as cleared the
+        # moment "Log meal" is clicked. The message is stashed for that run
+        # because this one ends at the rerun without painting it.
+        st.session_state["_reset_add_entry_form"] = True
+        excluded_note = ""
+        if excluded:
+            excluded_note = f" (not counted: {excluded_reason})" if excluded_reason else " (not counted toward totals)"
+        what = items[0][0] if len(items) == 1 else f"{len(items)} items"
+        st.session_state["_add_entry_confirmation"] = (
+            f"[Logged {what}{f' at {store}' if store else ''} for ¥{meal_total:,.0f}{excluded_note}]"
+        )
+        st.rerun()
     else:
         # The message from a successful add on the run just before this one
         # (forced via that st.rerun() above) -- popped so it only ever
@@ -446,6 +484,26 @@ with st.container(key="main_body"):
             st.write("No entries for this day.")
             day_total = 0
         else:
+            # Each meal as one line with its total, opening to its items; the
+            # table under it is where rows are changed.
+            for meal in meals(day_entries):
+                rows = meal["rows"]
+                item_count = int((~rows["item"].isin([BAG_ITEM, TAX_ITEM])).sum())
+                summary = [meal["time"][11:16], html.escape(meal["store"] or "No store"), f"¥{meal['total']:,}",
+                           f"{item_count} item{'s' if item_count != 1 else ''}"]
+                if rows["excluded"].all():
+                    summary.append("not counted")
+                lines = "".join(
+                    f"<div>{html.escape(str(row.item) if pd.notna(row.item) else '')}"
+                    f" · ¥{int(row.cost_yen) if pd.notna(row.cost_yen) else 0:,}"
+                    + (" <small>(not counted)</small>" if row.excluded and not rows["excluded"].all() else "")
+                    + "</div>"
+                    for row in rows.itertuples()
+                )
+                st.markdown(f"<details><summary>{' · '.join(summary)}</summary>"
+                            f"<div style='margin: 0.3rem 0 0.5rem 1.2rem'>{lines}</div></details>",
+                            unsafe_allow_html=True)
+            st.caption("Change, add or delete rows here. Changes save straight away.")
             edited_entries = st.data_editor(
                 day_entries,
                 num_rows="dynamic",

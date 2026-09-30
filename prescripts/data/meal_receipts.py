@@ -108,6 +108,21 @@ def counted_total(entries: pd.DataFrame) -> int:
     return int(entries.loc[~entries["excluded"], "cost_yen"].fillna(0).sum())
 
 
+def meals(entries: pd.DataFrame) -> list[dict]:
+    # A day's rows gathered into meals: rows logged together share their
+    # time and store (a meal's items, bag and tax -- see the add form). In
+    # the order logged, each {"time", "store", "rows", "total"}, "rows" a
+    # DataFrame and "total" what counts toward totals.
+    if entries.empty:
+        return []
+    entries = with_excluded_column(entries)
+    stores = entries["store"].where(entries["store"].notna(), "")
+    found = []
+    for (timestamp, store), rows in entries.groupby([entries["timestamp"], stores], sort=False):
+        found.append({"time": str(timestamp), "store": store, "rows": rows, "total": counted_total(rows)})
+    return found
+
+
 def save_entries(csv_path: Path, entries: pd.DataFrame) -> None:
     # Normalized on the way out too, so a reason picked in the Entries table
     # is written with its implied excluded=True, not just read back that way.

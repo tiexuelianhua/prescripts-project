@@ -86,7 +86,8 @@ def test_store_can_be_left_blank(app_copy):
         at.selectbox(key="add_entry_item").set_value("Onigiri")
         at.run()
         assert at.selectbox(key="add_entry_store").value is None
-        next(button for button in at.button if button.label == "Add entry").click()
+        at.number_input(key="add_entry_tax").set_value(0)  # price included tax
+        next(button for button in at.button if button.label == "Log meal").click()
         at.run()
         assert not at.exception and not at.warning, (at.exception, at.warning)
         entries = load_entries(get_today_folder() / "receipts.csv")
@@ -121,7 +122,7 @@ def test_konbini_bag_and_tax_get_rows_of_their_own(app_copy):
         bag = at.checkbox(key="add_entry_bag")
         assert bag.value is True and "¥5" in bag.label, (bag.value, bag.label)
         at.number_input(key="add_entry_tax").set_value(12)
-        next(button for button in at.button if button.label == "Add entry").click()
+        next(button for button in at.button if button.label == "Log meal").click()
         at.run()
         assert not at.exception and not at.warning, (at.exception, at.warning)
         entries = load_entries(get_today_folder() / "receipts.csv")
@@ -160,6 +161,60 @@ def test_setting_todays_budget(app_copy):
         at.run()
         assert any("vs ¥1,000 budget" in metric.delta for metric in at.metric), [m.delta for m in at.metric]
         assert at.number_input(key="meal_set_today_budget").value == 1000  # follows the fresh start
+    """)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_logging_a_meal(app_copy):
+    # Items gather into one meal with a running total and can be taken out
+    # again; tax follows 8% of the items until it's typed over; "Log meal"
+    # saves every row at one time and store, and Entries shows them as one
+    # meal with its total.
+    result = run_in(app_copy, """
+        from datetime import date
+        from streamlit.testing.v1 import AppTest
+        from prescripts.common import SCRIPTS_DIR
+        from prescripts.data.meal_receipts import TAX_ITEM, append_entry, day_folder_for, get_today_folder, load_entries
+
+        folder = day_folder_for(date(2026, 8, 1))
+        folder.mkdir(parents=True)
+        for item, yen in (("Onigiri", 150), ("Karaage", 250), ("Tea", 100)):
+            append_entry(folder / "receipts.csv", "2026-08-01 12:00:00", "Olympic", item, yen)
+
+        at = AppTest.from_file(str(SCRIPTS_DIR / "prescripts/pages/meal_receipts.py"), default_timeout=60)
+        at.run()
+        def add(item):
+            at.selectbox(key="add_entry_item").set_value(item)
+            at.run()
+            next(button for button in at.button if button.label == "+ Add item").click()
+            at.run()
+        def total():
+            return next(block.value for block in at.markdown if "Total:" in block.value)
+        for item in ("Onigiri", "Karaage", "Tea"):
+            add(item)
+        assert at.selectbox(key="add_entry_item").value is None  # cleared for the next item
+        assert at.selectbox(key="add_entry_store").value == "Olympic"
+        assert at.number_input(key="add_entry_tax").value == 40  # 8% of 500
+        assert "¥540" in total() and "3 items" in total(), total()
+
+        removes = [button for button in at.button if (button.key or "").startswith("meal_remove_")]
+        removes[-1].click()  # take the tea out
+        at.run()
+        assert at.number_input(key="add_entry_tax").value == 32 and "¥432" in total(), total()
+        at.number_input(key="add_entry_tax").set_value(30)  # the receipt's own tax line
+        at.run()
+        add("Tea")
+        assert at.number_input(key="add_entry_tax").value == 30, "typed tax was overwritten"
+        next(button for button in at.button if button.label == "Log meal").click()
+        at.run()
+        assert not at.exception, at.exception
+
+        entries = load_entries(get_today_folder() / "receipts.csv")
+        assert list(zip(entries["item"], entries["cost_yen"])) == [
+            ("Onigiri", 150), ("Karaage", 250), ("Tea", 100), (TAX_ITEM, 30)], entries
+        assert entries["timestamp"].nunique() == 1 and set(entries["store"]) == {"Olympic"}
+        assert [line for line in at.markdown if "<details>" in line.value and "Olympic · ¥530 · 3 items" in line.value]
+        assert at.number_input(key="add_entry_tax").value == 0 and not at.selectbox(key="add_entry_store").value
     """)
     assert result.returncode == 0, result.stdout + result.stderr
 
@@ -233,8 +288,9 @@ def test_item_bought_at_two_stores_is_offered_per_store(app_copy):
         assert at.selectbox(key="add_entry_store").value == "FamilyMart"
         assert at.number_input(key="add_entry_cost").value == 160
         at.checkbox(key="add_entry_bag").uncheck()  # ticked for a konbini, but no bag this time
+        at.number_input(key="add_entry_tax").set_value(0)  # price included tax
         at.run()
-        next(button for button in at.button if button.label == "Add entry").click()
+        next(button for button in at.button if button.label == "Log meal").click()
         at.run()
         assert not at.exception, at.exception
         entries = load_entries(get_today_folder() / "receipts.csv")
