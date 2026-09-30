@@ -356,6 +356,7 @@ def render_activities_tile() -> None:
             details = [ACTIVITIES_CATEGORIES["food"][place["category"]][0].removesuffix("s"), _distance(place)]
             details += [html.escape(detail) for detail in (place["cuisine"], place["hours"]) if detail]
             st.markdown(
+                f"<div class='overview-pick-label'>🍜 To eat</div>"
                 f'<div class="overview-place-name" lang="ja">{html.escape(place["name"])}{english}</div>'
                 f"<small>{' · '.join(details)} · "
                 f"<a href='{activities_map_link(place)}' target='_blank'>Map</a></small>",
@@ -385,6 +386,7 @@ def render_activities_tile() -> None:
                        f"<small class='overview-credit'>Photo: {html.escape(photo['credit'] or 'Wikimedia Commons')}</small>"
                        if photo else "")
             st.markdown(
+                f"<div class='overview-pick-label'>⛩️ Somewhere to go</div>"
                 f"{picture}<div class='overview-place-name' lang='ja'>{html.escape(thing['name'])}{english}</div>"
                 f"<small>{html.escape(kind_of_place)} · {_distance(thing)} · "
                 f"<a href='{activities_map_link(thing)}' target='_blank'>Map</a></small>",
@@ -402,7 +404,8 @@ def render_activities_tile() -> None:
         event = _pick("overview_activities_event", coming_up, lambda event: f"{event['name']}|{event['start']}")
         english = f" · {html.escape(event['name_en'])}" if event["name_en"] else ""
         st.markdown(
-            f"<div class='overview-event-name' lang='ja'>📅 {html.escape(event['name'])}{english}</div>"
+            f"<div class='overview-pick-label'>📅 Coming up</div>"
+            f"<div class='overview-event-name' lang='ja'>{html.escape(event['name'])}{english}</div>"
             f"<small>{html.escape(format_dates(event))} · {html.escape(event['place'])}</small>",
             unsafe_allow_html=True,
         )
@@ -446,8 +449,9 @@ def _japanese_height() -> int:
 
 def _activities_height() -> int:
     # With an area: food, a place to go (usually with a photo) and an event.
-    # Without, just the event. Measured 2026-09-30.
-    return 67 if activities_load_settings().get("area") else 30
+    # Without, just the event. Measured 2026-09-30, with each pick's label
+    # and the gap above "Another".
+    return 71 if activities_load_settings().get("area") else 33
 
 
 def _spotify_height() -> int:
@@ -528,12 +532,14 @@ st.markdown(
         font-size: 1.3rem;
         font-weight: bold;
     }}
-    .overview-place-name {{
-        margin-top: 0.6rem;
-    }}
     .overview-event-name {{
         font-size: 1.1rem;
+    }}
+    /* Which pick is which, so the photo isn't taken for the food place. */
+    .overview-pick-label {{
         margin-top: 0.8rem;
+        font-size: 0.8rem;
+        opacity: 0.7;
     }}
     /* A place to go's photo, across the tile, above its name. */
     .overview-photo {{
@@ -542,12 +548,16 @@ st.markdown(
         background-size: cover;
         background-position: center;
         border-radius: 4px;
-        margin-top: 0.8rem;
+        margin-top: 0.2rem;
     }}
     .overview-credit {{
         display: block;
         opacity: 0.7;
         font-size: 0.7rem;
+    }}
+    /* Room between the event's date and the button under it. */
+    .st-key-overview_activities_another {{
+        margin-top: 0.75rem;
     }}
     [data-testid="stColumn"]:has([class*="st-key-overview_tile_"]) > [data-testid="stVerticalBlock"] > [data-testid="stLayoutWrapper"]:last-child {{
         flex-grow: 1;
