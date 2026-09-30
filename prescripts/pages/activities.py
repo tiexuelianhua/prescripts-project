@@ -198,13 +198,18 @@ def render_location(settings: dict) -> dict | None:
 
     if st.session_state.get("_activities_geo_error"):
         st.caption(st.session_state["_activities_geo_error"])
+    # The box above is empty on a later visit, so this says where the page
+    # is looking from.
     if here:
         label = f"your current location (to within about {format_distance(here['accuracy'])})"
+        st.caption(f"📍 Looking around {label}.")
         if st.button("Back to my saved area" if settings.get("area") else "Stop using my location"):
             st.session_state.pop("_activities_here", None)
             st.rerun()
         return {"lat": here["lat"], "lon": here["lon"], "label": label}
     if settings.get("area"):
+        st.caption(f"📍 Looking around your saved area, **{_plain(settings['area'])}**. "
+                   "Search above to change it.")
         return {"lat": settings["lat"], "lon": settings["lon"], "label": settings["area"]}
     return None
 
