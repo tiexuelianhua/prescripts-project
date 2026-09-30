@@ -376,7 +376,9 @@ with st.container(key="main_body"):
     # rounded down, for a receipt that adds tax on top; it can still be
     # typed over to match the receipt, as stores round differently.
     bag_yen = bag_price(store)
-    bag_column, tax_column, rate_column = st.columns([4, 3, 2], vertical_alignment="bottom")
+    # Tax at the left with its button, lined up under the items, and the
+    # bag box on its own line below.
+    tax_column, rate_column, _ = st.columns([3, 2, 4], vertical_alignment="bottom")
     rate_column.button(
         "Use 8%", width="stretch", help="Fill in 8% of the items so far",
         on_click=lambda amount: st.session_state.update(add_entry_tax=amount), args=(subtotal * 8 // 100,),
@@ -385,7 +387,7 @@ with st.container(key="main_body"):
         "Tax (¥)", min_value=0, step=1, key="add_entry_tax",
         help="Only when prices were before tax: the receipt's tax line. Logged as its own row.",
     )
-    with_bag = bag_column.checkbox(
+    with_bag = st.checkbox(
         f"+ 袋 bag (¥{bag_yen})", key="add_entry_bag",
         help="Logs the bag as its own row, at what one last cost at this store. Change the price in Entries if it differs.",
     )
