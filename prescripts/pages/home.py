@@ -248,7 +248,8 @@ _CREDITS_HTML = f"""
     Font: <a href="https://github.com/quiple/galmuri" target="_blank">Galmuri</a> by quiple (OFL-1.1).
     Weather: <a href="https://www.jma.go.jp/bosai/" target="_blank">JMA</a>,
     translated by <a href="https://mymemory.translated.net" target="_blank">MyMemory</a>.
-    Places: <a href="https://www.openstreetmap.org/copyright" target="_blank">© OpenStreetMap contributors</a>.
+    Places: <a href="https://www.openstreetmap.org/copyright" target="_blank">© OpenStreetMap contributors</a>,
+    photos from <a href="https://commons.wikimedia.org" target="_blank">Wikimedia Commons</a>.
     Lyrics: <a href="https://lrclib.net" target="_blank">LRCLIB</a>.
     Word lookups: <a href="https://jisho.org" target="_blank">Jisho</a>,
     <a href="https://kanjiapi.dev" target="_blank">kanjiapi.dev</a>.

@@ -1,7 +1,8 @@
 # Activities page: food and things to do within walking distance of a saved area
 # (a station or neighbourhood, typed once and remembered) or, for one visit,
 # the computer's current location. Places come from OpenStreetMap -- see
-# data/activities.py for the lookups and why they're OSM's.
+# data/activities.py for the lookups and why they're OSM's. Things to do
+# show a photo where Wikimedia Commons has one.
 import html
 import urllib.error
 
@@ -23,6 +24,7 @@ from prescripts.data.activities import (
     matches_wish,
     parse_places,
     parse_wish,
+    place_photos,
     place_spot,
     save_settings,
     search_link,
@@ -68,8 +70,12 @@ if is_first_load:
 # Place names in the system's Japanese font rather than the app's pixel font,
 # which drops strokes from dense kanji -- the same reason the Japanese page's
 # flashcards use it. The rest of each row stays in the pixel font.
+# A photo sits at the left of its row, cropped to one size so rows line up.
 st.markdown(
     '<style>.place-name { font-family: "Yu Gothic UI", "Yu Gothic", "Meiryo", "Hiragino Sans", sans-serif; }'
+    ".place-photo { float: left; width: 6rem; height: 4.5rem; object-fit: cover; border-radius: 4px;"
+    " margin: 0.2rem 0.8rem 0.2rem 0; }"
+    ".place-row-end { clear: both; }"
     "</style>",
     unsafe_allow_html=True,
 )
@@ -284,6 +290,8 @@ def render_list(places: list[dict], list_key: str) -> None:
     limit_key = f"_activities_{list_key}_limit"
     limit = st.session_state.get(limit_key, PAGE_SIZE)
     open_map = st.session_state.get("_activities_open_map")
+    # Only for the rows on show: each new one is a lookup, the first time.
+    photos = place_photos(places[:limit])
     for place in places[:limit]:
         name = _plain(place["name"]) + (f" · {_plain(place['name_en'])}" if place["name_en"] else "")
         details = [format_distance(place["distance"])]
@@ -295,10 +303,16 @@ def render_list(places: list[dict], list_key: str) -> None:
         details += [_plain(detail) for detail in (place["cuisine"], place["hours"]) if detail]
         details = [detail for detail in details if detail]
         text_column, map_column, hide_column = st.columns([11, 2, 1], vertical_alignment="center")
+        photo = photos.get(place["id"])
+        # The photo links to its Commons page, which has the full credit.
+        picture = (f"<a href='{html.escape(photo['page'])}' target='_blank'>"
+                   f"<img class='place-photo' src='{html.escape(photo['url'])}' alt=''></a>") if photo else ""
+        credit = f"  \n<small>Photo: {_plain(photo['credit'] or 'Wikimedia Commons')}</small>" if photo else ""
         text_column.markdown(
-            f"{CATEGORY_ICONS[place['category']]} <b class='place-name'>{name}</b>  \n"
+            f"{picture}{CATEGORY_ICONS[place['category']]} <b class='place-name'>{name}</b>  \n"
             f"<small>{' · '.join(details)} · "
-            f"<a href='{map_link(place)}' target='_blank'>Directions</a></small>",
+            f"<a href='{map_link(place)}' target='_blank'>Directions</a></small>{credit}"
+            + ("<div class='place-row-end'></div>" if photo else ""),
             unsafe_allow_html=True,
         )
         is_open = open_map == place["id"]
@@ -360,5 +374,6 @@ with st.container(key="main_body"):
 
     st.caption(
         "Places © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors. "
+        "Photos from [Wikimedia Commons](https://commons.wikimedia.org), each credited under it. "
         "Only as complete as its map: some places may be missing or out of date."
     )

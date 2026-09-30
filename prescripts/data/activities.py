@@ -8,8 +8,13 @@
 # README and Home's credits, as its licence asks. Both services ask for a
 # User-Agent naming the app, light use, and (Nominatim) at most one request a
 # second -- lookups here only happen on an explicit search, and are cached.
+#
+# Photos for things to do come from Wikimedia Commons (see place_photos),
+# also free and keyless, for places whose OSM entry links Wikidata,
+# Wikipedia or a Commons file.
 import difflib
 import hashlib
+import html
 import json
 import math
 import re
@@ -30,7 +35,12 @@ _CACHE_FRESH_S = 24 * 3600
 _CACHE_KEEP_S = 30 * 24 * 3600
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 OVERPASS_URL = "https://overpass-api.de/api/interpreter"
-_HEADERS = {"User-Agent": "The Prescripts (personal dashboard app)"}
+# Wikimedia also asks for a way to reach whoever runs the app: the repo.
+_HEADERS = {"User-Agent": "The Prescripts (personal dashboard app; https://github.com/tiexuelianhua/prescripts-project)"}
+WIKIDATA_URL = "https://www.wikidata.org/w/api.php"
+COMMONS_URL = "https://commons.wikimedia.org/w/api.php"
+PHOTOS_PATH = CACHE_DIR / "photos.json"
+PHOTO_WIDTH = 240
 
 # Walking distances offered, in metres. Coarse steps rather than a free
 # slider, since each distance is its own (cached) lookup.
@@ -218,7 +228,8 @@ def place_type(tags: dict) -> str:
 def parse_places(kind: str, elements: list[dict], lat: float, lon: float) -> list[dict]:
     # Named places of a known category, nearest first, each {"id", "name",
     # "name_en", "category", "type", "cuisine", "hours", "religion",
-    # "distance", "lat", "lon"} ("id" is OSM's own, e.g. "node/123").
+    # "distance", "lat", "lon", "photo_source"} ("id" is OSM's own, e.g.
+    # "node/123"; for "photo_source" see photo_source).
     # Unnamed ones are dropped: "a restaurant" with no name can't be found.
     # A place mapped twice shows once, as its nearer entry.
     places = []
@@ -242,6 +253,7 @@ def parse_places(kind: str, elements: list[dict], lat: float, lon: float) -> lis
             "distance": distance_m(lat, lon, point["lat"], point["lon"]),
             "lat": point["lat"],
             "lon": point["lon"],
+            "photo_source": photo_source(tags) if category not in CATEGORIES["food"] else None,
         })
     kept = []
     for place in sorted(places, key=lambda place: place["distance"]):
@@ -500,3 +512,153 @@ def map_embed(place: dict, span: float = 0.003) -> str:
     bbox = f"{lon - span},{lat - span},{lon + span},{lat + span}"
     return ("https://www.openstreetmap.org/export/embed.html?"
             + urllib.parse.urlencode({"bbox": bbox, "layer": "mapnik", "marker": f"{lat},{lon}"}))
+
+
+# Photos for things to do. Food places go without: OSM rarely links a
+# restaurant to a photo, and a chain's links lead to its logo.
+def _commons_file(value: str) -> str | None:
+    # "File:Sensoji_2023.jpg", or a Commons page link to it, as the file's
+    # name. Categories ("Category:Sensoji") and other websites don't count.
+    value = urllib.parse.unquote(value.strip()).removeprefix("https://commons.wikimedia.org/wiki/")
+    if not value.startswith("File:"):
+        return None
+    return value.removeprefix("File:").replace("_", " ")
+
+
+def photo_source(tags: dict) -> str | None:
+    # Where a place's photo can come from, best first, as one string: a
+    # Commons file named on the place itself ("file:Name.jpg"), its Wikidata
+    # item's image ("wikidata:Q123"), or its Wikipedia article's lead image
+    # ("wikipedia:ja:浅草寺"). None when OSM links none of them.
+    for key in ("wikimedia_commons", "image"):
+        name = _commons_file(tags.get(key, ""))
+        if name:
+            return f"file:{name}"
+    if re.fullmatch(r"Q\d+", tags.get("wikidata", "")):
+        return f"wikidata:{tags['wikidata']}"
+    if re.fullmatch(r"[a-z-]+:.+", tags.get("wikipedia", "")):
+        return f"wikipedia:{tags['wikipedia']}"
+    return None
+
+
+def _in_batches(items: list, size: int = 50):
+    # Wikimedia's APIs take up to 50 titles or ids at a time.
+    for start in range(0, len(items), size):
+        yield items[start:start + size]
+
+
+def _wikidata_images(ids: list[str]) -> dict[str, str]:
+    # Wikidata item -> its image's file name (property P18), where it has one.
+    found = {}
+    for batch in _in_batches(ids):
+        url = WIKIDATA_URL + "?" + urllib.parse.urlencode(
+            {"action": "wbgetentities", "ids": "|".join(batch), "props": "claims", "format": "json"})
+        for item_id, entity in _get_json(url, timeout=15).get("entities", {}).items():
+            claims = entity.get("claims", {}).get("P18", [])
+            value = claims[0].get("mainsnak", {}).get("datavalue", {}).get("value") if claims else None
+            if isinstance(value, str):
+                found[item_id] = value.replace("_", " ")
+    return found
+
+
+def _wikipedia_images(links: list[str]) -> dict[str, str]:
+    # "ja:浅草寺" -> the article's lead image's file name. Only its freely
+    # licensed one (page_image_free): some articles lead with a non-free
+    # image that can't be shown elsewhere.
+    by_language = {}
+    for link in links:
+        language, _, title = link.partition(":")
+        by_language.setdefault(language, []).append(title)
+    found = {}
+    for language, titles in by_language.items():
+        for batch in _in_batches(titles):
+            url = f"https://{language}.wikipedia.org/w/api.php?" + urllib.parse.urlencode({
+                "action": "query", "titles": "|".join(batch), "prop": "pageprops", "ppprop": "page_image_free",
+                "redirects": 1, "format": "json", "formatversion": 2,
+            })
+            reply = _get_json(url, timeout=15).get("query", {})
+            # A title can come back tidied or redirected: follow it home.
+            renamed = {entry["to"]: entry["from"] for key in ("normalized", "redirects") for entry in reply.get(key, [])}
+            for page in reply.get("pages", []):
+                name = page.get("pageprops", {}).get("page_image_free")
+                if name:
+                    title = page["title"]
+                    while title in renamed:
+                        title = renamed[title]
+                    found[f"{language}:{title}"] = name.replace("_", " ")
+    return found
+
+
+def _plain_text(markup: str) -> str:
+    # Commons gives authors as HTML (often a link to their user page).
+    return " ".join(html.unescape(re.sub(r"<[^>]+>", " ", markup)).split())
+
+
+def _commons_photos(names: list[str]) -> dict[str, dict]:
+    # File name -> {"url": a thumbnail PHOTO_WIDTH wide, "page": its Commons
+    # page, "credit": "author · licence"}, the credit its licence asks for.
+    found = {}
+    for batch in _in_batches(names):
+        url = COMMONS_URL + "?" + urllib.parse.urlencode({
+            "action": "query", "titles": "|".join(f"File:{name}" for name in batch), "prop": "imageinfo",
+            "iiprop": "url|extmetadata", "iiurlwidth": PHOTO_WIDTH,
+            "iiextmetadatafilter": "Artist|LicenseShortName", "format": "json", "formatversion": 2,
+        })
+        reply = _get_json(url, timeout=15).get("query", {})
+        renamed = {entry["to"]: entry["from"] for entry in reply.get("normalized", [])}
+        for page in reply.get("pages", []):
+            info = (page.get("imageinfo") or [{}])[0]
+            if not info.get("thumburl"):
+                continue
+            metadata = info.get("extmetadata", {})
+            author = _plain_text(metadata.get("Artist", {}).get("value", ""))
+            if len(author) > 60:
+                author = author[:57].rstrip() + "…"
+            licence = _plain_text(metadata.get("LicenseShortName", {}).get("value", ""))
+            title = renamed.get(page["title"], page["title"])
+            found[title.removeprefix("File:").replace("_", " ")] = {
+                "url": info["thumburl"],
+                "page": info.get("descriptionurl", ""),
+                "credit": " · ".join(part for part in (author, licence) if part),
+            }
+    return found
+
+
+def _load_photo_cache() -> dict:
+    try:
+        return json.loads(PHOTOS_PATH.read_text(encoding="utf-8"))
+    except (FileNotFoundError, ValueError):
+        return {}
+
+
+def place_photos(places: list[dict]) -> dict[str, dict]:
+    # Place id -> its photo (see _commons_photos), for those of the places
+    # given that have one. Kept on disk by photo source for a month,
+    # "none found" included, so a list already seen needs no lookups. If
+    # Wikimedia can't be reached, what's saved is shown and the rest are
+    # tried again next time.
+    cache = _load_photo_cache()
+    now = time.time()
+    sources = {place["id"]: place["photo_source"] for place in places if place.get("photo_source")}
+    missing = sorted({source for source in sources.values()
+                      if now - cache.get(source, {}).get("saved_at", 0) > _CACHE_KEEP_S})
+    if missing:
+        try:
+            files = {source: source.removeprefix("file:") for source in missing if source.startswith("file:")}
+            wikidata = _wikidata_images([source.removeprefix("wikidata:") for source in missing
+                                         if source.startswith("wikidata:")])
+            files |= {f"wikidata:{item}": name for item, name in wikidata.items()}
+            wikipedia = _wikipedia_images([source.removeprefix("wikipedia:") for source in missing
+                                           if source.startswith("wikipedia:")])
+            files |= {f"wikipedia:{link}": name for link, name in wikipedia.items()}
+            photos = _commons_photos(sorted(set(files.values())))
+        except (urllib.error.URLError, TimeoutError, ValueError, KeyError):
+            photos = None
+        if photos is not None:
+            for source in missing:
+                cache[source] = {"saved_at": now, "photo": photos.get(files.get(source, ""))}
+            cache = {source: entry for source, entry in cache.items() if now - entry["saved_at"] <= _CACHE_KEEP_S}
+            CACHE_DIR.mkdir(parents=True, exist_ok=True)
+            PHOTOS_PATH.write_text(json.dumps(cache, ensure_ascii=False), encoding="utf-8")
+    return {place_id: cache[source]["photo"] for place_id, source in sources.items()
+            if cache.get(source, {}).get("photo")}

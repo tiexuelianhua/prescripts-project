@@ -678,6 +678,63 @@ def test_activities_saved_answers(app_copy):
     """)
 
 
+def test_activities_photos(app_copy):
+    # A thing to do's photo comes from the Commons file named on it, else its
+    # Wikidata image, else its Wikipedia article's free lead image; food gets
+    # none. Found photos (and "none found") are saved, so a list seen before
+    # makes no lookups, and a failed lookup is tried again next time.
+    _check(app_copy, """
+        import urllib.error
+        import prescripts.data.activities as activities
+
+        source = activities.photo_source
+        assert source({"image": "https://commons.wikimedia.org/wiki/File:Sensoji_2023.jpg",
+                       "wikidata": "Q1"}) == "file:Sensoji 2023.jpg"
+        assert source({"wikimedia_commons": "Category:Sensoji", "wikidata": "Q1"}) == "wikidata:Q1"
+        assert source({"image": "https://example.com/a.jpg", "wikipedia": "ja:浅草寺"}) == "wikipedia:ja:浅草寺"
+        assert source({"name": "Somewhere"}) is None
+
+        tags = {"leisure": "park", "wikidata": "Q1"}
+        elements = [
+            {"type": "node", "id": 1, "lat": 35.0, "lon": 139.0, "tags": {**tags, "name": "Park"}},
+            {"type": "node", "id": 2, "lat": 35.0, "lon": 139.0, "tags": {**tags, "name": "Garden", "wikidata": "Q2"}},
+            {"type": "node", "id": 3, "lat": 35.0, "lon": 139.0,
+             "tags": {"leisure": "park", "name": "Shrine park", "wikipedia": "ja:浅草神社"}},
+        ]
+        places = activities.parse_places("things", elements, 35.0, 139.0)
+        food = activities.parse_places("food", [{"type": "node", "id": 9, "lat": 35.0, "lon": 139.0,
+            "tags": {"amenity": "cafe", "name": "Café", "wikidata": "Q9"}}], 35.0, 139.0)
+        assert food[0]["photo_source"] is None
+
+        asked = []
+        def get_json(url, data=None, timeout=30):
+            asked.append(url)
+            if get_json.down:
+                raise urllib.error.URLError("Wikimedia is down")
+            if "wikidata.org" in url:  # Q2 has no image
+                return {"entities": {"Q1": {"claims": {"P18": [{"mainsnak": {"datavalue": {"value": "Park.jpg"}}}]}},
+                                     "Q2": {"claims": {}}}}
+            if "wikipedia.org" in url:
+                return {"query": {"pages": [{"title": "浅草神社", "pageprops": {"page_image_free": "Shrine_gate.jpg"}}]}}
+            return {"query": {"pages": [
+                {"title": f"File:{name}", "imageinfo": [{"thumburl": f"https://thumb/{name}", "descriptionurl": "https://page",
+                    "extmetadata": {"Artist": {"value": "<a href='x'>Someone</a>"}, "LicenseShortName": {"value": "CC0"}}}]}
+                for name in ("Park.jpg", "Shrine gate.jpg")]}}
+        get_json.down = True
+        activities._get_json = get_json
+
+        assert activities.place_photos(places) == {}  # unreachable: nothing to show, nothing saved
+        get_json.down = False
+        photos = activities.place_photos(places)
+        assert photos == {
+            "node/1": {"url": "https://thumb/Park.jpg", "page": "https://page", "credit": "Someone · CC0"},
+            "node/3": {"url": "https://thumb/Shrine gate.jpg", "page": "https://page", "credit": "Someone · CC0"},
+        }, photos
+        asked.clear()
+        assert activities.place_photos(places) == photos and asked == []  # all saved, Q2's "none" too
+    """)
+
+
 def test_overview_columns_end_level(app_copy):
     # Every split is tried, so the columns end as close to level as they can.
     # Placing tiles one at a time into the shorter column once left the

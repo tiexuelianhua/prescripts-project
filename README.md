@@ -187,7 +187,7 @@ The project has automated tests. They load every page and check the rules undern
 .venv\Scripts\python -m pytest
 ```
 
-It takes two to three minutes and should finish with `40 passed`. Close the app first if it's running: installing packages while it's open can fail, because Windows locks files the app is using.
+It takes two to three minutes and should finish with `41 passed`. Close the app first if it's running: installing packages while it's open can fail, because Windows locks files the app is using.
 
 To check the code for mistakes like unused or undefined names, and for import order, run `.venv\Scripts\ruff check .` (add `--fix` to sort the imports for you). The settings are in `pyproject.toml`.
 
@@ -229,7 +229,7 @@ On Mac and Linux, the app runs in your web browser. The app window (`desktop_app
 
    As on Windows, press **Enter** if Streamlit asks for an email, and **Ctrl+C** to stop it.
 
-Everywhere else in this README, use `.venv/bin/python` in place of `.venv\Scripts\python`. The tests usually finish with `37 passed, 3 skipped`: the three skipped tests check PowerShell scripts, and they only run if PowerShell is installed.
+Everywhere else in this README, use `.venv/bin/python` in place of `.venv\Scripts\python`. The tests usually finish with `38 passed, 3 skipped`: the three skipped tests check PowerShell scripts, and they only run if PowerShell is installed.
 
 ## How it's built
 
@@ -246,7 +246,7 @@ prescripts/
     ├── home.py              → quotes.json
     ├── meal_receipts.py     → Meal Receipts\ (a receipts.csv per day)
     ├── weather.py           → JMA, MyMemory (translation)
-    ├── activities.py        → OpenStreetMap (Nominatim for areas, Overpass for places)
+    ├── activities.py        → OpenStreetMap (Nominatim for areas, Overpass for places), Wikimedia for photos
     ├── spotify.py, lyrics.py → Spotify Web API, LRCLIB
     └── japanese/            → Japanese\cards.json, Jisho, kanjiapi.dev
                                (deck, lookups, typed answers, spelling check)
@@ -270,7 +270,7 @@ Some choices behind it:
 - The glitch when you arrive on Home was inspired by Limbus Company's [000] trailer ([YouTube](https://youtu.be/Y2-VkdfA2os)), without copying its style.
 - Colours, font choice and button style are taken from the fan site [prescript.neocities.org](https://prescript.neocities.org/).
 - Pixel font: [Galmuri](https://github.com/quiple/galmuri) by quiple, under the SIL Open Font License (`static/Galmuri-OFL.txt`).
-- Weather: [Japan Meteorological Agency](https://www.jma.go.jp/bosai/), with warning headlines translated by [MyMemory](https://mymemory.translated.net). Places: © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors. Lyrics: [LRCLIB](https://lrclib.net). Word lookups: [Jisho](https://jisho.org) and [kanjiapi.dev](https://kanjiapi.dev).
+- Weather: [Japan Meteorological Agency](https://www.jma.go.jp/bosai/), with warning headlines translated by [MyMemory](https://mymemory.translated.net). Places: © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors, with photos from [Wikimedia Commons](https://commons.wikimedia.org), each credited beside it. Lyrics: [LRCLIB](https://lrclib.net). Word lookups: [Jisho](https://jisho.org) and [kanjiapi.dev](https://kanjiapi.dev).
 
 ## Licence
 
