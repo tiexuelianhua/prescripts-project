@@ -250,6 +250,8 @@ _CREDITS_HTML = f"""
     translated by <a href="https://mymemory.translated.net" target="_blank">MyMemory</a>.
     Places: <a href="https://www.openstreetmap.org/copyright" target="_blank">© OpenStreetMap contributors</a>,
     photos from <a href="https://commons.wikimedia.org" target="_blank">Wikimedia Commons</a>.
+    Events: Tokyo Big Sight's list from <a href="https://portal.data.metro.tokyo.lg.jp/" target="_blank">Tokyo open data</a>
+    (CC BY 4.0), news from <a href="https://animeanime.jp" target="_blank">Anime!Anime!</a>.
     Lyrics: <a href="https://lrclib.net" target="_blank">LRCLIB</a>.
     Word lookups: <a href="https://jisho.org" target="_blank">Jisho</a>,
     <a href="https://kanjiapi.dev" target="_blank">kanjiapi.dev</a>.

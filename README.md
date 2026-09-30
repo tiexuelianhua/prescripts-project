@@ -9,7 +9,7 @@ A personal dashboard app for everyday life in Japan, themed on the Prescripts of
 | **Overview** | A summary tile from each of the other pages, all on one screen |
 | **Meal Receipts** | Log meals and spending against a daily or weekly budget |
 | **Weather** | Forecasts, warnings and live readings from the Japan Meteorological Agency |
-| **Activities** | Food and things to do within walking distance of a station, an area, or where you are |
+| **Activities** | Food and things to do within walking distance of a station, an area, or where you are, plus festivals, markets and other events coming up around Tokyo |
 | **Spotify** | See and control what's playing, with lyrics (needs a one-off setup, below) |
 | **Japanese** | Vocabulary and kanji flashcards with spaced-repetition reviews |
 
@@ -161,7 +161,7 @@ Prescripts\
 ├── Meal Receipts\        ← created when you first log a meal
 ├── Japanese\             ← your flashcards
 ├── Weather\              ← your chosen forecast area (default: Tokyo)
-├── Activities\           ← your saved area and walking distance, plus recent searches
+├── Activities\           ← your saved area and walking distance, events you've added, plus recent searches
 ├── Spotify\              ← your Spotify keys + connection
 ├── quotes.json           ← quotes you add on Home
 └── app_settings.json     ← app-wide preferences, e.g. zoom level
@@ -187,7 +187,7 @@ The project has automated tests. They load every page and check the rules undern
 .venv\Scripts\python -m pytest
 ```
 
-It takes two to three minutes and should finish with `41 passed`. Close the app first if it's running: installing packages while it's open can fail, because Windows locks files the app is using.
+It takes two to three minutes and should finish with `43 passed`. Close the app first if it's running: installing packages while it's open can fail, because Windows locks files the app is using.
 
 To check the code for mistakes like unused or undefined names, and for import order, run `.venv\Scripts\ruff check .` (add `--fix` to sort the imports for you). The settings are in `pyproject.toml`.
 
@@ -229,7 +229,7 @@ On Mac and Linux, the app runs in your web browser. The app window (`desktop_app
 
    As on Windows, press **Enter** if Streamlit asks for an email, and **Ctrl+C** to stop it.
 
-Everywhere else in this README, use `.venv/bin/python` in place of `.venv\Scripts\python`. The tests usually finish with `38 passed, 3 skipped`: the three skipped tests check PowerShell scripts, and they only run if PowerShell is installed.
+Everywhere else in this README, use `.venv/bin/python` in place of `.venv\Scripts\python`. The tests usually finish with `40 passed, 3 skipped`: the three skipped tests check PowerShell scripts, and they only run if PowerShell is installed.
 
 ## How it's built
 
@@ -247,6 +247,7 @@ prescripts/
     ├── meal_receipts.py     → Meal Receipts\ (a receipts.csv per day)
     ├── weather.py           → JMA, MyMemory (translation)
     ├── activities.py        → OpenStreetMap (Nominatim for areas, Overpass for places), Wikimedia for photos
+    ├── events.py            → Tokyo Big Sight's open data, Anime!Anime! news, yearly_events.json
     ├── spotify.py, lyrics.py → Spotify Web API, LRCLIB
     └── japanese/            → Japanese\cards.json, Jisho, kanjiapi.dev
                                (deck, lookups, typed answers, spelling check)
@@ -270,7 +271,7 @@ Some choices behind it:
 - The glitch when you arrive on Home was inspired by Limbus Company's [000] trailer ([YouTube](https://youtu.be/Y2-VkdfA2os)), without copying its style.
 - Colours, font choice and button style are taken from the fan site [prescript.neocities.org](https://prescript.neocities.org/).
 - Pixel font: [Galmuri](https://github.com/quiple/galmuri) by quiple, under the SIL Open Font License (`static/Galmuri-OFL.txt`).
-- Weather: [Japan Meteorological Agency](https://www.jma.go.jp/bosai/), with warning headlines translated by [MyMemory](https://mymemory.translated.net). Places: © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors, with photos from [Wikimedia Commons](https://commons.wikimedia.org), each credited beside it. Lyrics: [LRCLIB](https://lrclib.net). Word lookups: [Jisho](https://jisho.org) and [kanjiapi.dev](https://kanjiapi.dev).
+- Weather: [Japan Meteorological Agency](https://www.jma.go.jp/bosai/), with warning headlines translated by [MyMemory](https://mymemory.translated.net). Places: © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors, with photos from [Wikimedia Commons](https://commons.wikimedia.org), each credited beside it. Events: Tokyo Big Sight's list from [Tokyo's open data](https://portal.data.metro.tokyo.lg.jp/) (CC BY 4.0), and headlines from [Anime!Anime!](https://animeanime.jp). Lyrics: [LRCLIB](https://lrclib.net). Word lookups: [Jisho](https://jisho.org) and [kanjiapi.dev](https://kanjiapi.dev).
 
 ## Licence
 

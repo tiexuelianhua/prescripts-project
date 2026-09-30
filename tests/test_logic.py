@@ -735,6 +735,77 @@ def test_activities_photos(app_copy):
     """)
 
 
+def test_events(app_copy):
+    # Big Sight's list keeps public events only, grouped by their words; a
+    # yearly event shows while it's usually on or coming up, over the new
+    # year too; news keeps collab headlines, or the watched words; and a
+    # saved copy stands in when a source can't be reached.
+    _check(app_copy, """
+        import os
+        import time
+        import urllib.error
+        from datetime import date
+        import prescripts.data.events as events
+
+        header = "展示会名,会期(開始),会期(終了),利用施設,開催時間 開催時間が毎日異なる場合,来場対象者,内容,URL"
+        csv_text = "\\n".join([
+            header,
+            "COMIC CITY 東京153,2026/11/29,2026/11/29,西1-4,10:30-15:00,一般,,https://example.com",
+            "食品開発展,2026/10/14,2026/10/16,西1・2・4,10:00-17:00,商談,,",
+            "文学フリマ東京43,2026/11/8,2026/11/8,南1-4,12:00-17:00,一般,,",
+            "産業交流展,2026/11/11,2026/11/13,有明GYM-EX,10:00-17:00,商談/一般,,",
+        ])
+        parsed = events.parse_big_sight(csv_text)
+        assert [(event["name"], event["group"]) for event in parsed] == [
+            ("COMIC CITY 東京153", "anime_games"), ("文学フリマ東京43", "art"), ("産業交流展", "convention")], parsed
+        assert parsed[0]["start"] == "2026-11-29" and parsed[0]["place"] == "Tokyo Big Sight (西1-4)"
+        assert parsed[2]["place"] == "有明GYM-EX"  # its own building, not a hall
+
+        boroichi = {"around": [["12-15", "12-16"], ["01-15", "01-16"]]}
+        assert events._yearly_next(boroichi, date(2026, 11, 20)) == date(2026, 12, 15)
+        assert events._yearly_next(boroichi, date(2026, 12, 20)) == date(2027, 1, 15)
+        assert events._yearly_next(boroichi, date(2026, 9, 1)) is None  # over two months off
+        film_festival = {"around": [["10-25", "11-06"]]}
+        assert events._yearly_next(film_festival, date(2026, 11, 1)) == date(2026, 11, 1)  # on now
+        new_year = {"around": [["12-30", "01-03"]]}
+        assert events._yearly_next(new_year, date(2027, 1, 2)) == date(2027, 1, 2)  # began last year
+        for entry in events.yearly_events():  # the shipped list is well-formed
+            assert entry["group"] in events.GROUPS and entry["usually"] and entry["around"], entry
+            for first, final in entry["around"]:
+                date(2028, *map(int, first.split("-"))), date(2028, *map(int, final.split("-")))
+
+        feed = '''<?xml version="1.0"?><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+            xmlns="http://purl.org/rss/1.0/" xmlns:dc="http://purl.org/dc/elements/1.1/">
+            <item><title>「ハローキティ」コラボカフェ開催</title><link>https://a</link><dc:date>2026-09-30T01:00:00Z</dc:date></item>
+            <item><title>新作アニメの放送日決定</title><link>https://b</link><dc:date>2026-09-29T01:00:00Z</dc:date></item>
+            <item><title>「鬼滅の刃」新グッズ</title><link>https://c</link><dc:date>2026-09-28T01:00:00Z</dc:date></item>
+        </rdf:RDF>'''
+        fetched = []
+        def fetch(url, timeout=30):
+            fetched.append(url)
+            if fetch.down:
+                raise urllib.error.URLError("down")
+            return feed.encode()
+        fetch.down = False
+        events._fetch = fetch
+        assert [item["link"] for item in events.news([])] == ["https://a"]
+        assert [item["link"] for item in events.news(["鬼滅"])] == ["https://c"]
+        assert events.news([])[0]["date"] == "2026-09-30" and len(fetched) == 1  # saved for an hour
+
+        path = events.CACHE_DIR / "anime_news.txt"
+        hours_ago = time.time() - 2 * 3600
+        os.utime(path, (hours_ago, hours_ago))
+        fetch.down = True
+        assert [item["link"] for item in events.news([])] == ["https://a"]  # old copy, source down
+        path.unlink()
+        try:
+            events.news([])
+            raise AssertionError("should have failed: nothing saved to fall back on")
+        except urllib.error.URLError:
+            pass
+    """)
+
+
 def test_overview_columns_end_level(app_copy):
     # Every split is tried, so the columns end as close to level as they can.
     # Placing tiles one at a time into the shorter column once left the

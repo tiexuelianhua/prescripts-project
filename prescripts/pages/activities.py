@@ -5,6 +5,7 @@
 # show a photo where Wikimedia Commons has one.
 import html
 import urllib.error
+from datetime import date
 
 import streamlit as st
 
@@ -31,6 +32,20 @@ from prescripts.data.activities import (
     unhide_place,
     without_hidden,
 )
+from prescripts.data.events import (
+    AHEAD_DAYS,
+    FETCH_ERRORS as EVENT_FETCH_ERRORS,
+    GROUPS,
+    add_my_event,
+    big_sight_events,
+    dates_search,
+    matches,
+    news,
+    remove_my_event,
+    today_jst,
+    upcoming,
+    web_search,
+)
 
 PAGE_TITLE = "Activities"
 # Results shown at first, and added by each "Show more": a busy area like
@@ -54,6 +69,14 @@ TYPE_LABELS = {
     "department_store": "department store", "public_bath": "",
 }
 FETCH_ERRORS = (urllib.error.URLError, TimeoutError, ValueError, KeyError)
+GROUP_ICONS = {"festival": "🏮", "market": "🧺", "anime_games": "🎮", "art": "🎨", "music": "🎵", "convention": "🏢"}
+# Web searches for the kinds of event no free source lists.
+QUICK_SEARCHES = {
+    "Anime pop-up shops this week": "アニメ ポップアップストア 東京 今週",
+    "Collab cafés on now": "コラボカフェ 東京 開催中",
+    "Art exhibitions this month": "東京 展覧会 今月",
+    "Gigs this weekend": "東京 ライブ 今週末",
+}
 
 is_first_load = "_activities_title_played" not in st.session_state
 inject_body_fade_in("main_body")
@@ -337,6 +360,127 @@ def render_list(places: list[dict], list_key: str) -> None:
         st.rerun()
 
 
+def format_dates(event: dict) -> str:
+    # "Sat 3 Oct", "2–4 Oct" or "28 Nov – 2 Dec". A yearly event's dates are
+    # only approximate, so it says when it usually is instead.
+    if event["usually"]:
+        return f"usually {event['usually']}"
+    start, end = date.fromisoformat(event["start"]), date.fromisoformat(event["end"])
+    if start == end:
+        return f"{start:%a} {start.day} {start:%b}"
+    if (start.year, start.month) == (end.year, end.month):
+        return f"{start.day}–{end.day} {end:%b}"
+    return f"{start.day} {start:%b} – {end.day} {end:%b}"
+
+
+def _add_event() -> None:
+    name = st.session_state.get("activities_event_name", "").strip()
+    if not name:
+        st.session_state["_activities_event_note"] = "Give the event a name first."
+        return
+    start = st.session_state["activities_event_start"]
+    add_my_event(name, start, st.session_state.get("activities_event_end") or start,
+                 st.session_state.get("activities_event_place", ""), st.session_state["activities_event_group"],
+                 st.session_state.get("activities_event_link", ""))
+    for key in ("activities_event_name", "activities_event_place", "activities_event_link"):
+        st.session_state[key] = ""
+    st.session_state["_activities_event_note"] = f"Added {name}."
+
+
+def render_event_row(event: dict, today: date) -> None:
+    name = _plain(event["name"]) + (f" · {_plain(event['name_en'])}" if event["name_en"] else "")
+    details = [format_dates(event), _plain(event["place"])]
+    if event["hours"]:
+        details.append(_plain(event["hours"]))
+    if event["link"].startswith(("https://", "http://")):
+        details.append(f"<a href='{html.escape(event['link'])}' target='_blank'>Details</a>")
+    if event["usually"]:
+        details.append(f"<a href='{html.escape(dates_search(event, today))}' target='_blank'>This year's dates</a>")
+    details = [detail for detail in details if detail]
+    text_column, remove_column = st.columns([13, 1], vertical_alignment="center")
+    text_column.markdown(
+        f"{GROUP_ICONS.get(event['group'], '📅')} <b class='place-name event-name'>{name}</b>  \n"
+        f"<small>{' · '.join(details)}</small>",
+        unsafe_allow_html=True,
+    )
+    if event["source"] == "Mine":
+        remove_column.button("✕", key=f"activities_event_remove_{event['id']}", width="stretch",
+                             help="Remove this event", on_click=remove_my_event, args=(event["id"],))
+
+
+def render_events() -> None:
+    # Coming up around greater Tokyo. Not tied to the saved area, so shown
+    # even before one is set.
+    st.subheader("📅 Events")
+    today = today_jst()
+    try:
+        with st.spinner("Looking up events…"):
+            big_sight = big_sight_events()
+    except EVENT_FETCH_ERRORS:
+        big_sight = None
+    chosen = st.pills(
+        "Kinds of event", list(GROUPS), format_func=lambda group: f"{GROUP_ICONS[group]} {GROUPS[group]}",
+        # Conventions start off: most of Big Sight's public days are career
+        # and trade-style fairs, which would bury the rest.
+        selection_mode="multi", default=[group for group in GROUPS if group != "convention"],
+        key="activities_event_groups", label_visibility="collapsed",
+    )
+    search = st.text_input("Search events", placeholder="e.g. comic, Asakusa, fireworks", key="activities_event_search")
+    events = [event for event in upcoming(today, big_sight)
+              if event["group"] in chosen and (not search.strip() or matches(event, search))]
+    note = f"{len(events)} in the next {AHEAD_DAYS // 30} months, soonest first."
+    if big_sight is None:
+        note += " Tokyo Big Sight's list couldn't be reached, so its events are missing for now."
+    st.caption(note)
+
+    limit_key = "_activities_events_limit"
+    limit = st.session_state.get(limit_key, PAGE_SIZE)
+    for event in events[:limit]:
+        render_event_row(event, today)
+    if len(events) > limit and st.button("Show more", key="activities_events_more"):
+        st.session_state[limit_key] = limit + PAGE_SIZE
+        st.rerun()
+
+    with st.expander("Add an event"):
+        st.caption("For pop-ups, gigs and exhibitions you spot elsewhere. Only kept on this computer.")
+        st.text_input("Name", key="activities_event_name")
+        start_column, end_column = st.columns(2)
+        start_column.date_input("From", value=today, key="activities_event_start", format="YYYY/MM/DD")
+        end_column.date_input("To", value=None, key="activities_event_end", format="YYYY/MM/DD",
+                              help="Leave empty for a one-day event")
+        st.text_input("Where", key="activities_event_place")
+        st.selectbox("Kind", list(GROUPS), format_func=GROUPS.get, key="activities_event_group")
+        st.text_input("Link (optional)", key="activities_event_link")
+        st.button("Add event", on_click=_add_event)
+        if st.session_state.get("_activities_event_note"):
+            st.caption(st.session_state.pop("_activities_event_note"))
+
+    with st.expander("Collab and pop-up news"):
+        words = st.text_input(
+            "Watch for", value=", ".join(settings.get("news_words", [])),
+            placeholder="Series or characters, e.g. 鬼滅の刃, ハローキティ", key="activities_news_words",
+            help="Leave empty to see every collab and pop-up headline",
+        )
+        watched = [word.strip() for word in words.replace("、", ",").split(",") if word.strip()]
+        if watched != settings.get("news_words", []):
+            settings["news_words"] = watched
+            save_settings(settings)
+        try:
+            headlines = news(watched)[:10]
+        except EVENT_FETCH_ERRORS:
+            headlines = None
+            st.caption("Couldn't reach the news feed right now.")
+        if headlines == []:
+            st.caption("Nothing in the latest headlines" + (" mentions those." if watched else "."))
+        for item in headlines or []:
+            st.markdown(f"<small>{_plain(item['date'])}</small> "
+                        f"<a href='{html.escape(item['link'])}' target='_blank'>{_plain(item['title'])}</a>",
+                        unsafe_allow_html=True)
+        st.caption("Headlines from [Anime!Anime!](https://animeanime.jp). Nothing free lists pop-ups as such, "
+                   "so these search the web instead: "
+                   + " · ".join(f"[{label}]({web_search(query)})" for label, query in QUICK_SEARCHES.items()))
+
+
 settings = load_settings()
 
 with st.container(key="main_body"):
@@ -368,6 +512,9 @@ with st.container(key="main_body"):
             )
             render_places(kind, origin, radius)
 
+    st.divider()
+    render_events()
+
     if hidden_places(settings):
         with st.expander(f"Hidden places ({len(hidden_places(settings))})"):
             for entry in hidden_places(settings):
@@ -380,5 +527,6 @@ with st.container(key="main_body"):
     st.caption(
         "Places © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors. "
         "Photos from [Wikimedia Commons](https://commons.wikimedia.org), each credited under it. "
+        "Big Sight's events: [Tokyo open data](https://portal.data.metro.tokyo.lg.jp/) (CC BY 4.0). "
         "Only as complete as its map: some places may be missing or out of date."
     )

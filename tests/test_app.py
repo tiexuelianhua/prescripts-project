@@ -232,6 +232,9 @@ def test_activities_page(app_copy):
              "tags": {"amenity": "restaurant", "name": "うなぎ 松川", "name:en": "Matsukawa's Eel & Rice"}},
         ]
         activities.fetch_places = lambda kind, lat, lon, radius: sample
+        import prescripts.data.events as events
+        events.big_sight_events = lambda: []
+        events.news = lambda words: []
 
         at = AppTest.from_file(str(SCRIPTS_DIR / "app.py"), default_timeout=60)
         at.run()
@@ -287,6 +290,64 @@ def test_activities_page(app_copy):
         at.run()
         assert not at.exception, at.exception
         assert any("Couldn't reach OpenStreetMap" in error.value for error in at.error)
+    """)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_activities_events(app_copy):
+    # Events show soonest first with Conventions off at first; an event added
+    # with the form shows and can be removed; and with Big Sight's list
+    # unreachable the rest still show, with a note. Stand-ins replace the
+    # network lookups.
+    result = run_in(app_copy, """
+        import urllib.error
+        from datetime import date, timedelta
+        from streamlit.testing.v1 import AppTest
+        import prescripts.data.events as events
+        from prescripts.common import SCRIPTS_DIR
+
+        today = events.today_jst()
+        def day(offset):
+            return (today + timedelta(days=offset)).isoformat()
+        sample = [
+            {"name": "COMIC CITY", "start": day(5), "end": day(5), "place": "Tokyo Big Sight (西1-4)",
+             "group": "anime_games", "hours": "10:30-15:00", "link": "https://example.com", "source": "Big Sight"},
+            {"name": "Career fair", "start": day(2), "end": day(3), "place": "Tokyo Big Sight (南1-4)",
+             "group": "convention", "hours": "", "link": "", "source": "Big Sight"},
+        ]
+        events.big_sight_events = lambda: sample
+        events.news = lambda words: [{"title": "「ハローキティ」コラボカフェ", "link": "https://example.com/n", "date": "2026-09-30"}]
+        events.yearly_events = lambda: []
+
+        at = AppTest.from_file(str(SCRIPTS_DIR / "app.py"), default_timeout=60)
+        at.run()
+        at.switch_page("prescripts/pages/activities.py")
+        at.run()
+        assert not at.exception, at.exception
+        def shown():
+            return [block.value for block in at.markdown if "event-name" in block.value]
+        assert len(shown()) == 1 and "COMIC CITY" in shown()[0] and "10:30-15:00" in shown()[0], shown()
+        assert any("ハローキティ" in block.value for block in at.markdown)
+
+        at.text_input(key="activities_event_name").input("Chiikawa pop-up")
+        at.date_input(key="activities_event_start").set_value(today + timedelta(days=1))
+        at.text_input(key="activities_event_place").input("Shibuya PARCO")
+        at.selectbox(key="activities_event_group").set_value("anime_games")
+        next(button for button in at.button if button.label == "Add event").click()
+        at.run()
+        assert not at.exception, at.exception
+        assert len(shown()) == 2 and "Chiikawa pop-up" in shown()[0] and "Shibuya PARCO" in shown()[0], shown()
+        [mine] = events.my_events()
+        at.button(key=f"activities_event_remove_{mine['id']}").click()
+        at.run()
+        assert len(shown()) == 1 and events.my_events() == []
+
+        def unreachable():
+            raise urllib.error.URLError("down")
+        events.big_sight_events = unreachable
+        at.run()
+        assert not at.exception, at.exception
+        assert shown() == [] and any("couldn't be reached" in caption.value for caption in at.caption)
     """)
     assert result.returncode == 0, result.stdout + result.stderr
 
