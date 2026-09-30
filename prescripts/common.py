@@ -182,10 +182,15 @@ def render_top_bar() -> None:
         [data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"] > *:has(.st-key-top_bar) {{
             position: absolute;
         }}
+        /* Just right of the sidebar, which is open or shut and can be
+           dragged wider (--sidebar-right, kept by install_page_shortcuts),
+           so its arrow is never under the buttons. On a window too narrow
+           for both, the open sidebar covers the page anyway, so the bar
+           waits hidden until it's shut. */
         .st-key-top_bar {{
             position: fixed;
             top: 0.55rem;
-            left: 3.5rem;
+            left: calc(var(--sidebar-right, 0px) + 3.5rem);
             z-index: 999991;
             zoom: {1 / zoom};
             width: auto;
@@ -196,6 +201,9 @@ def render_top_bar() -> None:
             min-height: 0;
             padding: 0 0.6rem;
             line-height: 1.6;
+        }}
+        [data-sidebar-crowds] .st-key-top_bar {{
+            visibility: hidden;
         }}
         {arriving_hide}
         </style>
@@ -263,6 +271,38 @@ def install_page_shortcuts() -> None:
             document.addEventListener("click", event => {
                 if (event.target.closest(".st-key-go_overview button")) window.playHomeGlitch(GLITCH_OPTIONS);
             }, true);
+            // The top bar sits right of the sidebar (see render_top_bar).
+            // Its width changes as it opens, shuts or is dragged, and part
+            // of opening is a slide the observer can't see, so its edge is
+            // re-read every frame for a moment after. The check every second
+            // picks up a sidebar Streamlit has drawn afresh.
+            let followUntil = 0;
+            const follow = () => {
+                if (!watched) return;
+                const right = Math.max(0, watched.getBoundingClientRect().right);
+                const bar = document.querySelector(".st-key-top_bar");
+                const room = window.innerWidth - right - 56 - 50;  // its gap, Streamlit's menu
+                document.documentElement.style.setProperty("--sidebar-right", right + "px");
+                document.documentElement.toggleAttribute("data-sidebar-crowds", right > 0 && !!bar && bar.offsetWidth > room);
+                if (performance.now() < followUntil) requestAnimationFrame(follow);
+            };
+            const edge = new ResizeObserver(() => {
+                const idle = performance.now() >= followUntil;
+                followUntil = performance.now() + 800;
+                if (idle) follow();
+            });
+            let watched = null;
+            const watchSidebar = () => {
+                const sidebar = document.querySelector('[data-testid="stSidebar"]');
+                if (sidebar && sidebar !== watched) {
+                    if (watched) edge.unobserve(watched);
+                    edge.observe(sidebar);
+                    watched = sidebar;
+                }
+            };
+            watchSidebar();
+            setInterval(watchSidebar, 1000);
+            window.addEventListener("resize", follow);
         }
         </script>""".replace("GLITCH_OPTIONS", glitch_options),
         unsafe_allow_javascript=True,
