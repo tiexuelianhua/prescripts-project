@@ -451,7 +451,7 @@ def _activities_height() -> int:
     # With an area: food, a place to go (usually with a photo) and an event.
     # Without, just the event. Measured 2026-09-30, with each pick's label
     # and the gap above "Another".
-    return 71 if activities_load_settings().get("area") else 33
+    return 74 if activities_load_settings().get("area") else 35
 
 
 def _spotify_height() -> int:
@@ -537,7 +537,7 @@ st.markdown(
     }}
     /* Which pick is which, so the photo isn't taken for the food place. */
     .overview-pick-label {{
-        margin-top: 0.8rem;
+        margin-top: 1.4rem;
         font-size: 0.8rem;
         opacity: 0.7;
     }}
@@ -555,9 +555,11 @@ st.markdown(
         opacity: 0.7;
         font-size: 0.7rem;
     }}
-    /* Room between the event's date and the button under it. */
+    /* The button and the link under it sit at the tile's bottom when the
+       column leaves it room to spare, and at least 1rem below the event. */
     .st-key-overview_activities_another {{
-        margin-top: 0.75rem;
+        margin-top: auto;
+        padding-top: 1rem;
     }}
     [data-testid="stColumn"]:has([class*="st-key-overview_tile_"]) > [data-testid="stVerticalBlock"] > [data-testid="stLayoutWrapper"]:last-child {{
         flex-grow: 1;
