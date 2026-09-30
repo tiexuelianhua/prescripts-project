@@ -35,8 +35,17 @@ from prescripts.data.activities import (
     load_settings as activities_load_settings,
     map_link as activities_map_link,
     parse_places as activities_parse_places,
+    place_photos as activities_place_photos,
     place_spot as activities_place_spot,
+    saved_or_fetch_places as activities_saved_or_fetch_places,
     without_hidden as activities_without_hidden,
+)
+from prescripts.data.events import (
+    FETCH_ERRORS as EVENT_FETCH_ERRORS,
+    big_sight_events,
+    format_dates,
+    today_jst,
+    upcoming,
 )
 from prescripts.data.japanese.answers import (
     display_readings as japanese_display_readings,
@@ -293,38 +302,58 @@ def render_japanese_tile() -> None:
     st.page_link("prescripts/pages/japanese.py", label="Open Japanese", icon="🈁")
 
 
+def _pick(key: str, choices: list[dict], id_of) -> dict:
+    # A random pick, like the Japanese tile's word: new each time Overview
+    # is opened, kept while staying here (a Spotify button press reruns the
+    # page), and a different one after "🎲 Another".
+    just_arrived = st.session_state.get("_previous_page") != st.session_state.get("_current_page")
+    chosen = None if just_arrived else st.session_state.get(key)
+    if st.session_state.get("_overview_activities_reroll"):
+        choices = [choice for choice in choices if id_of(choice) != chosen] or choices
+        chosen = None
+    picked = next((choice for choice in choices if id_of(choice) == chosen), None) or random.choice(choices)
+    st.session_state[key] = id_of(picked)
+    return picked
+
+
+def _distance(place: dict) -> str:
+    metres = place["distance"]
+    return f"{metres:.0f} m away" if metres < 1000 else f"{metres / 1000:.1f} km away"
+
+
+def _tile_places(kind: str, settings: dict) -> list[dict] | None:
+    # None if OpenStreetMap couldn't be reached. Food is the quick lookup,
+    # so it's asked fresh (cached a day); things to do can take 15s+ when
+    # OSM is busy, which would hold up the whole page, so their saved copy
+    # is used whatever its age.
+    spot = activities_place_spot(settings["lat"], settings["lon"])
+    radius = settings.get("radius", ACTIVITIES_DEFAULT_RADIUS)
+    fetch = activities_fetch_places if kind == "food" else activities_saved_or_fetch_places
+    try:
+        elements = fetch(kind, *spot, radius)
+    except (urllib.error.URLError, TimeoutError, ValueError, KeyError):
+        return None
+    return activities_without_hidden(activities_parse_places(kind, elements, settings["lat"], settings["lon"]), settings)
+
+
 def render_activities_tile() -> None:
+    # A random place to eat, a place to go (one with a photo, where one of
+    # them has one) and an upcoming event, all re-rolled together.
     settings = activities_load_settings()
     area = settings.get("area")
     st.subheader(f"📍 Activities -- {area}" if area else "📍 Activities")
     if not area:
         st.caption("No area saved yet -- pick one on the Activities page.")
     else:
-        # Food only: it's the quick lookup (things to do can take 15s+ when
-        # OSM is busy, which would hold up the whole page), and cached a day.
-        radius = settings.get("radius", ACTIVITIES_DEFAULT_RADIUS)
-        try:
-            elements = activities_fetch_places("food", *activities_place_spot(settings["lat"], settings["lon"]), radius)
-            places = activities_without_hidden(
-                activities_parse_places("food", elements, settings["lat"], settings["lon"]), settings
-            )
-        except (urllib.error.URLError, TimeoutError, ValueError, KeyError):
-            places = None
+        food = _tile_places("food", settings)
+        if food is None:
             st.caption("Couldn't reach OpenStreetMap's place search right now.")
-        if places == []:
+        elif not food:
             st.caption("No food places found within walking distance.")
-        elif places:
-            # A random pick, like the Japanese tile's word: new each time
-            # Overview is opened, kept while staying here (a Spotify button
-            # press reruns the page), or re-rolled with the button.
-            just_arrived = st.session_state.get("_previous_page") != st.session_state.get("_current_page")
-            chosen_id = None if just_arrived else st.session_state.get("overview_activities_place")
-            place = next((place for place in places if place["id"] == chosen_id), None) or random.choice(places)
-            st.session_state["overview_activities_place"] = place["id"]
+        else:
+            place = _pick("overview_activities_place", food, lambda place: place["id"])
             english = f" · {html.escape(place['name_en'])}" if place["name_en"] else ""
-            details = [ACTIVITIES_CATEGORIES["food"][place["category"]][0].removesuffix("s"),
-                       f"{place['distance']:.0f} m away" if place["distance"] < 1000
-                       else f"{place['distance'] / 1000:.1f} km away"]
+            details = [ACTIVITIES_CATEGORIES["food"][place["category"]][0].removesuffix("s"), _distance(place)]
             details += [html.escape(detail) for detail in (place["cuisine"], place["hours"]) if detail]
             st.markdown(
                 f'<div class="overview-place-name" lang="ja">{html.escape(place["name"])}{english}</div>'
@@ -332,10 +361,56 @@ def render_activities_tile() -> None:
                 f"<a href='{activities_map_link(place)}' target='_blank'>Map</a></small>",
                 unsafe_allow_html=True,
             )
-            if st.button("🎲 Another", key="overview_activities_another"):
-                others = [other for other in places if other["id"] != place["id"]] or places
-                st.session_state["overview_activities_place"] = random.choice(others)["id"]
-                st.rerun()
+
+        things = _tile_places("things", settings) or []
+        if things:
+            # Photos for a handful at most: each new one is a lookup the
+            # first time (saved for a month after).
+            with_source = [thing for thing in things if thing["photo_source"]]
+            photos = activities_place_photos(random.sample(with_source, min(8, len(with_source))))
+            if st.session_state.get("overview_activities_thing") in {thing["id"] for thing in with_source}:
+                photos |= activities_place_photos(
+                    [thing for thing in with_source if thing["id"] == st.session_state["overview_activities_thing"]])
+            choices = [thing for thing in things if thing["id"] in photos] or things
+            thing = _pick("overview_activities_thing", choices, lambda place: place["id"])
+            photo = photos.get(thing["id"])
+            # As the Activities page words it: a shrine or temple, not OSM's
+            # "place of worship".
+            kind_of_place = {"shinto": "Shinto shrine", "buddhist": "Buddhist temple"}.get(
+                thing["religion"], thing["type"].replace("_", " "))
+            english = f" · {html.escape(thing['name_en'])}" if thing["name_en"] else ""
+            # A box with the photo as its background, cropped to fill it:
+            # Streamlit's own image styles keep an <img> at its own width.
+            picture = (f"<div class='overview-photo' style=\"background-image: url('{html.escape(photo['url'])}')\"></div>"
+                       f"<small class='overview-credit'>Photo: {html.escape(photo['credit'] or 'Wikimedia Commons')}</small>"
+                       if photo else "")
+            st.markdown(
+                f"{picture}<div class='overview-place-name' lang='ja'>{html.escape(thing['name'])}{english}</div>"
+                f"<small>{html.escape(kind_of_place)} · {_distance(thing)} · "
+                f"<a href='{activities_map_link(thing)}' target='_blank'>Map</a></small>",
+                unsafe_allow_html=True,
+            )
+
+    # Events aren't tied to the area, so shown even without one. Conventions
+    # are left out, as on the Activities page's list at first.
+    try:
+        big_sight = big_sight_events()
+    except EVENT_FETCH_ERRORS:
+        big_sight = None
+    coming_up = [event for event in upcoming(today_jst(), big_sight) if event["group"] != "convention"]
+    if coming_up:
+        event = _pick("overview_activities_event", coming_up, lambda event: f"{event['name']}|{event['start']}")
+        english = f" · {html.escape(event['name_en'])}" if event["name_en"] else ""
+        st.markdown(
+            f"<div class='overview-event-name' lang='ja'>📅 {html.escape(event['name'])}{english}</div>"
+            f"<small>{html.escape(format_dates(event))} · {html.escape(event['place'])}</small>",
+            unsafe_allow_html=True,
+        )
+    st.session_state.pop("_overview_activities_reroll", None)
+
+    if area or coming_up:
+        st.button("🎲 Another", key="overview_activities_another",
+                  on_click=lambda: st.session_state.update(_overview_activities_reroll=True))
     st.page_link("prescripts/pages/activities.py", label="Open Activities", icon="📍")
 
 
@@ -370,7 +445,9 @@ def _japanese_height() -> int:
 
 
 def _activities_height() -> int:
-    return 28 if activities_load_settings().get("area") else 19
+    # With an area: food, a place to go (usually with a photo) and an event.
+    # Without, just the event. Measured 2026-09-30.
+    return 67 if activities_load_settings().get("area") else 30
 
 
 def _spotify_height() -> int:
@@ -445,11 +522,32 @@ st.markdown(
     .overview-word-meaning {{
         margin-top: 0.25rem;
     }}
-    /* The Activities tile's pick, in the same Japanese font for the same reason. */
-    .overview-place-name {{
+    /* The Activities tile's picks, in the same Japanese font for the same reason. */
+    .overview-place-name, .overview-event-name {{
         font-family: "Yu Gothic UI", "Yu Gothic", "Meiryo", "Hiragino Sans", sans-serif;
         font-size: 1.3rem;
         font-weight: bold;
+    }}
+    .overview-place-name {{
+        margin-top: 0.6rem;
+    }}
+    .overview-event-name {{
+        font-size: 1.1rem;
+        margin-top: 0.8rem;
+    }}
+    /* A place to go's photo, across the tile, above its name. */
+    .overview-photo {{
+        width: 100%;
+        height: 9rem;
+        background-size: cover;
+        background-position: center;
+        border-radius: 4px;
+        margin-top: 0.8rem;
+    }}
+    .overview-credit {{
+        display: block;
+        opacity: 0.7;
+        font-size: 0.7rem;
     }}
     [data-testid="stColumn"]:has([class*="st-key-overview_tile_"]) > [data-testid="stVerticalBlock"] > [data-testid="stLayoutWrapper"]:last-child {{
         flex-grow: 1;

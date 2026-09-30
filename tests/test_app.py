@@ -362,10 +362,19 @@ def test_activities_page(app_copy):
         at.text_input(key="activities_wish").input("").run()
         assert any("3 within 800 m" in caption.value for caption in at.caption)
 
-        # Overview's tile: one of the places, and "Another" picks a different one.
+        # Overview's tile: one of the places, a place to go with its photo,
+        # an event, and "Another" picks a different place.
+        things = [{"type": "node", "id": 7, "lat": 35.6590, "lon": 139.7020,
+                   "tags": {"leisure": "park", "name": "代々木公園", "wikidata": "Q1"}}]
+        activities.saved_or_fetch_places = lambda kind, lat, lon, radius: things
+        photo = {"url": "https://thumb/park.jpg", "page": "https://page", "credit": "Someone · CC0"}
+        activities.place_photos = lambda places: {place["id"]: photo for place in places if place["id"] == "node/7"}
         at.switch_page("prescripts/pages/overview.py")
         at.run()
         assert not at.exception, at.exception
+        thing = next(block.value for block in at.markdown if "代々木公園" in block.value)
+        assert "overview-photo" in thing and "thumb/park.jpg" in thing and "Someone · CC0" in thing, thing
+        assert any("overview-event-name" in block.value for block in at.markdown)  # the monthly antique market at least
         def picked():
             return next(block.value for block in at.markdown if "overview-place-name" in block.value
                         and "<div" in block.value)

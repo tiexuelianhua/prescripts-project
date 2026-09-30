@@ -208,6 +208,19 @@ def upcoming(today: date, big_sight: list[dict] | None) -> list[dict]:
     return sorted(found, key=lambda event: (event["start"], event["name"]))
 
 
+def format_dates(event: dict) -> str:
+    # "Sat 3 Oct", "2–4 Oct" or "28 Nov – 2 Dec". A yearly event's dates are
+    # only approximate, so it says when it usually is instead.
+    if event["usually"]:
+        return f"usually {event['usually']}"
+    start, end = date.fromisoformat(event["start"]), date.fromisoformat(event["end"])
+    if start == end:
+        return f"{start:%a} {start.day} {start:%b}"
+    if (start.year, start.month) == (end.year, end.month):
+        return f"{start.day}–{end.day} {end:%b}"
+    return f"{start.day} {start:%b} – {end.day} {end:%b}"
+
+
 def matches(event: dict, text: str) -> bool:
     # Every word typed is in its name, place or group.
     haystack = f"{event['name']} {event['place']} {GROUPS.get(event['group'], '')}".casefold()

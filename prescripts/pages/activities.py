@@ -39,6 +39,7 @@ from prescripts.data.events import (
     add_my_event,
     big_sight_events,
     dates_search,
+    format_dates,
     matches,
     news,
     remove_my_event,
@@ -358,19 +359,6 @@ def render_list(places: list[dict], list_key: str) -> None:
     if len(places) > limit and st.button("Show more", key=f"activities_{list_key}_more"):
         st.session_state[limit_key] = limit + PAGE_SIZE
         st.rerun()
-
-
-def format_dates(event: dict) -> str:
-    # "Sat 3 Oct", "2–4 Oct" or "28 Nov – 2 Dec". A yearly event's dates are
-    # only approximate, so it says when it usually is instead.
-    if event["usually"]:
-        return f"usually {event['usually']}"
-    start, end = date.fromisoformat(event["start"]), date.fromisoformat(event["end"])
-    if start == end:
-        return f"{start:%a} {start.day} {start:%b}"
-    if (start.year, start.month) == (end.year, end.month):
-        return f"{start.day}–{end.day} {end:%b}"
-    return f"{start.day} {start:%b} – {end.day} {end:%b}"
 
 
 def _add_event() -> None:

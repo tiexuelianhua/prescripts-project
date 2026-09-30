@@ -161,6 +161,17 @@ def _overpass(query: str) -> list[dict]:
     return elements
 
 
+def saved_or_fetch_places(kind: str, lat: float, lon: float, radius: int) -> list[dict]:
+    # For Overview, which shouldn't wait on a slow lookup: the saved answer
+    # whatever its age (places rarely change, and the Activities page keeps
+    # it fresh), only asking Overpass when there's none yet.
+    path = CACHE_DIR / (hashlib.sha1(overpass_query(kind, lat, lon, radius).encode()).hexdigest() + ".json")
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))["elements"]
+    except (FileNotFoundError, ValueError, KeyError):
+        return fetch_places(kind, lat, lon, radius)
+
+
 def _overpass_fetch(query: str) -> list[dict]:
     body = urllib.parse.urlencode({"data": query}).encode()
     try:
