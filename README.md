@@ -12,6 +12,7 @@ A personal dashboard app for everyday life in Japan, themed on the Prescripts of
 | **Activities** | Food and things to do within walking distance of a station, an area, or where you are, plus festivals, markets and other events coming up around Tokyo |
 | **Spotify** | See and control what's playing, with lyrics (needs a one-off setup, below) |
 | **Japanese** | Vocabulary and kanji flashcards with spaced-repetition reviews |
+| **Settings** | Switch pages and Overview tiles on or off (Spotify starts off) |
 
 ![The Overview page: a tile each for Meal Receipts, Weather, Japanese and Spotify](docs/screenshots/overview.png)
 
@@ -131,7 +132,7 @@ Want it open (minimised) whenever you sign in? Press **Win+R**, type `shell:star
 
 ## Optional: connect Spotify
 
-Every page except Spotify works straight away. The Spotify page needs your own (free) Spotify developer app, because Spotify doesn't let apps like this share one. Until you set it up, the page just says no credentials were found.
+Every page except Spotify works straight away. Spotify starts switched off: turn it on in the app's **Settings** page first. It needs your own (free) Spotify developer app, because Spotify doesn't let apps like this share one. Until you set it up, the page just says no credentials were found.
 
 1. Go to the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard), sign in with your Spotify account, and click **Create app**.
 2. Give it any name and description. Under **Redirect URIs**, add exactly:
@@ -164,7 +165,7 @@ Prescripts\
 ├── Activities\           ← your saved area and walking distance, events you've added, plus recent searches
 ├── Spotify\              ← your Spotify keys + connection
 ├── quotes.json           ← quotes you add on Home
-└── app_settings.json     ← app-wide preferences, e.g. zoom level
+└── app_settings.json     ← app-wide preferences: zoom level, which pages and tiles are on
 ```
 
 Back up the `Prescripts` folder to back up everything.
@@ -187,7 +188,7 @@ The project has automated tests. They load every page and check the rules undern
 .venv\Scripts\python -m pytest
 ```
 
-It takes two to three minutes and should finish with `46 passed`. Close the app first if it's running: installing packages while it's open can fail, because Windows locks files the app is using.
+It takes two to three minutes and should finish with `47 passed`. Close the app first if it's running: installing packages while it's open can fail, because Windows locks files the app is using.
 
 To check the code for mistakes like unused or undefined names, and for import order, run `.venv\Scripts\ruff check .` (add `--fix` to sort the imports for you). The settings are in `pyproject.toml`.
 
@@ -229,7 +230,7 @@ On Mac and Linux, the app runs in your web browser. The app window (`desktop_app
 
    As on Windows, press **Enter** if Streamlit asks for an email, and **Ctrl+C** to stop it.
 
-Everywhere else in this README, use `.venv/bin/python` in place of `.venv\Scripts\python`. The tests usually finish with `43 passed, 3 skipped`: the three skipped tests check PowerShell scripts, and they only run if PowerShell is installed.
+Everywhere else in this README, use `.venv/bin/python` in place of `.venv\Scripts\python`. The tests usually finish with `44 passed, 3 skipped`: the three skipped tests check PowerShell scripts, and they only run if PowerShell is installed.
 
 ## How it's built
 
@@ -241,7 +242,7 @@ app.py                       shared look, top bar, and navigation between pages
 prescripts/
 ├── common.py                what every page shares: the page list, the Prescripts styling, JST
 ├── spotify_widgets.py       Spotify controls used by both the Spotify page and Overview
-├── pages/                   home, overview, meal_receipts, weather, activities, spotify, japanese
+├── pages/                   home, overview, meal_receipts, weather, activities, spotify, japanese, settings
 └── data/
     ├── home.py              → quotes.json
     ├── meal_receipts.py     → Meal Receipts\ (a receipts.csv per day)

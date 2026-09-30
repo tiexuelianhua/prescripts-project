@@ -12,11 +12,11 @@ import streamlit as st
 
 from prescripts.common import (
     GLITCH_SECONDS,
-    PAGES,
     PRIVATE_LOOK,
     SCRIPTS_DIR,
     TYPE_AFTER_GLITCH_SECONDS,
     show_logo,
+    shown_pages,
     theme_colors,
     typewriter,
 )
@@ -187,7 +187,7 @@ query = st.text_input(
 # weather like") go to their page; anything else is offered as a search.
 # The search links open in the user's own browser, not this window.
 if query.strip():
-    route = route_command(query, PAGES)
+    route = route_command(query, shown_pages())
     if route["action"] == "page":
         st.switch_page(route["page"]["path"])
     elif route["action"] == "choose":

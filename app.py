@@ -6,13 +6,13 @@ import streamlit as st
 
 from prescripts.common import (
     LOGO_PATH,
-    PAGES,
     inject_button_style,
     inject_input_style,
     inject_toast_style,
     install_page_shortcuts,
     render_overview_button,
     render_top_bar,
+    shown_pages,
 )
 
 st.set_page_config(
@@ -29,8 +29,10 @@ inject_input_style()
 inject_toast_style()
 
 home_page = st.Page("prescripts/pages/home.py", title="Home", icon="🏠", default=True)
+# Only the pages switched on in Settings: a hidden one leaves the sidebar,
+# and its address stops working until it's switched back on.
 other_pages = [
-    st.Page(page["path"], title=page["title"], icon=page["icon"], url_path=page["url_path"]) for page in PAGES
+    st.Page(page["path"], title=page["title"], icon=page["icon"], url_path=page["url_path"]) for page in shown_pages()
 ]
 
 current_page = st.navigation([home_page, *other_pages])

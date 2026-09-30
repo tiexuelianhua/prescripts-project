@@ -31,9 +31,16 @@ _RUN_EVERY_PAGE = """
 """
 
 
+def switch_every_page_on(app_copy):
+    # For tests that visit every page or tile: a new public install starts
+    # with Spotify switched off (OFF_BY_DEFAULT in common.py).
+    (app_copy.parent / "app_settings.json").write_text('{"pages": {"spotify_page": true}}', encoding="utf-8")
+
+
 def test_every_page_loads(app_copy):
     # A fresh copy has no private logo beside it, so this is the public look
     # -- what anyone installing from the README gets.
+    switch_every_page_on(app_copy)
     result = run_in(app_copy, _RUN_EVERY_PAGE)
     assert result.returncode == 0, result.stdout + result.stderr
 
@@ -41,6 +48,7 @@ def test_every_page_loads(app_copy):
 def test_every_page_loads_in_private_look(app_copy):
     # The private look switches on when Images/The_Index_Logo.webp exists
     # beside the code; any real image will do for that.
+    switch_every_page_on(app_copy)
     images = app_copy.parent / "Images"
     images.mkdir()
     shutil.copy(app_copy / "static" / "forget_me_not.png", images / "The_Index_Logo.webp")
@@ -443,6 +451,7 @@ def test_overview_translates_last(app_copy):
     # The Weather tile's warning shows in Japanese at first and is swapped for
     # English only after every tile has drawn, so the translation service
     # doesn't hold the others up. Stand-ins replace the network lookups.
+    switch_every_page_on(app_copy)
     result = run_in(app_copy, """
         from streamlit.testing.v1 import AppTest
         import prescripts.data.spotify as spotify
@@ -550,6 +559,7 @@ def test_month_comparisons(app_copy):
 def test_overview_tiles_with_no_data_yet(app_copy):
     # A fresh install: every tile says what's missing rather than failing,
     # and a set budget with nothing logged reads as ¥0 of it.
+    switch_every_page_on(app_copy)
     result = run_in(app_copy, """
         import json
         from streamlit.testing.v1 import AppTest
@@ -576,6 +586,7 @@ def test_overview_tiles_with_no_data_yet(app_copy):
 
 def test_home_button_goes_home(app_copy):
     # Every page but Home has the Home button (Ctrl+Shift+H presses it too).
+    switch_every_page_on(app_copy)
     result = run_in(app_copy, """
         from streamlit.testing.v1 import AppTest
         from prescripts.common import PAGES, SCRIPTS_DIR
@@ -597,6 +608,7 @@ def test_home_button_goes_home(app_copy):
 def test_overview_button_goes_to_overview(app_copy):
     # Every page but Overview has the Overview button (Ctrl+Shift+O presses
     # it); on Home it's there but hidden, just for the shortcut.
+    switch_every_page_on(app_copy)
     result = run_in(app_copy, """
         from streamlit.testing.v1 import AppTest
         from prescripts.common import PAGES, SCRIPTS_DIR
@@ -615,6 +627,58 @@ def test_overview_button_goes_to_overview(app_copy):
             at.run()
             assert not at.exception, (path, at.exception)
             assert on_overview(at), path + " didn't go to Overview"
+    """)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_switching_pages_and_tiles(app_copy):
+    # A new public install starts with Spotify off; Settings switches a page
+    # off everywhere (sidebar, Home's commands, its tile) without touching its
+    # data, a tile off on its own, and Overview off takes its button too.
+    result = run_in(app_copy, """
+        from streamlit.testing.v1 import AppTest
+        from prescripts.common import SCRIPTS_DIR, load_app_settings, page_shown, shown_pages, tile_shown
+        from prescripts.data.home import route_command
+
+        assert not page_shown("spotify_page") and page_shown("japanese") and page_shown("settings")
+        assert route_command("spotify", shown_pages()).get("page", {}).get("title") != "Spotify"
+
+        at = AppTest.from_file(str(SCRIPTS_DIR / "app.py"), default_timeout=120)
+        at.run()
+        at.switch_page("prescripts/pages/settings.py")
+        at.run()
+        assert not at.exception, at.exception
+        at.toggle(key="settings_pages_japanese").set_value(False)
+        at.run()
+        at.toggle(key="settings_tiles_activities").set_value(False)
+        at.run()
+        assert not page_shown("japanese") and not tile_shown("japanese")
+        assert page_shown("activities") and not tile_shown("activities")
+        assert at.toggle(key="settings_tiles_japanese").disabled  # its page is off
+        assert route_command("japanese", shown_pages()).get("page", {}).get("title") != "Japanese"
+
+        at.switch_page("prescripts/pages/overview.py")
+        at.run()
+        assert not at.exception, at.exception
+        tiles = [header.value for header in at.subheader]
+        assert any(tile.startswith("🧾") for tile in tiles), tiles
+        assert not any(tile.startswith(("🈁", "📍", "🎵")) for tile in tiles), tiles
+        try:
+            at.switch_page("prescripts/pages/japanese.py")
+            raise AssertionError("a hidden page should have left the navigation")
+        except ValueError:
+            pass
+
+        at.switch_page("prescripts/pages/settings.py")
+        at.run()
+        at.toggle(key="settings_pages_japanese").set_value(True)
+        at.toggle(key="settings_pages_overview").set_value(False)
+        at.run()
+        assert load_app_settings()["pages"] == {"japanese": True, "overview": False}
+        assert not [button for button in at.button if button.key == "go_overview"]
+        at.switch_page("prescripts/pages/japanese.py")  # back in the navigation
+        at.run()
+        assert not at.exception, at.exception
     """)
     assert result.returncode == 0, result.stdout + result.stderr
 
@@ -670,6 +734,7 @@ def test_page_addresses_stay_the_same(app_copy):
             "Activities": "activities",
             "Spotify": "spotify_page",
             "Japanese": "japanese",
+            "Settings": "settings",
         }, addresses
         assert REDIRECT_URI == "http://127.0.0.1:8501/" + addresses["Spotify"], REDIRECT_URI
     """)

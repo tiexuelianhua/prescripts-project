@@ -20,9 +20,11 @@ from prescripts.common import (
     JST,
     balanced_columns,
     inject_body_fade_in,
+    load_app_settings,
     render_page_title,
     show_logo,
     theme_colors,
+    tile_shown,
     typewriter,
     wait_for_glitch,
 )
@@ -377,13 +379,17 @@ def _spotify_height() -> int:
     return 30 if spotify_is_configured() and spotify_is_connected() else 19
 
 
-TILES = [
-    (render_meal_receipts_tile, 33, False),
-    (render_weather_tile, _weather_height, False),
-    (render_japanese_tile, _japanese_height, False),
-    (render_activities_tile, _activities_height, False),
-    (render_spotify_tile, _spotify_height, True),
-]
+# Keyed by its page's url_path: a tile shows only while that page is on, and
+# can be switched off by itself too (Settings page).
+ALL_TILES = {
+    "meal_receipts": (render_meal_receipts_tile, 33, False),
+    "weather": (render_weather_tile, _weather_height, False),
+    "japanese": (render_japanese_tile, _japanese_height, False),
+    "activities": (render_activities_tile, _activities_height, False),
+    "spotify_page": (render_spotify_tile, _spotify_height, True),
+}
+app_settings = load_app_settings()
+TILES = [tile for url_path, tile in ALL_TILES.items() if tile_shown(url_path, app_settings)]
 
 # Each tile is outlined in the theme's accent blue (the same blue as the
 # buttons' outlines) so the tiles read as separate widgets. Styled directly
@@ -454,6 +460,9 @@ st.markdown(
 )
 
 with st.container(key="main_body"):
+    if not TILES:
+        st.caption("Every tile is switched off. Turn some back on in Settings.")
+        st.page_link("prescripts/pages/settings.py", label="Open Settings", icon="⚙️")
     columns = st.columns(2, gap=0)
     heights = [height() if callable(height) else height for _render, height, _live in TILES]
     placements = []

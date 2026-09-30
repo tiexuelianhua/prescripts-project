@@ -87,7 +87,21 @@ PAGES = [
         "url_path": "japanese",
         "keywords": ["japanese", "vocab", "vocabulary", "kanji", "flashcard", "flashcards", "srs", "study", "日本語"],
     },
+    {
+        "title": "Settings",
+        "icon": "⚙️",
+        "path": "prescripts/pages/settings.py",
+        "url_path": "settings",
+        "keywords": ["settings", "preferences", "options", "customise", "customize", "hide", "show", "pages", "widgets"],
+        # Can't be switched off: it's where things are switched back on.
+        "always_on": True,
+    },
 ]
+# Pages a new install of the public version starts with switched off, until
+# turned on in Settings. Spotify needs each person to register a Spotify
+# developer app of their own before it does anything. The author's own copy
+# (the private look) starts with everything on.
+OFF_BY_DEFAULT = set() if PRIVATE_LOOK else {"spotify_page"}
 
 
 # App-wide preferences that don't belong to any one page (currently just the
@@ -135,6 +149,28 @@ def load_app_settings() -> dict:
 def save_app_settings(settings: dict) -> None:
     with open(APP_SETTINGS_PATH, "w", encoding="utf-8") as file:
         json.dump(settings, file, indent=2)
+
+
+def page_shown(url_path: str, settings: dict | None = None) -> bool:
+    # Whether a page is switched on (Settings page). Hidden pages leave the
+    # sidebar, Home's commands and Overview, but keep all their data.
+    page = next((page for page in PAGES if page["url_path"] == url_path), {})
+    if page.get("always_on"):
+        return True
+    settings = load_app_settings() if settings is None else settings
+    return settings.get("pages", {}).get(url_path, url_path not in OFF_BY_DEFAULT)
+
+
+def shown_pages(settings: dict | None = None) -> list[dict]:
+    settings = load_app_settings() if settings is None else settings
+    return [page for page in PAGES if page_shown(page["url_path"], settings)]
+
+
+def tile_shown(url_path: str, settings: dict | None = None) -> bool:
+    # A page's Overview tile: only while its page is on, and it can also be
+    # switched off by itself, keeping the page.
+    settings = load_app_settings() if settings is None else settings
+    return page_shown(url_path, settings) and settings.get("tiles", {}).get(url_path, True)
 
 
 def _step_zoom(step: int) -> None:
@@ -230,6 +266,10 @@ TYPE_AFTER_GLITCH_SECONDS = GLITCH_SECONDS * 0.85
 
 
 def render_overview_button() -> None:
+    # Not there at all while Overview is switched off, so Ctrl+Shift+O finds
+    # no button and does nothing.
+    if not page_shown("overview"):
+        return
     if st.button("🎛️", key="go_overview", help="Overview (Ctrl+Shift+O)"):
         # The glitch started in the browser with this click; Overview times
         # its title and logo from it.
