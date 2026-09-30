@@ -279,7 +279,6 @@ with st.container(key="main_body"):
         st.session_state["add_entry_excluded"] = False
         st.session_state["add_entry_excluded_reason"] = None
         st.session_state["add_entry_tax"] = 0
-        st.session_state["_tax_suggested"] = 0
         st.session_state["add_entry_bag"] = False
         st.session_state["_bag_ticked_for_store"] = None
         st.session_state["_meal_basket"] = []
@@ -372,19 +371,19 @@ with st.container(key="main_body"):
     if store != st.session_state.get("_bag_ticked_for_store"):
         st.session_state["add_entry_bag"] = is_konbini(store)
         st.session_state["_bag_ticked_for_store"] = store
-    # Tax starts at 8% of the items (food's reduced rate, rounded down) and
-    # follows them as they change, until it's typed over to match the
-    # receipt -- stores round differently.
-    suggested_tax = subtotal * 8 // 100
-    if st.session_state.get("add_entry_tax", 0) == st.session_state.get("_tax_suggested", 0):
-        st.session_state["add_entry_tax"] = suggested_tax
-    st.session_state["_tax_suggested"] = suggested_tax
+    # Tax starts at 0, since most prices (konbini ones especially) already
+    # include it. "Use 8%" fills in food's reduced rate on the items so far,
+    # rounded down, for a receipt that adds tax on top; it can still be
+    # typed over to match the receipt, as stores round differently.
     bag_yen = bag_price(store)
-    bag_column, tax_column = st.columns(2, vertical_alignment="bottom")
+    bag_column, tax_column, rate_column = st.columns([4, 3, 2], vertical_alignment="bottom")
+    rate_column.button(
+        "Use 8%", width="stretch", help="Fill in 8% of the items so far",
+        on_click=lambda amount: st.session_state.update(add_entry_tax=amount), args=(subtotal * 8 // 100,),
+    )
     tax_yen = tax_column.number_input(
         "Tax (¥)", min_value=0, step=1, key="add_entry_tax",
-        help="Starts at 8% of the items -- change it to the receipt's tax line, or 0 if prices included tax. "
-        "Logged as its own row.",
+        help="Only when prices were before tax: the receipt's tax line. Logged as its own row.",
     )
     with_bag = bag_column.checkbox(
         f"+ 袋 bag (¥{bag_yen})", key="add_entry_bag",

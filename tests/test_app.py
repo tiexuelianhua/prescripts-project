@@ -86,7 +86,6 @@ def test_store_can_be_left_blank(app_copy):
         at.selectbox(key="add_entry_item").set_value("Onigiri")
         at.run()
         assert at.selectbox(key="add_entry_store").value is None
-        at.number_input(key="add_entry_tax").set_value(0)  # price included tax
         next(button for button in at.button if button.label == "Log meal").click()
         at.run()
         assert not at.exception and not at.warning, (at.exception, at.warning)
@@ -167,7 +166,7 @@ def test_setting_todays_budget(app_copy):
 
 def test_logging_a_meal(app_copy):
     # Items gather into one meal with a running total and can be taken out
-    # again; tax follows 8% of the items until it's typed over; "Log meal"
+    # again; tax starts at 0, and "Use 8%" fills in 8% of the items; "Log meal"
     # saves every row at one time and store, and Entries shows them as one
     # meal with its total.
     result = run_in(app_copy, """
@@ -194,11 +193,14 @@ def test_logging_a_meal(app_copy):
             add(item)
         assert at.selectbox(key="add_entry_item").value is None  # cleared for the next item
         assert at.selectbox(key="add_entry_store").value == "Olympic"
-        assert at.number_input(key="add_entry_tax").value == 40  # 8% of 500
-        assert "¥540" in total() and "3 items" in total(), total()
+        assert at.number_input(key="add_entry_tax").value == 0  # prices usually include tax
+        assert "¥500" in total() and "3 items" in total(), total()
 
         removes = [button for button in at.button if (button.key or "").startswith("meal_remove_")]
         removes[-1].click()  # take the tea out
+        at.run()
+        assert "¥400" in total() and "2 items" in total(), total()
+        next(button for button in at.button if button.label == "Use 8%").click()
         at.run()
         assert at.number_input(key="add_entry_tax").value == 32 and "¥432" in total(), total()
         at.number_input(key="add_entry_tax").set_value(30)  # the receipt's own tax line
@@ -288,7 +290,6 @@ def test_item_bought_at_two_stores_is_offered_per_store(app_copy):
         assert at.selectbox(key="add_entry_store").value == "FamilyMart"
         assert at.number_input(key="add_entry_cost").value == 160
         at.checkbox(key="add_entry_bag").uncheck()  # ticked for a konbini, but no bag this time
-        at.number_input(key="add_entry_tax").set_value(0)  # price included tax
         at.run()
         next(button for button in at.button if button.label == "Log meal").click()
         at.run()
