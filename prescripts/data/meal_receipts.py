@@ -388,11 +388,15 @@ def carried_over(settings: dict, today: date) -> int:
     # under budget, or takes away what it was over. Nothing resets it on its
     # own. A day with nothing logged counts as ¥0 spent. Uses today's budget
     # amount for every day, so changing the amount changes the past too.
+    #
+    # "carry_over_set" is a whole budget set by hand for the "since" day, to
+    # fix a total that's come out wrong: that day's budget is exactly it,
+    # and later days carry on from what's left of it.
     amount, period = budget_settings(settings)
     since = settings.get("carry_over_since")
     if not settings.get("carry_over") or period != "daily" or amount <= 0 or not since:
         return 0
-    balance = 0
+    balance = settings["carry_over_set"] - amount if "carry_over_set" in settings else 0
     day = date.fromisoformat(since)
     while day < today:
         balance += amount - counted_total(load_entries(day_folder_for(day) / "receipts.csv"))

@@ -365,6 +365,13 @@ def test_budget_carry_over(app_copy):
         assert carried_over(dict(settings, carry_over=False), today) == 0
         assert carried_over(dict(settings, budget_period="weekly"), today) == 0
         assert carried_over(dict(settings, carry_over_since="2026-09-13"), today) == 0  # just started fresh
+
+        # Today's budget set by hand is exactly that, whatever the daily
+        # amount, and the next day carries on from what's left of it.
+        set_today = dict(settings, carry_over_since="2026-09-10", carry_over_set=2000)
+        assert 1000 + carried_over(set_today, date(2026, 9, 10)) == 2000
+        assert 1500 + carried_over(dict(set_today, budget_amount=1500), date(2026, 9, 10)) == 2000
+        assert 1000 + carried_over(set_today, date(2026, 9, 11)) == 1000 + (2000 - 800)
     """)
 
 

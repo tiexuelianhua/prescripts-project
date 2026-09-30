@@ -134,6 +134,36 @@ def test_konbini_bag_and_tax_get_rows_of_their_own(app_copy):
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+def test_setting_todays_budget(app_copy):
+    # "Set today's budget" makes today's whole budget that amount, carried
+    # over included, and says so; "Start fresh" goes back to the plain budget.
+    result = run_in(app_copy, """
+        from datetime import datetime, timedelta
+        from streamlit.testing.v1 import AppTest
+        from prescripts.common import JST, SCRIPTS_DIR
+        from prescripts.data.meal_receipts import MEAL_RECEIPTS_DIR, save_settings
+
+        MEAL_RECEIPTS_DIR.mkdir(parents=True, exist_ok=True)
+        week_ago = (datetime.now(JST).date() - timedelta(days=7)).isoformat()
+        save_settings({"budget_amount": 1000, "budget_period": "daily", "carry_over": True, "carry_over_since": week_ago})
+
+        at = AppTest.from_file(str(SCRIPTS_DIR / "prescripts/pages/meal_receipts.py"), default_timeout=60)
+        at.run()
+        assert at.number_input(key="meal_set_today_budget").value == 8000  # 7 unspent days + today
+        at.number_input(key="meal_set_today_budget").set_value(2000)
+        next(button for button in at.sidebar.button if button.label == "Set").click()
+        at.run()
+        assert not at.exception, at.exception
+        assert any("Today's budget set to ¥2,000" in caption.value for caption in at.sidebar.caption)
+        assert any("vs ¥2,000 budget" in metric.delta for metric in at.metric), [m.delta for m in at.metric]
+        next(button for button in at.sidebar.button if button.label == "Start fresh from today").click()
+        at.run()
+        assert any("vs ¥1,000 budget" in metric.delta for metric in at.metric), [m.delta for m in at.metric]
+        assert at.number_input(key="meal_set_today_budget").value == 1000  # follows the fresh start
+    """)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 def test_meal_receipts_works_without_powershell(app_copy):
     # Mac/Linux have no PowerShell, so today's folder is made in Python
     # there. It must be the same folder the .ps1 scripts give, and the page

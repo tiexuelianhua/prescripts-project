@@ -110,12 +110,38 @@ with st.sidebar:
             settings["carry_over"] = carry_on
             if carry_on:
                 settings["carry_over_since"] = today_jst.isoformat()
+                settings.pop("carry_over_set", None)
             save_settings(settings)
         if carry_on:
             carry = carried_over(settings, today_jst)
-            st.caption(f"Carried over: {signed_yen(carry)} since {settings['carry_over_since']}")
-            if st.button("Start fresh from today", disabled=settings["carry_over_since"] == today_jst.isoformat()):
+            is_set_today = settings["carry_over_since"] == today_jst.isoformat() and "carry_over_set" in settings
+            if is_set_today:
+                st.caption(f"Today's budget set to ¥{settings['carry_over_set']:,}. Carrying over from there.")
+            else:
+                st.caption(f"Carried over: {signed_yen(carry)} since {settings['carry_over_since']}")
+            fresh = settings["carry_over_since"] == today_jst.isoformat() and "carry_over_set" not in settings
+            if st.button("Start fresh from today", disabled=fresh):
                 settings["carry_over_since"] = today_jst.isoformat()
+                settings.pop("carry_over_set", None)
+                save_settings(settings)
+                st.rerun()
+            # To fix a carried-over total that's come out wrong: today's whole
+            # budget, carry-over included, becomes this.
+            # Starts at today's budget as it stands, and follows it when that
+            # changes (a fresh start, a new daily amount), rather than keeping
+            # whatever was last typed.
+            if st.session_state.get("_meal_set_today_from") != budget_amount + carry:
+                st.session_state["_meal_set_today_from"] = budget_amount + carry
+                st.session_state.pop("meal_set_today_budget", None)
+            set_column, button_column = st.columns([3, 2], vertical_alignment="bottom")
+            set_amount = set_column.number_input(
+                "Set today's budget (¥)", min_value=0, step=100, value=budget_amount + carry,
+                key="meal_set_today_budget",
+                help="Replaces today's budget and anything carried over. Tomorrow carries on from what's left of it.",
+            )
+            if button_column.button("Set", width="stretch"):
+                settings["carry_over_since"] = today_jst.isoformat()
+                settings["carry_over_set"] = int(set_amount)
                 save_settings(settings)
                 st.rerun()
 
