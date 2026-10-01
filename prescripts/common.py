@@ -311,6 +311,15 @@ def install_page_shortcuts() -> None:
             document.addEventListener("click", event => {
                 if (event.target.closest(".st-key-go_overview button")) window.playHomeGlitch(GLITCH_OPTIONS);
             }, true);
+            // A button's help tooltip stays open while the button has focus,
+            // and a click leaves it focused, so the tooltip hung on screen
+            // after a click until something else was clicked (the queue's
+            // hearts showed it most). Mouse clicks let go of focus; keyboard
+            // presses (detail 0) keep it, so Tab users still see the tooltip.
+            document.addEventListener("click", event => {
+                const button = event.target.closest(".stTooltipHoverTarget button");
+                if (button && event.detail > 0) button.blur();
+            });
             // The top bar sits right of the sidebar (see render_top_bar).
             // Its width changes as it opens, shuts or is dragged, and part
             // of opening is a slide the observer can't see, so its edge is
