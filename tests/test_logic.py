@@ -257,8 +257,9 @@ def test_quote_credit(app_copy):
 
 
 def test_excluded_entries_never_count(app_copy):
-    # Excluded rows (ticked, or given a reason) drop out of every total, and
-    # a receipts.csv from before the excluded column existed still reads.
+    # Excluded rows drop out of every total, a note alone doesn't exclude a
+    # row, and a receipts.csv from before the excluded column existed still
+    # reads.
     _check(app_copy, """
         from datetime import date
         import pandas as pd
@@ -276,9 +277,9 @@ def test_excluded_entries_never_count(app_copy):
             "excluded_reason": [None, None, "Paid with cash", "  "],
         })
         normalized = with_default_columns(rows)
-        assert list(normalized["excluded"]) == [False, True, True, False]  # a reason implies excluded
+        assert list(normalized["excluded"]) == [False, True, False, False]  # a note is just a note
         assert list(normalized["excluded_reason"].fillna("-")) == ["-", "-", "Paid with cash", "-"]  # blank = no reason
-        assert counted_total(rows) == 500
+        assert counted_total(rows) == 800
         assert counted_total(pd.DataFrame()) == 0
 
         old_day = day_folder_for(date(2026, 9, 8))
@@ -299,7 +300,7 @@ def test_excluded_entries_never_count(app_copy):
         log(date(2026, 9, 6), 999)  # the Sunday before
         log(date(2026, 9, 7), 100)
         log(date(2026, 9, 10), 300)
-        log(date(2026, 9, 10), 5000, excluded_reason="Covered by friend/coworker")
+        log(date(2026, 9, 10), 5000, excluded=True, excluded_reason="Covered by friend/coworker")
         log(date(2026, 9, 11), 400)  # after "today"
         assert week_total_so_far(date(2026, 9, 10)) == 100 + 150 + 300
     """)

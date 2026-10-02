@@ -126,15 +126,16 @@ def test_konbini_bag_and_tax_get_rows_of_their_own(app_copy):
         assert at.checkbox(key="add_entry_bag").value is False  # Olympic isn't a konbini
         at.selectbox(key="add_entry_item").set_value("Onigiri")
         at.run()
-        bag = at.checkbox(key="add_entry_bag")
-        assert bag.value is True and "¥5" in bag.label, (bag.value, bag.label)
+        assert at.checkbox(key="add_entry_bag").value is True
+        assert at.number_input(key="add_entry_bag_yen").value == 5  # Lawson's last bag
+        at.number_input(key="add_entry_bag_yen").set_value(6)  # costs more this time
         at.number_input(key="add_entry_tax").set_value(12)
         next(button for button in at.button if button.label == "Log meal").click()
         at.run()
         assert not at.exception and not at.warning, (at.exception, at.warning)
         entries = load_entries(get_today_folder() / "receipts.csv")
         assert list(zip(entries["item"], entries["cost_yen"], entries["store"])) == [
-            ("Onigiri", 150, "Lawson"), (BAG_ITEM, 5, "Lawson"), (TAX_ITEM, 12, "Lawson"),
+            ("Onigiri", 150, "Lawson"), (BAG_ITEM, 6, "Lawson"), (TAX_ITEM, 12, "Lawson"),
         ], entries
         # The form clears, bag box included.
         assert at.checkbox(key="add_entry_bag").value is False and at.number_input(key="add_entry_tax").value == 0
@@ -278,6 +279,17 @@ def test_logging_other_spending(app_copy):
         assert "Food · today" in bars and "¥0 / ¥1,000" in bars, bars
         assert "Transport · this month" in bars and "¥3,000 / ¥10,000" in bars and "¥7,000 left" in bars, bars
         assert any("Today: ¥3,000" in block.value for block in at.markdown)
+
+        # A fare needs no item: left blank, it's a transit fee.
+        at.selectbox(key="add_entry_category").set_value("Transport")
+        at.run()
+        at.number_input(key="add_entry_cost").set_value(178)
+        at.run()
+        next(button for button in at.button if button.label == "Log receipt").click()
+        at.run()
+        assert not at.exception and not at.warning, (at.exception, at.warning)
+        entries = load_entries(get_today_folder() / "receipts.csv")
+        assert list(zip(entries["item"], entries["cost_yen"]))[-1] == ("Transit fee", 178), entries
     """)
     assert result.returncode == 0, result.stdout + result.stderr
 

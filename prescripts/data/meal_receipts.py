@@ -23,7 +23,11 @@ SETTINGS_PATH = MEAL_RECEIPTS_DIR / "settings.json"
 # receipts.csv files from before then don't have the column at all, which
 # load_entries() reads as "not excluded" rather than rewriting them up front.
 # "excluded_reason" (why it's excluded) was added the same day, same
-# handling: missing column = no reason given.
+# handling: missing column = no reason given. Since 2026-10-02 it's shown
+# as "Notes": any note on any receipt, which no longer excludes it by
+# itself (rows excluded through a reason before then were saved with
+# excluded ticked, so they stay excluded). The column keeps its name, so
+# no file needs rewriting.
 # "category" (Food, Transport, ...) came on 2026-10-02, when the page grew
 # from meals into a general Budget page. Same handling again: a row with no
 # category is Food, since everything logged before then was a meal.
@@ -32,8 +36,8 @@ DEFAULT_CATEGORY = "Food"
 # Offered on a new install. Can be added to (type one into the picker) and
 # renamed; the list in use is kept in settings.json, see categories().
 DEFAULT_CATEGORIES = ["Food", "Transport", "Shopping", "Other"]
-# Offered first in the reason pickers; any other reason typed on the add form
-# is kept too and offered from then on (see known_exclusion_reasons()).
+# Offered first in the Notes pickers; any other note typed is kept too and
+# offered from then on (see known_exclusion_reasons()).
 DEFAULT_EXCLUSION_REASONS = ["Paid with cash", "Covered by friend/coworker"]
 JAPANESE_MONTHS = [
     "1月", "2月", "3月", "4月", "5月", "6月",
@@ -99,9 +103,7 @@ def with_default_columns(entries: pd.DataFrame) -> pd.DataFrame:
     reason = entries["excluded_reason"].astype("string").str.strip()
     has_reason = reason.notna() & (reason != "")
     entries["excluded_reason"] = reason.where(has_reason, None).astype(object)
-    # Giving a reason implies excluding the entry -- picking one in the
-    # Entries table shouldn't also need the checkbox ticked separately.
-    entries["excluded"] = entries["excluded"].fillna(False).astype(bool) | has_reason
+    entries["excluded"] = entries["excluded"].fillna(False).astype(bool)
     if "category" not in entries.columns:
         entries["category"] = None
     category = entries["category"].astype("string").str.strip()
@@ -308,7 +310,7 @@ def month_excluded_by_reason(day_folder: Path) -> pd.Series:
         return pd.Series(dtype=int)
     entries = pd.concat(frames, ignore_index=True)
     excluded = entries[entries["excluded"]]
-    reasons = excluded["excluded_reason"].fillna("No reason given")
+    reasons = excluded["excluded_reason"].fillna("No note")
     return excluded["cost_yen"].groupby(reasons).sum().astype(int).sort_values(ascending=False)
 
 
@@ -589,6 +591,8 @@ def budget_status(settings: dict, day: date, today: date) -> list[dict]:
 BAG_ITEM = "Bag (袋)"
 TAX_ITEM = "Tax"
 DEFAULT_BAG_YEN = 3
+# What a transport receipt is logged as when no item is given.
+TRANSIT_FEE_ITEM = "Transit fee"
 
 
 def bag_price(store: str | None) -> int:

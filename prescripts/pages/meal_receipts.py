@@ -27,6 +27,7 @@ from prescripts.data.meal_receipts import (
     BAG_ITEM,
     PERIODS,
     TAX_ITEM,
+    TRANSIT_FEE_ITEM,
     append_entry,
     bag_price,
     budget_category,
@@ -109,6 +110,12 @@ with st.sidebar:
         "Category", options=category_names, key="budget_editing",
         index=category_names.index(budgeted) if budgeted in category_names else 0,
     )
+    # In its colour, like the form's Category box.
+    st.markdown(
+        f"<style>.st-key-budget_editing input, .st-key-budget_editing [data-baseweb='select'] div "
+        f"{{ color: {colors.get(editing, ACCENT_COLOR)}; }}</style>",
+        unsafe_allow_html=True,
+    )
     budget = budget_for(settings, editing)
     # Keyed per category, so switching categories shows that one's own
     # saved values rather than the last one's.
@@ -127,8 +134,11 @@ with st.sidebar:
         save_settings(settings)
 
     if period == "daily" and amount > 0:
+        # Some room above the switch, so it doesn't sit tight under the
+        # amount box.
+        st.markdown("<style>.st-key-budget_carry_box { margin-top: 0.75rem; }</style>", unsafe_allow_html=True)
         # Off for a new category until switched on.
-        carry_on = st.toggle(
+        carry_on = st.container(key="budget_carry_box").toggle(
             "Carry leftover budget over", value=budget["carry_over"], key=f"budget_carry_{editing}",
             help="What's left of each day's budget adds to the next day's, and going over takes it away. "
             "Keeps adding up until you start fresh. A day with nothing logged counts as ¥0 spent.",
@@ -390,6 +400,12 @@ with st.container(key="main_body"):
     )
     category = (category or "").strip() or budgeted
     is_food = category == budgeted
+    # The chosen category in its own colour (Food's is the accent, like the
+    # other boxes' hints) rather than plain white.
+    st.markdown(
+        f"<style>.st-key-add_entry_category input {{ color: {colors.get(category, ACCENT_COLOR)}; }}</style>",
+        unsafe_allow_html=True,
+    )
     # Transport takes From/To stations where the store goes, on a row of
     # their own (drawn after Item too, for the same reason as Store).
     is_transport = category == transport
@@ -399,7 +415,9 @@ with st.container(key="main_body"):
     choices = item_choices(excluded_items, excluded_stores, category)
     item_choice = item_column.selectbox(
         "Item", options=choices, format_func=item_choice_label, index=None,
-        accept_new_options=True, placeholder="Type or pick an item",
+        accept_new_options=True,
+        # Transport needs no item: left blank, it's logged as a transit fee.
+        placeholder=f"{TRANSIT_FEE_ITEM} -- or type or pick another" if is_transport else "Type or pick an item",
         key="add_entry_item",
     )
     # A per-store choice typed out in full ("Onigiri (Lawson)") and entered
@@ -441,6 +459,8 @@ with st.container(key="main_body"):
             key="add_entry_store",
         )
     cost_yen = cost_column.number_input("Cost (¥)", min_value=0, step=1, key="add_entry_cost")
+    if is_transport and not item and cost_yen:
+        item = TRANSIT_FEE_ITEM
     # Never greyed out: a click can land before an item just typed has
     # registered, and a greyed-out button would swallow it.
     if add_column.button("+ Add item", width="stretch"):
@@ -466,8 +486,12 @@ with st.container(key="main_body"):
     # A bag and the receipt's tax line each go in as a row of their own. The
     # bag box ticks itself whenever the store changes to a konbini (bags are
     # usual there) and can still be unticked.
+    # Its price starts at what a bag last cost at this store, and can be
+    # changed (one store's chain doesn't always charge the same) -- the
+    # price logged is then what's offered there next time.
     if store != st.session_state.get("_bag_ticked_for_store"):
         st.session_state["add_entry_bag"] = is_konbini(store)
+        st.session_state["add_entry_bag_yen"] = bag_price(store)
         st.session_state["_bag_ticked_for_store"] = store
     # Tax starts at 0, since most prices (konbini ones especially) already
     # include it. "Use 8%" fills in food's reduced rate on the items so far,
@@ -475,9 +499,8 @@ with st.container(key="main_body"):
     # typed over to match the receipt, as stores round differently. Every
     # other category gets the standard 10%.
     tax_rate = 8 if is_food else 10
-    bag_yen = bag_price(store)
     # Fares and top-ups have neither, so Transport leaves both out.
-    tax_yen, with_bag = 0, False
+    tax_yen, with_bag, bag_yen = 0, False, 0
     if not is_transport:
         # Tax at the left with its button, lined up under the items, and the
         # bag box on its own line below.
@@ -490,16 +513,29 @@ with st.container(key="main_body"):
             "Tax (¥)", min_value=0, step=1, key="add_entry_tax",
             help="Only when prices were before tax: the receipt's tax line. Logged as its own row.",
         )
-        with_bag = st.checkbox(
-            f"+ 袋 bag (¥{bag_yen})", key="add_entry_bag",
-            help="Logs the bag as its own row, at what one last cost at this store. "
-            "Change the price in Entries if it differs.",
+        bag_column, bag_yen_column, _ = st.columns([3, 2, 4], vertical_alignment="center")
+        with_bag = bag_column.checkbox(
+            "+ 袋 bag", key="add_entry_bag",
+            help="Logs the bag as its own row. Its price starts at what one last cost at this store.",
         )
+        if with_bag:
+            # Gone from session state while the box was unticked.
+            st.session_state.setdefault("add_entry_bag_yen", bag_price(store))
+            bag_yen = bag_yen_column.number_input(
+                "Bag (¥)", min_value=0, step=1, key="add_entry_bag_yen", label_visibility="collapsed",
+            )
     meal_total = subtotal + (bag_yen if with_bag else 0) + tax_yen
     item_word = "item" if len(items) == 1 else "items"
     st.markdown(f"**Total: ¥{meal_total:,}** <small>({len(items)} {item_word}"
                 + (f", bag ¥{bag_yen:,}" if with_bag else "") + (f", tax ¥{tax_yen:,}" if tax_yen else "")
                 + ")</small>", unsafe_allow_html=True)
+    # Any note, e.g. why it isn't counted. Typed ones are offered from then
+    # on, and can be changed later in Entries.
+    excluded_reason = st.selectbox(
+        "Notes", options=known_exclusion_reasons(), index=None,
+        accept_new_options=True, placeholder="Optional -- pick or type a note",
+        key="add_entry_excluded_reason",
+    )
     excluded = st.checkbox(
         "Don't count toward totals",
         help="Still logged, but left out of the day/week/month totals and budget -- "
@@ -507,16 +543,6 @@ with st.container(key="main_body"):
         "from the **Excluded** column in Entries.",
         key="add_entry_excluded",
     )
-    # Only asked once the box is ticked -- optional even then, since the
-    # entry's still excluded without one (it just files under "No reason
-    # given" in the month breakdown).
-    excluded_reason = None
-    if excluded:
-        excluded_reason = st.selectbox(
-            "Reason", options=known_exclusion_reasons(), index=None,
-            accept_new_options=True, placeholder="Optional -- pick or type a reason",
-            key="add_entry_excluded_reason",
-        )
     log_clicked = st.button("Log meal" if is_food else "Log receipt")
     if log_clicked and not items:
         st.warning("Add an item first.")
@@ -561,7 +587,7 @@ with st.container(key="main_body"):
         st.session_state["_reset_add_entry_form"] = True
         excluded_note = ""
         if excluded:
-            excluded_note = f" (not counted: {excluded_reason})" if excluded_reason else " (not counted toward totals)"
+            excluded_note = " (not counted toward totals)"
         what = items[0][0] if len(items) == 1 else f"{len(items)} items"
         category_note = "" if is_food else f" ({category})"
         st.session_state["_add_entry_confirmation"] = (
@@ -616,6 +642,7 @@ with st.container(key="main_body"):
                     f"<div>{html.escape(str(row.item) if pd.notna(row.item) else '')}"
                     f" · ¥{int(row.cost_yen) if pd.notna(row.cost_yen) else 0:,}"
                     + (" <small>(not counted)</small>" if row.excluded and not rows["excluded"].all() else "")
+                    + (f" <small>· {html.escape(row.excluded_reason)}</small>" if pd.notna(row.excluded_reason) else "")
                     + "</div>"
                     for row in rows.itertuples()
                 )
@@ -637,14 +664,9 @@ with st.container(key="main_body"):
                         help="Left out of totals/budget (e.g. paid in cash, covered by someone else)",
                         default=False,
                     ),
-                    # A fixed dropdown (the table can't take free text for new
-                    # options) -- a reason not listed yet can be typed once
-                    # on the add form, and shows up here from then on.
-                    # Picking one here also ticks Excluded on save.
-                    "excluded_reason": st.column_config.SelectboxColumn(
-                        "Reason",
-                        options=known_exclusion_reasons(),
-                    ),
+                    # Free text: a dropdown here can't take anything not
+                    # already listed.
+                    "excluded_reason": st.column_config.TextColumn("Notes"),
                     # Same: a new category is typed on the add form first.
                     "category": st.column_config.SelectboxColumn(
                         "Category", options=category_names, default=budgeted,
