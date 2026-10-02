@@ -19,7 +19,7 @@ PAGE_TITLE = "Settings"
 # One line on what each page is for, to help decide what to keep.
 ABOUT = {
     "overview": "Every page's summary on one screen",
-    "meal_receipts": "Log meals and spending against a budget",
+    "meal_receipts": "Log meals and other spending by category, against a budget",
     "weather": "The forecast and warnings, from Japan's weather agency",
     "activities": "Food, things to do and events nearby",
     "spotify_page": "Your Spotify, with lyrics. Needs a Spotify developer app of your own (see the README)",

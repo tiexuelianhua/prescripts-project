@@ -142,8 +142,12 @@ inject_seek_slider_styles("overview_spotify_seek")
 
 
 def render_meal_receipts_tile() -> None:
-    st.subheader("🧾 Meal Receipts")
+    st.subheader("🧾 Budget")
     data = meal_receipts_today_summary()
+    # With a budget, its numbers are for the budgeted category (Food), with
+    # everything spent today noted under them once there's other spending.
+    category = data["budget_category"].lower()
+    other_spending = data["all_total_yen"] != data["total_yen"]
     # st.metric only reads a leading "-" to decide the arrow/color for a
     # string delta, so the sign has to be the very first character.
     if data["budget_period"] == "weekly" and data["budget_amount"] > 0:
@@ -151,28 +155,33 @@ def render_meal_receipts_tile() -> None:
         diff = week_total - data["budget_amount"]
         diff_str = f"-¥{abs(diff):,.0f}" if diff < 0 else f"¥{diff:,.0f}"
         st.metric(
-            "This week's total",
+            f"This week: {category}",
             f"¥{week_total:,.0f}",
             delta=f"{diff_str} vs ¥{data['budget_amount']:,.0f} allowance",
             delta_color="inverse",
         )
         st.progress(min(week_total / data["budget_amount"], 1.0))
-        st.caption(f"Today so far: ¥{data['total_yen']:,.0f}")
+        today_note = f"Today so far: ¥{data['total_yen']:,.0f} {category}"
+        if other_spending:
+            today_note += f", ¥{data['all_total_yen']:,.0f} in all"
+        st.caption(today_note)
     elif data["budget_amount"] > 0:
         # Includes anything carried over from earlier days.
         budget = data["today_budget_yen"]
         diff = data["total_yen"] - budget
         diff_str = f"-¥{abs(diff):,.0f}" if diff < 0 else f"¥{diff:,.0f}"
         st.metric(
-            "Today's total",
+            f"Today: {category}",
             f"¥{data['total_yen']:,.0f}",
             delta=f"{diff_str} vs ¥{budget:,.0f} budget",
             delta_color="inverse",
         )
         st.progress(min(data["total_yen"] / budget, 1.0) if budget > 0 else 1.0)
+        if other_spending:
+            st.caption(f"All spending today: ¥{data['all_total_yen']:,.0f}")
     else:
-        st.metric("Today's total", f"¥{data['total_yen']:,.0f}")
-    st.page_link("prescripts/pages/meal_receipts.py", label="Open Meal Receipts", icon="🧾")
+        st.metric("Today's total", f"¥{data['all_total_yen']:,.0f}")
+    st.page_link("prescripts/pages/meal_receipts.py", label="Open Budget", icon="🧾")
 
 
 def render_weather_tile() -> None:

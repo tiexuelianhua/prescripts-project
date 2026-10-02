@@ -1,4 +1,6 @@
-# Streamlit interface for logging meal receipts and viewing daily/monthly totals.
+# Streamlit interface for the Budget page (Meal Receipts until it took other
+# spending too): logging receipts by category and viewing daily/monthly
+# totals. This file, the data folder and the scripts keep the old name.
 # Reuses addDay_cV.ps1 to create/locate today's folder, so folder-creation logic
 # and its error logging stay in one place.
 # Made by: Claude (cV)
@@ -25,8 +27,10 @@ from prescripts.data.meal_receipts import (
     TAX_ITEM,
     append_entry,
     bag_price,
+    budget_category,
     budget_settings,
     carried_over,
+    categories,
     counted_total,
     day_folder_for,
     get_today_folder,
@@ -48,12 +52,16 @@ from prescripts.data.meal_receipts import (
     save_settings,
     signed_yen,
     split_item_choice,
+    totals_by_category,
     week_bounds,
     week_total_so_far,
 )
 
 TEXT_COLOR, ACCENT_COLOR = theme_colors()
-PAGE_TITLE = "Meal Receipts"
+PAGE_TITLE = "Budget"
+# Chart colours for categories besides the budgeted one (which takes the
+# accent colour): soft enough to sit beside it in both light and dark mode.
+CATEGORY_COLORS = ["#e0a37a", "#7fbf9b", "#c99ad1", "#c4b86a", "#7fb3c9"]
 
 # Page config and the shared button style are handled once, in app.py, since
 # this script now runs as one page of the multi-page app rather than its own
@@ -80,6 +88,10 @@ with header_title:
 settings = load_settings()
 excluded_stores = set(settings.get("excluded_stores", []))
 excluded_items = set(settings.get("excluded_items", []))
+category_names = categories(settings)
+# The budget below is for one category (Food) until each category gets its
+# own; every other category is logged and totalled but not budgeted yet.
+budgeted = budget_category(settings)
 
 with st.sidebar:
     st.header("Settings")
@@ -91,7 +103,8 @@ with st.sidebar:
         if stored_period.capitalize() in period_options else 0,
     )
     budget_period = budget_period_choice.lower()
-    budget_label = "Daily budget (¥)" if budget_period == "daily" else "Weekly allowance (¥)"
+    budget_label = (f"Daily {budgeted.lower()} budget (¥)" if budget_period == "daily"
+                    else f"Weekly {budgeted.lower()} allowance (¥)")
     budget_amount = st.number_input(budget_label, min_value=0, step=100, value=stored_amount)
     if budget_amount != stored_amount or budget_period != stored_period:
         settings["budget_amount"] = budget_amount
@@ -199,7 +212,7 @@ with st.sidebar:
 
         st.divider()
         st.caption(
-            "Rename a store/item everywhere it appears in past receipts -- "
+            "Rename a store, item or category everywhere it appears in past receipts -- "
             "fixes a typo at the source, not just in the dropdowns above."
         )
 
@@ -249,6 +262,34 @@ with st.sidebar:
             st.toast(f"Renamed {renamed} receipt(s): '{rename_store_old}' → '{rename_store_new.strip()}'.")
             st.rerun()
 
+        # Categories are renamed the same way, and in the saved list too. A
+        # new category needs no button: typing one into the add form's
+        # Category box adds it.
+        if st.session_state.get("_reset_rename_category"):
+            st.session_state["rename_category_old"] = None
+            st.session_state["rename_category_new"] = ""
+            st.session_state["_reset_rename_category"] = False
+        rename_category_old = st.selectbox(
+            "Category to rename", options=category_names, index=None, key="rename_category_old"
+        )
+        rename_category_new = st.text_input("Rename to", key="rename_category_new")
+        if st.button(
+            "Rename category",
+            disabled=not (rename_category_old and rename_category_new.strip()),
+        ):
+            new_name = rename_category_new.strip()
+            renamed = rename_value("category", rename_category_old, new_name)
+            # Renaming onto a category that already exists merges the two.
+            settings["categories"] = list(dict.fromkeys(
+                new_name if name == rename_category_old else name for name in category_names
+            ))
+            if budgeted == rename_category_old:
+                settings["budget_category"] = new_name
+            save_settings(settings)
+            st.session_state["_reset_rename_category"] = True
+            st.toast(f"Renamed {renamed} receipt(s): '{rename_category_old}' → '{new_name}'.")
+            st.rerun()
+
 today_folder = get_today_folder()
 today_date = datetime.now(JST).date()
 logging_text = f"[Logging to: {today_folder}]"
@@ -275,6 +316,7 @@ with st.container(key="main_body"):
     # any of these widgets exist yet in that run.
     if st.session_state.get("_reset_add_entry_form"):
         st.session_state["add_entry_day"] = today_date
+        st.session_state["add_entry_category"] = budgeted
         st.session_state["add_entry_store"] = None
         st.session_state["add_entry_excluded"] = False
         st.session_state["add_entry_excluded_reason"] = None
@@ -300,19 +342,30 @@ with st.container(key="main_body"):
     # picked" before submission if it were in one. So the whole section is
     # plain widgets with plain buttons, and behaves the same way throughout.
     #
-    # The meal's day and store come first, then its items one at a time. The
-    # one real ordering constraint is Item before Store/Cost: the suggestion
-    # writes to their session_state in between, and both have to be created
-    # after that write to pick it up within the same run -- so Store sits
-    # beside Day but is drawn after Item, via columns made up front.
-    day_column, store_column = st.columns(2)
+    # The meal's day, category and store come first, then its items one at a
+    # time. The one real ordering constraint is Item before Store/Cost: the
+    # suggestion writes to their session_state in between, and both have to
+    # be created after that write to pick it up within the same run -- so
+    # Store sits beside Day but is drawn after Item, via columns made up front.
+    day_column, category_column, store_column = st.columns([2, 2, 3])
     entry_date = day_column.date_input(
         "Day", value=today_date, max_value=today_date, key="add_entry_day"
     )
-    # Typed text in these three survives clicking/tabbing away without Enter.
-    keep_typed_selectbox_text("add_entry_item", "add_entry_store", "add_entry_excluded_reason")
+    # Typed text in these survives clicking/tabbing away without Enter.
+    keep_typed_selectbox_text("add_entry_category", "add_entry_item", "add_entry_store", "add_entry_excluded_reason")
+    # A category typed that isn't listed yet is added when the receipt's
+    # logged. Store and item suggestions only come from this category's
+    # past receipts.
+    category = category_column.selectbox(
+        "Category", options=category_names, accept_new_options=True,
+        index=category_names.index(budgeted) if budgeted in category_names else 0,
+        key="add_entry_category",
+        help="Type a new one to add it. Store and item suggestions follow the category.",
+    )
+    category = (category or "").strip() or budgeted
+    is_food = category == budgeted
     item_column, cost_column, add_column = st.columns([5, 2, 2], vertical_alignment="bottom")
-    choices = item_choices(excluded_items, excluded_stores)
+    choices = item_choices(excluded_items, excluded_stores, category)
     item_choice = item_column.selectbox(
         "Item", options=choices, format_func=item_choice_label, index=None,
         accept_new_options=True, placeholder="Type or pick an item",
@@ -324,7 +377,7 @@ with st.container(key="main_body"):
         item_choice = {item_choice_label(choice): choice for choice in choices}.get(item_choice, item_choice)
     item, choice_store = split_item_choice(item_choice) if item_choice else (None, None)
     if item and st.session_state.get("_last_autofilled_item") != item_choice:
-        last_entry = last_entry_for_item(item, choice_store)
+        last_entry = last_entry_for_item(item, choice_store, category)
         if last_entry is not None:
             st.session_state["add_entry_cost"] = int(last_entry["cost_yen"])
             # Just a suggestion -- still an ordinary editable selectbox. Only
@@ -336,7 +389,7 @@ with st.container(key="main_body"):
         st.session_state["_last_autofilled_item"] = item_choice
 
     store = store_column.selectbox(
-        "Store", options=known_values("store", exclude=excluded_stores), index=None,
+        "Store", options=known_values("store", exclude=excluded_stores, category=category), index=None,
         accept_new_options=True, placeholder="Optional -- type or pick a store",
         # Optional, for a store whose name can't be recalled (or read) at
         # the time -- it can be filled in later from Entries.
@@ -374,14 +427,16 @@ with st.container(key="main_body"):
     # Tax starts at 0, since most prices (konbini ones especially) already
     # include it. "Use 8%" fills in food's reduced rate on the items so far,
     # rounded down, for a receipt that adds tax on top; it can still be
-    # typed over to match the receipt, as stores round differently.
+    # typed over to match the receipt, as stores round differently. Every
+    # other category gets the standard 10%.
+    tax_rate = 8 if is_food else 10
     bag_yen = bag_price(store)
     # Tax at the left with its button, lined up under the items, and the
     # bag box on its own line below.
     tax_column, rate_column, _ = st.columns([3, 2, 4], vertical_alignment="bottom")
     rate_column.button(
-        "Use 8%", width="stretch", help="Fill in 8% of the items so far",
-        on_click=lambda amount: st.session_state.update(add_entry_tax=amount), args=(subtotal * 8 // 100,),
+        f"Use {tax_rate}%", width="stretch", help=f"Fill in {tax_rate}% of the items so far",
+        on_click=lambda amount: st.session_state.update(add_entry_tax=amount), args=(subtotal * tax_rate // 100,),
     )
     tax_yen = tax_column.number_input(
         "Tax (¥)", min_value=0, step=1, key="add_entry_tax",
@@ -413,7 +468,7 @@ with st.container(key="main_body"):
             accept_new_options=True, placeholder="Optional -- pick or type a reason",
             key="add_entry_excluded_reason",
         )
-    log_clicked = st.button("Log meal")
+    log_clicked = st.button("Log meal" if is_food else "Log receipt")
     if log_clicked and not items:
         st.warning("Add an item first.")
     elif log_clicked:
@@ -439,8 +494,13 @@ with st.container(key="main_body"):
         for row_item, row_yen in rows:
             append_entry(
                 target_csv, timestamp.strftime("%Y-%m-%d %H:%M:%S"), store, row_item, row_yen,
-                excluded, excluded_reason,
+                excluded, excluded_reason, category,
             )
+        # A newly typed category joins the saved list, so it's offered from
+        # now on in the order it was added.
+        if category not in category_names:
+            settings["categories"] = category_names + [category]
+            save_settings(settings)
         # No st.form here, so nothing clears itself automatically -- but the
         # actual field reset can't happen right here (Streamlit forbids
         # changing a widget's session_state after that widget's already been
@@ -454,8 +514,9 @@ with st.container(key="main_body"):
         if excluded:
             excluded_note = f" (not counted: {excluded_reason})" if excluded_reason else " (not counted toward totals)"
         what = items[0][0] if len(items) == 1 else f"{len(items)} items"
+        category_note = "" if is_food else f" ({category})"
         st.session_state["_add_entry_confirmation"] = (
-            f"[Logged {what}{f' at {store}' if store else ''} for ¥{meal_total:,.0f}{excluded_note}]"
+            f"[Logged {what}{category_note}{f' at {store}' if store else ''} for ¥{meal_total:,.0f}{excluded_note}]"
         )
         st.rerun()
     else:
@@ -492,6 +553,10 @@ with st.container(key="main_body"):
                 item_count = int((~rows["item"].isin([BAG_ITEM, TAX_ITEM])).sum())
                 summary = [meal["time"][11:16], html.escape(meal["store"] or "No store"), f"¥{meal['total']:,}",
                            f"{item_count} item{'s' if item_count != 1 else ''}"]
+                # Food is most of them, so only other categories are named.
+                meal_categories = [name for name in rows["category"].unique() if name != budgeted]
+                if meal_categories:
+                    summary.insert(1, html.escape(" / ".join(meal_categories)))
                 if rows["excluded"].all():
                     summary.append("not counted")
                 lines = "".join(
@@ -527,14 +592,20 @@ with st.container(key="main_body"):
                         "Reason",
                         options=known_exclusion_reasons(),
                     ),
+                    # Same: a new category is typed on the add form first.
+                    "category": st.column_config.SelectboxColumn(
+                        "Category", options=category_names, default=budgeted,
+                    ),
                 },
             )
             # Drops fully-blank rows left over from clicking the editor's "+"
             # add-row button without filling anything in, so they don't get
-            # saved as-is. The Excluded checkbox is left out of that check,
-            # since its default=False means it's never blank on a new row.
+            # saved as-is. The Excluded checkbox and Category are left out of
+            # that check, since their defaults mean they're never blank on a
+            # new row.
             edited_entries = edited_entries.dropna(
-                how="all", subset=[c for c in edited_entries.columns if c not in ("excluded", "excluded_reason")]
+                how="all",
+                subset=[c for c in edited_entries.columns if c not in ("excluded", "excluded_reason", "category")],
             )
             # Saved as soon as anything in the table changes (the user asked
             # for edits to save by default, not wait on a button) -- except
@@ -586,7 +657,16 @@ with st.container(key="main_body"):
         # that day -- so the total/budget metric only appears for today
         # (where ¥0 so far is meaningful) or a day that actually has entries.
         if is_today or not day_entries.empty:
-            total_label = "Today's total" if is_today else f"Total for {selected_date.strftime('%d-%m-%Y')}"
+            day_name = "Today" if is_today else selected_date.strftime("%d-%m-%Y")
+            day_categories = totals_by_category(edited_entries) if not day_entries.empty else {}
+            # With a budget, the metric is the budgeted category's spending
+            # (only that is budgeted so far), and everything else is listed
+            # under it.
+            if budget_amount > 0:
+                total_label = f"{day_name}: {budgeted.lower()}"
+                day_total = day_categories.get(budgeted, 0)
+            else:
+                total_label = "Today's total" if is_today else f"Total for {day_name}"
             # A single day's total only gets compared against the budget
             # when that budget is itself daily -- comparing one day's spend
             # to a weekly allowance would be misleading (see the separate
@@ -611,14 +691,19 @@ with st.container(key="main_body"):
                 st.progress(min(day_total / day_budget, 1.0) if day_budget > 0 else 1.0)
             else:
                 st.metric(total_label, f"¥{day_total:,.0f}")
+            # Every category's share, once anything besides the budgeted
+            # one has been spent that day.
+            if set(day_categories) - {budgeted}:
+                shares = " · ".join(f"{name} ¥{yen:,}" for name, yen in day_categories.items())
+                st.caption(f"All spending: ¥{sum(day_categories.values()):,} ({shares})")
 
             if budget_period == "weekly" and budget_amount > 0 and is_today:
                 week_start, week_end = week_bounds(today_date)
-                week_total = week_total_so_far(today_date)
+                week_total = week_total_so_far(today_date, budgeted)
                 diff = week_total - budget_amount
                 diff_str = f"-¥{abs(diff):,.0f}" if diff < 0 else f"¥{diff:,.0f}"
                 st.metric(
-                    f"This week's total ({week_start.strftime('%d-%m')}–{week_end.strftime('%d-%m')})",
+                    f"This week: {budgeted.lower()} ({week_start.strftime('%d-%m')}–{week_end.strftime('%d-%m')})",
                     f"¥{week_total:,.0f}",
                     delta=f"{diff_str} vs ¥{budget_amount:,.0f} allowance",
                     delta_color="inverse",
@@ -650,12 +735,23 @@ with st.container(key="main_body"):
             if not excluded_by_reason.empty:
                 breakdown = " · ".join(f"{reason} ¥{yen:,.0f}" for reason, yen in excluded_by_reason.items())
                 st.caption(f"Not counted: ¥{excluded_by_reason.sum():,.0f} ({breakdown})")
-            st.bar_chart(summary.set_index("day")["total_yen"], color=ACCENT_COLOR)
+            # Each day's bar split by category, the budgeted one first (in
+            # the accent colour), the rest largest first.
+            month_categories = summary.drop(columns=["day", "total_yen"]).sum().sort_values(ascending=False)
+            month_categories = month_categories[month_categories > 0]
+            order = sorted(month_categories.index, key=lambda name: name != budgeted)
+            if len(order) > 1:
+                shares = " · ".join(f"{name} ¥{month_categories[name]:,.0f}" for name in order)
+                st.caption(f"By category: {shares}")
+                colors = [ACCENT_COLOR] + [CATEGORY_COLORS[i % len(CATEGORY_COLORS)] for i in range(len(order) - 1)]
+                st.bar_chart(summary.set_index("day")[order], color=colors, y_label="")
+            else:
+                st.bar_chart(summary.set_index("day")["total_yen"], color=ACCENT_COLOR)
 
     # Secondary, so collapsed (the page's convention): the last six months
     # side by side. Only months from the first one with receipts are shown.
     with st.expander("Month by month"):
-        history = monthly_history(today_date, budget_amount, budget_period)
+        history = monthly_history(today_date, budget_amount, budget_period, budget_category=budgeted)
         if len(history) < 2:
             st.write("Month-by-month comparisons appear once there's more than one month of receipts.")
         else:
@@ -668,12 +764,17 @@ with st.container(key="main_body"):
                 "Per day": history["per_day_yen"].map("¥{:,.0f}".format),
             })
             if budget_amount > 0:
+                # The allowance is for the budgeted category, so that's what
+                # it's set against -- shown as its own column once anything
+                # else has been spent.
+                if (history["budgeted_yen"] != history["total_yen"]).any():
+                    table[budgeted] = history["budgeted_yen"].map("¥{:,.0f}".format)
                 table["Allowance"] = history["allowance_yen"].map("¥{:,.0f}".format)
-                table["Difference"] = (history["total_yen"] - history["allowance_yen"]).map(signed_yen)
+                table["Difference"] = (history["budgeted_yen"] - history["allowance_yen"]).map(signed_yen)
             st.dataframe(table, hide_index=True, width="stretch")
             if budget_amount > 0:
                 st.caption(
-                    "Allowance is your budget spread over each month's days"
+                    f"Allowance is your {budgeted.lower()} budget spread over each month's days"
                     + (" (a weekly allowance counts as a seventh per day)." if budget_period == "weekly" else ".")
                     + " Under budget shows as a minus."
                 )

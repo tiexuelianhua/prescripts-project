@@ -264,7 +264,7 @@ def test_excluded_entries_never_count(app_copy):
         import pandas as pd
         from prescripts.data.meal_receipts import (
             append_entry, counted_total, day_folder_for, load_entries, week_bounds, week_total_so_far,
-            with_excluded_column,
+            with_default_columns,
         )
 
         rows = pd.DataFrame({
@@ -275,7 +275,7 @@ def test_excluded_entries_never_count(app_copy):
             "excluded": [False, True, None, None],  # None = a row added with the table's "+"
             "excluded_reason": [None, None, "Paid with cash", "  "],
         })
-        normalized = with_excluded_column(rows)
+        normalized = with_default_columns(rows)
         assert list(normalized["excluded"]) == [False, True, True, False]  # a reason implies excluded
         assert list(normalized["excluded_reason"].fillna("-")) == ["-", "-", "Paid with cash", "-"]  # blank = no reason
         assert counted_total(rows) == 500
@@ -372,6 +372,54 @@ def test_budget_carry_over(app_copy):
         assert 1000 + carried_over(set_today, date(2026, 9, 10)) == 2000
         assert 1500 + carried_over(dict(set_today, budget_amount=1500), date(2026, 9, 10)) == 2000
         assert 1000 + carried_over(set_today, date(2026, 9, 11)) == 1000 + (2000 - 800)
+    """)
+
+
+def test_spending_categories(app_copy):
+    # Rows from before categories count as Food. Totals split by category,
+    # suggestions follow one, and the budget and its carry-over only count
+    # its own category. Renaming Food reaches the old rows and the budget.
+    _check(app_copy, """
+        from datetime import date
+        from prescripts.data.meal_receipts import (
+            append_entry, budget_category, carried_over, categories, counted_total, day_folder_for, known_values,
+            load_entries, rename_value, totals_by_category, week_total_so_far,
+        )
+
+        old_day = day_folder_for(date(2026, 9, 8))
+        old_day.mkdir(parents=True)
+        (old_day / "receipts.csv").write_text(
+            "timestamp,store,item,cost_yen\\n2026-09-08 12:00:00,Lawson,Onigiri,150\\n", encoding="utf-8"
+        )
+        old = load_entries(old_day / "receipts.csv")
+        assert list(old["category"]) == ["Food"], old
+
+        day = day_folder_for(date(2026, 9, 9))
+        day.mkdir(parents=True)
+        csv = day / "receipts.csv"
+        append_entry(csv, "2026-09-09 08:00:00", "Lawson", "Onigiri", 200)
+        append_entry(csv, "2026-09-09 09:00:00", "JR East", "Suica top-up", 3000, category="Transport")
+        append_entry(csv, "2026-09-09 18:00:00", "Uniqlo", "T-shirt", 1500, category="Shopping")
+        append_entry(csv, "2026-09-09 19:00:00", "JR East", "Suica top-up", 1000, category="Transport", excluded=True)
+        entries = load_entries(csv)
+        assert counted_total(entries) == 4700
+        assert counted_total(entries, "Transport") == 3000
+        assert totals_by_category(entries) == {"Transport": 3000, "Shopping": 1500, "Food": 200}
+        assert known_values("store", category="Transport") == ["JR East"]
+        assert known_values("item", category="Food") == ["Onigiri"]
+        assert week_total_so_far(date(2026, 9, 9), "Food") == 350  # Mon 7th to the 9th
+
+        settings = {"budget_amount": 1000, "budget_period": "daily", "carry_over": True,
+                    "carry_over_since": "2026-09-08"}
+        assert carried_over(settings, date(2026, 9, 10)) == (1000 - 150) + (1000 - 200)
+
+        assert categories({}) == ["Food", "Transport", "Shopping", "Other"]
+        append_entry(csv, "2026-09-09 20:00:00", None, "Gift", 500, category="Presents")
+        assert categories({}) == ["Food", "Transport", "Shopping", "Other", "Presents"]
+
+        assert rename_value("category", "Food", "Meals") == 2  # the old row too
+        assert set(load_entries(old_day / "receipts.csv")["category"]) == {"Meals"}
+        assert budget_category({}) == "Food" and budget_category({"budget_category": "Meals"}) == "Meals"
     """)
 
 

@@ -82,6 +82,13 @@ def seed_sample_data(copy: Path) -> None:
         if days_ago == 3:
             append_entry(folder / "receipts.csv", f"{day} 20:15:00", "Izakaya", "Team dinner", 3500,
                          excluded=True, excluded_reason="Covered by friend/coworker")
+        # Spending besides food: a Suica top-up on the 1st and every Monday,
+        # and some shopping.
+        if day.day == 1 or day.weekday() == 0:
+            append_entry(folder / "receipts.csv", f"{day} 07:50:00", "JR East", "Suica top-up", 3000,
+                         category="Transport")
+        if days_ago == min(5, today.day - 1):
+            append_entry(folder / "receipts.csv", f"{day} 16:30:00", "Uniqlo", "T-shirt", 1990, category="Shopping")
     settings = load_settings()
     settings.update({"budget_amount": 7000, "budget_period": "weekly"})
     save_settings(settings)

@@ -50,11 +50,17 @@ PAGES = [
         "keywords": ["overview", "summary", "today", "control center", "dashboard"],
     },
     {
-        "title": "Meal Receipts",
+        # Called Meal Receipts until it took other spending too. The file,
+        # address and settings key keep that name, so bookmarks and saved
+        # page switches still work.
+        "title": "Budget",
         "icon": "🧾",
         "path": "prescripts/pages/meal_receipts.py",
         "url_path": "meal_receipts",
-        "keywords": ["meal", "receipt", "receipts", "food", "budget"],
+        "keywords": [
+            "budget", "meal", "meals", "receipt", "receipts", "food", "spending", "money", "expenses",
+            "transport", "suica", "pasmo", "shopping",
+        ],
     },
     {
         "title": "Weather",

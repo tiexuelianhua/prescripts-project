@@ -229,6 +229,49 @@ def test_logging_a_meal(app_copy):
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+def test_logging_other_spending(app_copy):
+    # A Suica top-up logged as Transport: the form's suggestions follow the
+    # category, tax is the standard 10%, and the food budget is untouched
+    # while the day's other spending is listed under it.
+    result = run_in(app_copy, """
+        from datetime import date
+        from streamlit.testing.v1 import AppTest
+        from prescripts.common import SCRIPTS_DIR
+        from prescripts.data.meal_receipts import MEAL_RECEIPTS_DIR, append_entry, day_folder_for, get_today_folder, load_entries, save_settings
+
+        folder = day_folder_for(date(2026, 8, 1))
+        folder.mkdir(parents=True)
+        append_entry(folder / "receipts.csv", "2026-08-01 08:00:00", "Lawson", "Onigiri", 150)
+        append_entry(folder / "receipts.csv", "2026-08-01 09:00:00", "JR East", "Suica top-up", 3000, category="Transport")
+        MEAL_RECEIPTS_DIR.mkdir(parents=True, exist_ok=True)
+        save_settings({"budget_amount": 1000, "budget_period": "daily"})
+
+        at = AppTest.from_file(str(SCRIPTS_DIR / "prescripts/pages/meal_receipts.py"), default_timeout=60)
+        at.run()
+        assert at.selectbox(key="add_entry_category").value == "Food"
+        assert at.selectbox(key="add_entry_item").options == ["Onigiri"]
+        at.selectbox(key="add_entry_category").set_value("Transport")
+        at.run()
+        assert at.selectbox(key="add_entry_item").options == ["Suica top-up"]
+        at.selectbox(key="add_entry_item").set_value("Suica top-up")
+        at.run()
+        assert at.selectbox(key="add_entry_store").value == "JR East"
+        assert at.number_input(key="add_entry_cost").value == 3000
+        assert [button for button in at.button if button.label == "Use 10%"]
+        next(button for button in at.button if button.label == "Log receipt").click()
+        at.run()
+        assert not at.exception and not at.warning, (at.exception, at.warning)
+
+        entries = load_entries(get_today_folder() / "receipts.csv")
+        assert list(zip(entries["item"], entries["category"])) == [("Suica top-up", "Transport")], entries
+        assert at.selectbox(key="add_entry_category").value == "Food"  # back to Food for the next one
+        [food] = [metric for metric in at.metric if metric.label == "Today: food"]
+        assert food.value == "¥0" and "vs ¥1,000 budget" in food.delta, (food.value, food.delta)
+        assert any("All spending: ¥3,000 (Transport ¥3,000)" in caption.value for caption in at.caption)
+    """)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 def test_meal_receipts_works_without_powershell(app_copy):
     # Mac/Linux have no PowerShell, so today's folder is made in Python
     # there. It must be the same folder the .ps1 scripts give, and the page
@@ -587,7 +630,7 @@ def test_overview_tiles_with_no_data_yet(app_copy):
         for expected in ("No flashcards yet.", "No area saved yet -- pick one on the Activities page.",
                          "Not connected yet -- connect your account on the Spotify page."):
             assert expected in captions, (expected, captions)
-        [meal] = [metric for metric in at.metric if metric.label == "Today's total"]
+        [meal] = [metric for metric in at.metric if metric.label == "Today: food"]
         assert meal.value == "¥0" and "vs ¥1,500 budget" in meal.delta, (meal.value, meal.delta)
     """)
     assert result.returncode == 0, result.stdout + result.stderr
@@ -623,7 +666,7 @@ def test_overview_button_goes_to_overview(app_copy):
         from prescripts.common import PAGES, SCRIPTS_DIR
 
         def on_overview(at):
-            return any(header.value.startswith("🧾") for header in at.subheader)  # the Meal Receipts tile
+            return any(header.value.startswith("🧾") for header in at.subheader)  # the Budget tile
 
         at = AppTest.from_file(str(SCRIPTS_DIR / "app.py"), default_timeout=120)
         for path in ["prescripts/pages/home.py", *[page["path"] for page in PAGES]]:
@@ -701,7 +744,7 @@ def test_home_commands(app_copy):
             route = route_command(query, PAGES)
             return route["page"]["title"] if route["action"] == "page" else route["action"]
 
-        assert goes_to("Go to Meal Receipts") == "Meal Receipts"
+        assert goes_to("Go to Meal Receipts") == "Budget"  # its old name still finds it
         assert goes_to("open the japanese page please") == "Japanese"
         assert goes_to("take me to weather") == "Weather"
         assert goes_to("what's the weather like") == "Weather"
@@ -710,12 +753,12 @@ def test_home_commands(app_copy):
         assert goes_to("日本語") == "Japanese"
         assert goes_to("activities") == "Activities"
         assert goes_to("nearby") == "Activities"
-        # "near me" is more specific than Meal Receipts' "food".
+        # "near me" is more specific than Budget's "food".
         assert goes_to("food near me") == "Activities"
 
         both = route_command("japanese food", PAGES)
         assert both["action"] == "choose", both
-        assert {page["title"] for page in both["pages"]} == {"Japanese", "Meal Receipts"}
+        assert {page["title"] for page in both["pages"]} == {"Japanese", "Budget"}
 
         search = route_command("how tall is Mount Fuji", PAGES)
         assert search["action"] == "search", search
@@ -738,7 +781,7 @@ def test_page_addresses_stay_the_same(app_copy):
         addresses = {page["title"]: page["url_path"] for page in PAGES}
         assert addresses == {
             "Overview": "overview",
-            "Meal Receipts": "meal_receipts",
+            "Budget": "meal_receipts",  # kept from when it was Meal Receipts
             "Weather": "weather",
             "Activities": "activities",
             "Spotify": "spotify_page",

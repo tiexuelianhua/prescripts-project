@@ -1,4 +1,4 @@
-# Data/business logic for the Meal Receipts page -- CSV I/O, settings, and
+# Data/business logic for the Budget page (was Meal Receipts) -- CSV I/O, settings, and
 # summary computations, deliberately with no Streamlit *rendering* calls (
 # st.cache_data is fine, it's just a caching decorator with no UI output).
 # That separation means other pages (e.g. an Overview page wanting today's
@@ -24,7 +24,14 @@ SETTINGS_PATH = MEAL_RECEIPTS_DIR / "settings.json"
 # load_entries() reads as "not excluded" rather than rewriting them up front.
 # "excluded_reason" (why it's excluded) was added the same day, same
 # handling: missing column = no reason given.
-CSV_COLUMNS = ["timestamp", "store", "item", "cost_yen", "excluded", "excluded_reason"]
+# "category" (Food, Transport, ...) came on 2026-10-02, when the page grew
+# from meals into a general Budget page. Same handling again: a row with no
+# category is Food, since everything logged before then was a meal.
+CSV_COLUMNS = ["timestamp", "store", "item", "cost_yen", "excluded", "excluded_reason", "category"]
+DEFAULT_CATEGORY = "Food"
+# Offered on a new install. Can be added to (type one into the picker) and
+# renamed; the list in use is kept in settings.json, see categories().
+DEFAULT_CATEGORIES = ["Food", "Transport", "Shopping", "Other"]
 # Offered first in the reason pickers; any other reason typed on the add form
 # is kept too and offered from then on (see known_exclusion_reasons()).
 DEFAULT_EXCLUSION_REASONS = ["Paid with cash", "Covered by friend/coworker"]
@@ -75,13 +82,13 @@ def day_folder_for(date) -> Path:
 def load_entries(csv_path: Path) -> pd.DataFrame:
     if csv_path.exists():
         try:
-            return with_excluded_column(pd.read_csv(csv_path))
+            return with_default_columns(pd.read_csv(csv_path))
         except pd.errors.EmptyDataError:
             pass
-    return with_excluded_column(pd.DataFrame(columns=CSV_COLUMNS))
+    return with_default_columns(pd.DataFrame(columns=CSV_COLUMNS))
 
 
-def with_excluded_column(entries: pd.DataFrame) -> pd.DataFrame:
+def with_default_columns(entries: pd.DataFrame) -> pd.DataFrame:
     # Also covers rows added through the Entries table's "+" button, which
     # leave the checkbox as None rather than False.
     entries = entries.copy()
@@ -95,17 +102,51 @@ def with_excluded_column(entries: pd.DataFrame) -> pd.DataFrame:
     # Giving a reason implies excluding the entry -- picking one in the
     # Entries table shouldn't also need the checkbox ticked separately.
     entries["excluded"] = entries["excluded"].fillna(False).astype(bool) | has_reason
+    if "category" not in entries.columns:
+        entries["category"] = None
+    category = entries["category"].astype("string").str.strip()
+    entries["category"] = category.where(category.notna() & (category != ""), DEFAULT_CATEGORY).astype(object)
     return entries
 
 
-def counted_total(entries: pd.DataFrame) -> int:
+def counted_total(entries: pd.DataFrame, category: str | None = None) -> int:
     # The one place "what counts toward a total" is decided -- every day/
     # week/month total goes through here, so excluded entries drop out of
-    # all of them alike.
+    # all of them alike. With a category, only that category's rows count.
     if entries.empty:
         return 0
-    entries = with_excluded_column(entries)
-    return int(entries.loc[~entries["excluded"], "cost_yen"].fillna(0).sum())
+    entries = with_default_columns(entries)
+    counted = ~entries["excluded"]
+    if category is not None:
+        counted &= entries["category"] == category
+    return int(entries.loc[counted, "cost_yen"].fillna(0).sum())
+
+
+def totals_by_category(entries: pd.DataFrame) -> dict[str, int]:
+    # Counted total per category, largest first; categories with nothing
+    # counted are left out.
+    if entries.empty:
+        return {}
+    entries = with_default_columns(entries)
+    counted = entries[~entries["excluded"]]
+    totals = counted["cost_yen"].fillna(0).groupby(counted["category"]).sum().astype(int)
+    return {name: int(yen) for name, yen in totals.sort_values(ascending=False).items() if yen}
+
+
+def categories(settings: dict) -> list[str]:
+    # The categories offered: the saved list (the defaults until one's added
+    # or renamed), then any others found in receipts, e.g. typed into the
+    # Entries table's file by hand.
+    saved = settings.get("categories", DEFAULT_CATEGORIES)
+    used = set(with_default_columns(all_entries())["category"].dropna().unique())
+    return saved + sorted(used - set(saved))
+
+
+def budget_category(settings: dict) -> str:
+    # The category the budget, carry-over and "Set today's budget" apply
+    # to. Always Food so far; kept as a setting so renaming Food (e.g. to
+    # "Meals") keeps the budget on it.
+    return settings.get("budget_category", DEFAULT_CATEGORY)
 
 
 def meals(entries: pd.DataFrame) -> list[dict]:
@@ -115,7 +156,7 @@ def meals(entries: pd.DataFrame) -> list[dict]:
     # DataFrame and "total" what counts toward totals.
     if entries.empty:
         return []
-    entries = with_excluded_column(entries)
+    entries = with_default_columns(entries)
     stores = entries["store"].where(entries["store"].notna(), "")
     found = []
     for (timestamp, store), rows in entries.groupby([entries["timestamp"], stores], sort=False):
@@ -126,7 +167,7 @@ def meals(entries: pd.DataFrame) -> list[dict]:
 def save_entries(csv_path: Path, entries: pd.DataFrame) -> None:
     # Normalized on the way out too, so a reason picked in the Entries table
     # is written with its implied excluded=True, not just read back that way.
-    with_excluded_column(entries).to_csv(csv_path, index=False, encoding="utf-8")
+    with_default_columns(entries).to_csv(csv_path, index=False, encoding="utf-8")
     # Every write goes through here, so this is the one place the cached
     # all_entries() scan is dropped -- a just-added store/item is suggested
     # straight away instead of after the cache's 60s ttl.
@@ -145,7 +186,7 @@ def relocate_edited_entries(entries: pd.DataFrame, viewed_date) -> pd.DataFrame:
     for target_date, rows in moved.groupby(entry_dates[entry_dates != viewed_date]):
         target_csv = day_folder_for(target_date) / "receipts.csv"
         target_csv.parent.mkdir(parents=True, exist_ok=True)
-        combined = pd.concat([load_entries(target_csv), with_excluded_column(rows)], ignore_index=True)
+        combined = pd.concat([load_entries(target_csv), with_default_columns(rows)], ignore_index=True)
         combined = combined.sort_values("timestamp").reset_index(drop=True)
         save_entries(target_csv, combined)
     return entries[entry_dates == viewed_date]
@@ -159,6 +200,7 @@ def append_entry(
     cost_yen: int,
     excluded: bool = False,
     excluded_reason: str | None = None,
+    category: str = DEFAULT_CATEGORY,
 ) -> None:
     # Rewrites the whole file rather than appending one line: a pre-"excluded"
     # receipts.csv has a 4-column header, and a 5-field row appended under
@@ -170,6 +212,7 @@ def append_entry(
         "cost_yen": cost_yen,
         "excluded": excluded,
         "excluded_reason": excluded_reason,
+        "category": category,
     }])
     save_entries(csv_path, pd.concat([load_entries(csv_path), entry], ignore_index=True))
 
@@ -182,7 +225,9 @@ def rename_value(column: str, old_value: str, new_value: str) -> int:
     renamed = 0
     for csv_file in MEAL_RECEIPTS_DIR.glob("*/*/*/receipts.csv"):
         try:
-            df = pd.read_csv(csv_file)
+            # Filled in first, so renaming Food reaches rows from before
+            # the category column too.
+            df = with_default_columns(pd.read_csv(csv_file))
         except pd.errors.EmptyDataError:
             continue
         matches = df[column] == old_value
@@ -204,12 +249,18 @@ def save_settings(settings: dict) -> None:
 
 
 def month_summary(day_folder: Path) -> pd.DataFrame:
+    # One row per logged day: "day", "total_yen", and a column of yen per
+    # category spent on that month (0 on days it wasn't), for the stacked chart.
     rows = []
     for day_dir in sorted(day_folder.parent.iterdir()):
         csv_path = day_dir / "receipts.csv"
         if csv_path.exists():
-            rows.append({"day": day_dir.name, "total_yen": counted_total(load_entries(csv_path))})
-    return pd.DataFrame(rows)
+            entries = load_entries(csv_path)
+            rows.append({"day": day_dir.name, "total_yen": counted_total(entries), **totals_by_category(entries)})
+    summary = pd.DataFrame(rows)
+    category_columns = [column for column in summary.columns if column not in ("day", "total_yen")]
+    summary[category_columns] = summary[category_columns].fillna(0).astype(int)
+    return summary
 
 
 def month_excluded_by_reason(day_folder: Path) -> pd.Series:
@@ -229,7 +280,7 @@ def month_excluded_by_reason(day_folder: Path) -> pd.Series:
 
 
 def known_exclusion_reasons() -> list[str]:
-    used = with_excluded_column(all_entries())["excluded_reason"].dropna().unique()
+    used = with_default_columns(all_entries())["excluded_reason"].dropna().unique()
     return DEFAULT_EXCLUSION_REASONS + sorted(set(used) - set(DEFAULT_EXCLUSION_REASONS))
 
 
@@ -247,11 +298,19 @@ def all_entries() -> pd.DataFrame:
             frames.append(pd.read_csv(csv_file))
         except pd.errors.EmptyDataError:
             continue
-    return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=CSV_COLUMNS)
+    return with_default_columns(pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=CSV_COLUMNS))
 
 
-def known_values(column: str, exclude: set[str] | None = None) -> list[str]:
-    values = set(all_entries()[column].dropna().unique())
+def entries_in(category: str | None) -> pd.DataFrame:
+    # Every receipt, or just one category's -- the store/item suggestions
+    # follow the add form's category, so a train top-up doesn't offer
+    # onigiri.
+    entries = all_entries()
+    return entries if category is None else entries[entries["category"] == category]
+
+
+def known_values(column: str, exclude: set[str] | None = None, category: str | None = None) -> list[str]:
+    values = set(entries_in(category)[column].dropna().unique())
     if exclude:
         values -= exclude
     return sorted(values)
@@ -265,10 +324,12 @@ def known_values(column: str, exclude: set[str] | None = None) -> list[str]:
 _ITEM_STORE_SEPARATOR = "\x1f"
 
 
-def item_choices(exclude_items: set[str] | None = None, exclude_stores: set[str] | None = None) -> list[str]:
-    entries = all_entries()
+def item_choices(
+    exclude_items: set[str] | None = None, exclude_stores: set[str] | None = None, category: str | None = None,
+) -> list[str]:
+    entries = entries_in(category)
     choices = []
-    for item in known_values("item", exclude=exclude_items):
+    for item in known_values("item", exclude=exclude_items, category=category):
         stores = entries.loc[entries["item"] == item, "store"]
         # A blank store counts as its own variant ("" here), shown as the
         # plain item name next to the named ones.
@@ -293,13 +354,14 @@ def item_choice_label(choice: str) -> str:
     return f"{item} ({store})" if store else item
 
 
-def last_entry_for_item(item: str, store: str | None = None) -> pd.Series | None:
+def last_entry_for_item(item: str, store: str | None = None, category: str | None = None) -> pd.Series | None:
     # Timestamps are "YYYY-MM-DD HH:MM:SS" strings, which sort correctly as
     # plain text -- no need to parse them as datetimes to find the latest.
     # Returns the whole row (not just cost) so the caller can also suggest
     # the store it was last bought from. With a store (see item_choices),
     # only purchases from that store count; "" means ones with no store.
-    matches = all_entries()
+    # With a category, only that category's purchases.
+    matches = entries_in(category)
     matches = matches[matches["item"] == item]
     if store == "":
         matches = matches[matches["store"].isna()]
@@ -310,9 +372,10 @@ def last_entry_for_item(item: str, store: str | None = None) -> pd.Series | None
     return matches.sort_values("timestamp").iloc[-1]
 
 
-def daily_totals_for_month(year: int, month: int) -> dict[date, int]:
+def daily_totals_for_month(year: int, month: int, category: str | None = None) -> dict[date, int]:
     # Counted total per logged day of one month, keyed by date (read from the
     # day folders' dd-mm-yyyy names). Days with no receipts.csv are absent.
+    # With a category, only that category's spending.
     month_dir = day_folder_for(date(year, month, 1)).parent
     totals = {}
     if month_dir.exists():
@@ -324,7 +387,7 @@ def daily_totals_for_month(year: int, month: int) -> dict[date, int]:
                 day = datetime.strptime(day_dir.name, "%d-%m-%Y").date()
             except ValueError:
                 continue
-            totals[day] = counted_total(load_entries(csv_path))
+            totals[day] = counted_total(load_entries(csv_path), category)
     return totals
 
 
@@ -360,15 +423,21 @@ def month_comparison(today: date) -> dict:
     }
 
 
-def monthly_history(today: date, budget_amount: int = 0, budget_period: str = "daily", months: int = 6) -> pd.DataFrame:
+def monthly_history(
+    today: date, budget_amount: int = 0, budget_period: str = "daily", months: int = 6,
+    budget_category: str | None = None,
+) -> pd.DataFrame:
     # One row per month, oldest first, for the last `months` months up to and
     # including this one -- starting from the first of them with any receipts,
     # so months before logging began don't show as zeros. The current month
     # counts only the days so far, for its per-day average and allowance.
+    # "budgeted_yen" is what the budget's category spent (everything, with no
+    # category given): that, not the total, is what the allowance is for.
     rows = []
     year, month = today.year, today.month
     for _ in range(months):
         totals = daily_totals_for_month(year, month)
+        budgeted = daily_totals_for_month(year, month, budget_category) if budget_category else totals
         is_current = (year, month) == (today.year, today.month)
         days = today.day if is_current else calendar.monthrange(year, month)[1]
         total = sum(totals.values())
@@ -376,6 +445,7 @@ def monthly_history(today: date, budget_amount: int = 0, budget_period: str = "d
             "month": f"{year}年{month}月" + (" (so far)" if is_current else ""),
             "total_yen": total,
             "per_day_yen": round(total / days),
+            "budgeted_yen": sum(budgeted.values()),
             "allowance_yen": allowance_for_days(budget_amount, budget_period, days) if budget_amount > 0 else None,
             "has_entries": bool(totals),
         })
@@ -383,7 +453,8 @@ def monthly_history(today: date, budget_amount: int = 0, budget_period: str = "d
     rows.reverse()
     while rows and not rows[0]["has_entries"]:
         rows.pop(0)
-    return pd.DataFrame(rows, columns=["month", "total_yen", "per_day_yen", "allowance_yen", "has_entries"]).drop(columns="has_entries")
+    columns = ["month", "total_yen", "per_day_yen", "budgeted_yen", "allowance_yen", "has_entries"]
+    return pd.DataFrame(rows, columns=columns).drop(columns="has_entries")
 
 
 def budget_settings(settings: dict) -> tuple[int, str]:
@@ -407,6 +478,8 @@ def carried_over(settings: dict, today: date) -> int:
     # "carry_over_set" is a whole budget set by hand for the "since" day, to
     # fix a total that's come out wrong: that day's budget is exactly it,
     # and later days carry on from what's left of it.
+    #
+    # Only the budget's category is carried: a Suica top-up isn't a meal.
     amount, period = budget_settings(settings)
     since = settings.get("carry_over_since")
     if not settings.get("carry_over") or period != "daily" or amount <= 0 or not since:
@@ -414,7 +487,7 @@ def carried_over(settings: dict, today: date) -> int:
     balance = settings["carry_over_set"] - amount if "carry_over_set" in settings else 0
     day = date.fromisoformat(since)
     while day < today:
-        balance += amount - counted_total(load_entries(day_folder_for(day) / "receipts.csv"))
+        balance += amount - counted_total(load_entries(day_folder_for(day) / "receipts.csv"), budget_category(settings))
         day += timedelta(days=1)
     return balance
 
@@ -440,15 +513,16 @@ def week_bounds(reference_date: date) -> tuple[date, date]:
     return week_start, week_start + timedelta(days=6)
 
 
-def week_total_so_far(reference_date: date) -> int:
+def week_total_so_far(reference_date: date, category: str | None = None) -> int:
     # Sum of counted (non-excluded) cost_yen from the Monday of reference_date's week through
     # reference_date itself (not through the week's end -- there's usually
-    # no point reading ahead into days that haven't happened yet).
+    # no point reading ahead into days that haven't happened yet). With a
+    # category, only that category's.
     week_start, _ = week_bounds(reference_date)
     total = 0
     day = week_start
     while day <= reference_date:
-        total += counted_total(load_entries(day_folder_for(day) / "receipts.csv"))
+        total += counted_total(load_entries(day_folder_for(day) / "receipts.csv"), category)
         day += timedelta(days=1)
     return total
 
@@ -460,8 +534,13 @@ def today_summary() -> dict:
     entries = load_entries(today_folder / "receipts.csv")
     settings = load_settings()
     budget_amount, budget_period = budget_settings(settings)
+    category = budget_category(settings)
     result = {
-        "total_yen": counted_total(entries),
+        # The budget's category ("budget_category") against its budget, and
+        # everything spent today beside it.
+        "budget_category": category,
+        "total_yen": counted_total(entries, category),
+        "all_total_yen": counted_total(entries),
         "budget_amount": budget_amount,
         "budget_period": budget_period,
         "has_entries": not entries.empty,
@@ -470,6 +549,6 @@ def today_summary() -> dict:
     }
     if budget_period == "weekly" and budget_amount > 0:
         today_date = datetime.now(JST).date()
-        result["week_total_yen"] = week_total_so_far(today_date)
+        result["week_total_yen"] = week_total_so_far(today_date, category)
         result["week_start"], result["week_end"] = week_bounds(today_date)
     return result

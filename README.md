@@ -7,7 +7,7 @@ A personal dashboard app for everyday life in Japan, themed on the Prescripts of
 | Page | What it does |
 |---|---|
 | **Overview** | A summary tile from each of the other pages, all on one screen |
-| **Meal Receipts** | Log meals and spending against a daily or weekly budget |
+| **Budget** | Log meals, train top-ups, shopping and other spending by category, with a daily or weekly food budget |
 | **Weather** | Forecasts, warnings and live readings from the Japan Meteorological Agency |
 | **Activities** | Food and things to do within walking distance of a station, an area, or where you are, plus festivals, markets and other events coming up around Tokyo |
 | **Spotify** | See and control what's playing, with lyrics (needs a one-off setup, below) |
@@ -22,8 +22,8 @@ A personal dashboard app for everyday life in Japan, themed on the Prescripts of
 **Home**: Initial page. Type what you're after or pick a page from the » menu.
 ![Home page](docs/screenshots/home.png)
 
-**Meal Receipts**: log a meal item by item with a running total, see the day's meals, and track the week against a budget.
-![Meal Receipts page](docs/screenshots/meal_receipts.png)
+**Budget** (called Meal Receipts until October 2026): log a receipt item by item with a running total, see the day's spending, and track food against a budget. Each receipt has a category: Food, Transport, Shopping, Other, or one you add.
+![Budget page](docs/screenshots/meal_receipts.png)
 
 **Japanese**: flashcard reviews, graded Again / Hard / Good / Easy.
 ![Japanese page](docs/screenshots/japanese.png)
@@ -159,7 +159,7 @@ Everything is saved as ordinary files in folders beside the code, never inside i
 ```
 Prescripts\
 ├── prescripts-project\   ← the code (this repository)
-├── Meal Receipts\        ← created when you first log a meal
+├── Meal Receipts\        ← the Budget page's receipts, created when you first log one
 ├── Japanese\             ← your flashcards
 ├── Weather\              ← your chosen forecast area (default: Tokyo)
 ├── Activities\           ← your saved area and walking distance, events you've added, plus recent searches
@@ -188,7 +188,7 @@ The project has automated tests. They load every page and check the rules undern
 .venv\Scripts\python -m pytest
 ```
 
-It takes two to three minutes and should finish with `47 passed`. Close the app first if it's running: installing packages while it's open can fail, because Windows locks files the app is using.
+It takes two to three minutes and should finish with `49 passed`. Close the app first if it's running: installing packages while it's open can fail, because Windows locks files the app is using.
 
 To check the code for mistakes like unused or undefined names, and for import order, run `.venv\Scripts\ruff check .` (add `--fix` to sort the imports for you). The settings are in `pyproject.toml`.
 
@@ -230,7 +230,7 @@ On Mac and Linux, the app runs in your web browser. The app window (`desktop_app
 
    As on Windows, press **Enter** if Streamlit asks for an email, and **Ctrl+C** to stop it.
 
-Everywhere else in this README, use `.venv/bin/python` in place of `.venv\Scripts\python`. The tests usually finish with `44 passed, 3 skipped`: the three skipped tests check PowerShell scripts, and they only run if PowerShell is installed.
+Everywhere else in this README, use `.venv/bin/python` in place of `.venv\Scripts\python`. The tests usually finish with `46 passed, 3 skipped`: the three skipped tests check PowerShell scripts, and they only run if PowerShell is installed.
 
 ## How it's built
 
@@ -245,7 +245,7 @@ prescripts/
 ├── pages/                   home, overview, meal_receipts, weather, activities, spotify, japanese, settings
 └── data/
     ├── home.py              → quotes.json
-    ├── meal_receipts.py     → Meal Receipts\ (a receipts.csv per day)
+    ├── meal_receipts.py     → Meal Receipts\ (the Budget page: a receipts.csv per day)
     ├── weather.py           → JMA, MyMemory (translation)
     ├── activities.py        → OpenStreetMap (Nominatim for areas, Overpass for places), Wikimedia for photos
     ├── events.py            → Tokyo Big Sight's open data, Anime!Anime! news, yearly_events.json
@@ -261,7 +261,7 @@ Some choices behind it:
 - **Data files never draw anything.** That's what lets Overview show a tile from every page without loading the pages themselves.
 - **Plain CSV and JSON files, not a database.** They're easy to read, back up, and fix by hand, and one person's data doesn't need more.
 - **Japan time everywhere.** Dates are worked out in JST directly, so they stay right when the computer's clock is set to another time zone.
-- **The original scripts are still used.** On Windows, Meal Receipts makes its day folders with the PowerShell scripts the project started from (`add*_cV.ps1`). On Mac and Linux it does the same thing in Python.
+- **The original scripts are still used.** On Windows, the Budget page makes its day folders with the PowerShell scripts the project started from (`add*_cV.ps1`). On Mac and Linux it does the same thing in Python.
 - **Tests run against a copy.** `tests/` loads every page with Streamlit's `AppTest` and checks the rules directly, always in a temporary copy of the app so real data is never touched.
 - `LauncherSrc/` is a small C# launcher the author uses in place of the desktop shortcut.
 
