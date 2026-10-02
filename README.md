@@ -7,7 +7,7 @@ A personal dashboard app for everyday life in Japan, themed on the Prescripts of
 | Page | What it does |
 |---|---|
 | **Overview** | A summary tile from each of the other pages, all on one screen |
-| **Budget** | Log meals, train top-ups, shopping and other spending by category, with a daily or weekly food budget |
+| **Budget** | Log meals, train top-ups, shopping and other spending by category, each with its own daily, weekly or monthly budget |
 | **Weather** | Forecasts, warnings and live readings from the Japan Meteorological Agency |
 | **Activities** | Food and things to do within walking distance of a station, an area, or where you are, plus festivals, markets and other events coming up around Tokyo |
 | **Spotify** | See and control what's playing, with lyrics (needs a one-off setup, below) |
@@ -22,7 +22,7 @@ A personal dashboard app for everyday life in Japan, themed on the Prescripts of
 **Home**: Initial page. Type what you're after or pick a page from the » menu.
 ![Home page](docs/screenshots/home.png)
 
-**Budget** (called Meal Receipts until October 2026): log a receipt item by item with a running total, see the day's spending, and track food against a budget. Each receipt has a category: Food, Transport, Shopping, Other, or one you add.
+**Budget** (called Meal Receipts until October 2026): log a receipt item by item with a running total, and see the day's spending. Each receipt has a category (Food, Transport, Shopping, Other, or one you add), and each category can have its own budget, shown as a coloured bar. Transport receipts take From/To stations instead of a store.
 ![Budget page](docs/screenshots/meal_receipts.png)
 
 **Japanese**: flashcard reviews, graded Again / Hard / Good / Easy.
@@ -188,7 +188,7 @@ The project has automated tests. They load every page and check the rules undern
 .venv\Scripts\python -m pytest
 ```
 
-It takes two to three minutes and should finish with `49 passed`. Close the app first if it's running: installing packages while it's open can fail, because Windows locks files the app is using.
+It takes two to three minutes and should finish with `50 passed`. Close the app first if it's running: installing packages while it's open can fail, because Windows locks files the app is using.
 
 To check the code for mistakes like unused or undefined names, and for import order, run `.venv\Scripts\ruff check .` (add `--fix` to sort the imports for you). The settings are in `pyproject.toml`.
 
@@ -230,7 +230,7 @@ On Mac and Linux, the app runs in your web browser. The app window (`desktop_app
 
    As on Windows, press **Enter** if Streamlit asks for an email, and **Ctrl+C** to stop it.
 
-Everywhere else in this README, use `.venv/bin/python` in place of `.venv\Scripts\python`. The tests usually finish with `46 passed, 3 skipped`: the three skipped tests check PowerShell scripts, and they only run if PowerShell is installed.
+Everywhere else in this README, use `.venv/bin/python` in place of `.venv\Scripts\python`. The tests usually finish with `47 passed, 3 skipped`: the three skipped tests check PowerShell scripts, and they only run if PowerShell is installed.
 
 ## How it's built
 

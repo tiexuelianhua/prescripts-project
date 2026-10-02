@@ -143,10 +143,43 @@ def categories(settings: dict) -> list[str]:
 
 
 def budget_category(settings: dict) -> str:
-    # The category the budget, carry-over and "Set today's budget" apply
-    # to. Always Food so far; kept as a setting so renaming Food (e.g. to
-    # "Meals") keeps the budget on it.
+    # The food category: where the form starts, what the 8% tax and "Log
+    # meal" are for, and whose budget the pre-categories settings held. A
+    # setting so renaming Food (e.g. to "Meals") keeps all that on it.
     return settings.get("budget_category", DEFAULT_CATEGORY)
+
+
+def transport_category(settings: dict) -> str:
+    # The category logged with From/To stations instead of a store, and with
+    # no bag or tax. A setting for the same reason as budget_category.
+    return settings.get("transport_category", "Transport")
+
+
+# A transport receipt's stations are kept in its store column, joined by
+# this, so the Entries table and meal lines show the route with no new
+# columns. Either station can be left out.
+ROUTE_SEPARATOR = " → "
+
+
+def route(from_station: str | None, to_station: str | None) -> str | None:
+    stations = [name.strip() for name in (from_station, to_station) if name and name.strip()]
+    return ROUTE_SEPARATOR.join(stations) if len(stations) == 2 else (stations[0] if stations else None)
+
+
+def split_route(store) -> tuple[str | None, str | None]:
+    # (from, to) back out of a route; a single name counts as where it's from.
+    if not isinstance(store, str) or not store.strip():
+        return None, None
+    from_station, separator, to_station = store.partition(ROUTE_SEPARATOR)
+    return from_station.strip() or None, (to_station.strip() or None) if separator else None
+
+
+def known_stations(category: str) -> list[str]:
+    # Every station in past routes of this category, for the From/To boxes.
+    stations = set()
+    for store in known_values("store", category=category):
+        stations.update(name for name in split_route(store) if name)
+    return sorted(stations)
 
 
 def meals(entries: pd.DataFrame) -> list[dict]:
@@ -401,10 +434,11 @@ def signed_yen(amount: float) -> str:
     return f"{'-' if amount < 0 else '+'}¥{abs(amount):,.0f}"
 
 
-def allowance_for_days(budget_amount: int, budget_period: str, days: int) -> int:
+def allowance_for_days(budget_amount: int, budget_period: str, days: int, month_days: int = 30) -> int:
     # What the budget allows over a number of days. A weekly budget is spread
-    # evenly across its 7 days, so a month's share is pro rata.
-    per_day = budget_amount if budget_period == "daily" else budget_amount / 7
+    # evenly across its 7 days, and a monthly one across the month's days
+    # (month_days), so a month's share is pro rata.
+    per_day = {"daily": budget_amount, "weekly": budget_amount / 7}.get(budget_period, budget_amount / month_days)
     return round(per_day * days)
 
 
@@ -439,14 +473,15 @@ def monthly_history(
         totals = daily_totals_for_month(year, month)
         budgeted = daily_totals_for_month(year, month, budget_category) if budget_category else totals
         is_current = (year, month) == (today.year, today.month)
-        days = today.day if is_current else calendar.monthrange(year, month)[1]
+        month_days = calendar.monthrange(year, month)[1]
+        days = today.day if is_current else month_days
         total = sum(totals.values())
         rows.append({
             "month": f"{year}年{month}月" + (" (so far)" if is_current else ""),
             "total_yen": total,
             "per_day_yen": round(total / days),
             "budgeted_yen": sum(budgeted.values()),
-            "allowance_yen": allowance_for_days(budget_amount, budget_period, days) if budget_amount > 0 else None,
+            "allowance_yen": allowance_for_days(budget_amount, budget_period, days, month_days) if budget_amount > 0 else None,
             "has_entries": bool(totals),
         })
         year, month = _previous_month(year, month)
@@ -468,7 +503,40 @@ def budget_settings(settings: dict) -> tuple[int, str]:
     return amount, period
 
 
-def carried_over(settings: dict, today: date) -> int:
+# Pre-2026-10-02 settings.json files keep Food's budget in these top-level
+# keys. Read as Food's budget until it's next saved, which moves it into
+# "budgets" (see budget_for / save_budget).
+_OLD_BUDGET_KEYS = ("daily_budget", "budget_amount", "budget_period", "carry_over", "carry_over_since", "carry_over_set")
+PERIODS = ["daily", "weekly", "monthly"]
+
+
+def budget_for(settings: dict, category: str) -> dict:
+    # A category's budget: {"amount", "period", "carry_over"}, plus
+    # "carry_over_since" / "carry_over_set" while carry-over is in use. An
+    # amount of 0 means no budget. Budgets are soft: going over just shows.
+    saved = settings.get("budgets", {}).get(category)
+    if saved is not None:
+        return {"amount": 0, "period": "daily", "carry_over": False, **saved}
+    if category == budget_category(settings):
+        amount, period = budget_settings(settings)
+        budget = {"amount": amount, "period": period, "carry_over": settings.get("carry_over", False)}
+        for key in ("carry_over_since", "carry_over_set"):
+            if key in settings:
+                budget[key] = settings[key]
+        return budget
+    return {"amount": 0, "period": "daily", "carry_over": False}
+
+
+def save_budget(settings: dict, category: str, budget: dict) -> None:
+    # Into settings (the caller saves the file). Food's old top-level keys go
+    # once it's saved here, so there's one place it lives.
+    settings.setdefault("budgets", {})[category] = budget
+    if category == budget_category(settings):
+        for key in _OLD_BUDGET_KEYS:
+            settings.pop(key, None)
+
+
+def carried_over(settings: dict, today: date, category: str | None = None) -> int:
     # With carry-over on (daily budgets only), every day from when it was
     # switched on (or last started fresh) up to yesterday adds what it was
     # under budget, or takes away what it was over. Nothing resets it on its
@@ -479,17 +547,41 @@ def carried_over(settings: dict, today: date) -> int:
     # fix a total that's come out wrong: that day's budget is exactly it,
     # and later days carry on from what's left of it.
     #
-    # Only the budget's category is carried: a Suica top-up isn't a meal.
-    amount, period = budget_settings(settings)
-    since = settings.get("carry_over_since")
-    if not settings.get("carry_over") or period != "daily" or amount <= 0 or not since:
+    # Each category carries its own (Food when none is given).
+    category = category or budget_category(settings)
+    budget = budget_for(settings, category)
+    amount, since = budget["amount"], budget.get("carry_over_since")
+    if not budget["carry_over"] or budget["period"] != "daily" or amount <= 0 or not since:
         return 0
-    balance = settings["carry_over_set"] - amount if "carry_over_set" in settings else 0
+    balance = budget["carry_over_set"] - amount if "carry_over_set" in budget else 0
     day = date.fromisoformat(since)
     while day < today:
-        balance += amount - counted_total(load_entries(day_folder_for(day) / "receipts.csv"), budget_category(settings))
+        balance += amount - counted_total(load_entries(day_folder_for(day) / "receipts.csv"), category)
         day += timedelta(days=1)
     return balance
+
+
+def budget_status(settings: dict, day: date, today: date) -> list[dict]:
+    # Every category with a budget, in the categories' order, as spent so far
+    # in its period around `day`: {"category", "period", "spent", "budget",
+    # "carried"}. Carry-over only moves today's budget; another day is
+    # judged against the plain amount.
+    status = []
+    for category in categories(settings):
+        budget = budget_for(settings, category)
+        if budget["amount"] <= 0:
+            continue
+        if budget["period"] == "weekly":
+            spent = week_total_so_far(day, category)
+        elif budget["period"] == "monthly":
+            spent = sum(yen for logged, yen in daily_totals_for_month(day.year, day.month, category).items()
+                        if logged <= day)
+        else:
+            spent = counted_total(load_entries(day_folder_for(day) / "receipts.csv"), category)
+        carried = carried_over(settings, today, category) if day == today and budget["period"] == "daily" else 0
+        status.append({"category": category, "period": budget["period"], "spent": spent,
+                       "budget": budget["amount"] + carried, "carried": carried})
+    return status
 
 
 # Bags and tax are logged as rows of their own beside the item (see the add
@@ -529,26 +621,16 @@ def week_total_so_far(reference_date: date, category: str | None = None) -> int:
 
 def today_summary() -> dict:
     # For pages other than this one (e.g. Overview) that just want today's
-    # numbers without pulling in CSV/settings plumbing themselves.
+    # numbers without pulling in CSV/settings plumbing themselves: every
+    # budget (see budget_status), what's been spent today and this month in
+    # all, and the categories in order (for their colours).
     today_folder = get_today_folder()
-    entries = load_entries(today_folder / "receipts.csv")
     settings = load_settings()
-    budget_amount, budget_period = budget_settings(settings)
-    category = budget_category(settings)
-    result = {
-        # The budget's category ("budget_category") against its budget, and
-        # everything spent today beside it.
-        "budget_category": category,
-        "total_yen": counted_total(entries, category),
-        "all_total_yen": counted_total(entries),
-        "budget_amount": budget_amount,
-        "budget_period": budget_period,
-        "has_entries": not entries.empty,
-        # Today's daily budget including anything carried over.
-        "today_budget_yen": budget_amount + carried_over(settings, datetime.now(JST).date()),
+    today = datetime.now(JST).date()
+    return {
+        "budgets": budget_status(settings, today, today),
+        "today_yen": counted_total(load_entries(today_folder / "receipts.csv")),
+        "month_yen": sum(daily_totals_for_month(today.year, today.month).values()),
+        "categories": categories(settings),
+        "budget_category": budget_category(settings),
     }
-    if budget_period == "weekly" and budget_amount > 0:
-        today_date = datetime.now(JST).date()
-        result["week_total_yen"] = week_total_so_far(today_date, category)
-        result["week_start"], result["week_end"] = week_bounds(today_date)
-    return result

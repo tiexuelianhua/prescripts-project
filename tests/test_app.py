@@ -157,17 +157,19 @@ def test_setting_todays_budget(app_copy):
 
         at = AppTest.from_file(str(SCRIPTS_DIR / "prescripts/pages/meal_receipts.py"), default_timeout=60)
         at.run()
-        assert at.number_input(key="meal_set_today_budget").value == 8000  # 7 unspent days + today
-        at.number_input(key="meal_set_today_budget").set_value(2000)
+        def budget_line(text):
+            return any(text in block.value for block in at.markdown if "budget-line" in block.value)
+        assert at.number_input(key="meal_set_today_budget_Food").value == 8000  # 7 unspent days + today
+        at.number_input(key="meal_set_today_budget_Food").set_value(2000)
         next(button for button in at.sidebar.button if button.label == "Set").click()
         at.run()
         assert not at.exception, at.exception
         assert any("Today's budget set to ¥2,000" in caption.value for caption in at.sidebar.caption)
-        assert any("vs ¥2,000 budget" in metric.delta for metric in at.metric), [m.delta for m in at.metric]
+        assert budget_line("¥0 / ¥2,000") and budget_line("+¥1,000 carried over")
         next(button for button in at.sidebar.button if button.label == "Start fresh from today").click()
         at.run()
-        assert any("vs ¥1,000 budget" in metric.delta for metric in at.metric), [m.delta for m in at.metric]
-        assert at.number_input(key="meal_set_today_budget").value == 1000  # follows the fresh start
+        assert budget_line("¥0 / ¥1,000")
+        assert at.number_input(key="meal_set_today_budget_Food").value == 1000  # follows the fresh start
     """)
     assert result.returncode == 0, result.stdout + result.stderr
 
@@ -230,9 +232,9 @@ def test_logging_a_meal(app_copy):
 
 
 def test_logging_other_spending(app_copy):
-    # A Suica top-up logged as Transport: the form's suggestions follow the
-    # category, tax is the standard 10%, and the food budget is untouched
-    # while the day's other spending is listed under it.
+    # A Suica top-up logged as Transport: From/To stations instead of a
+    # store (filled in from the last top-up), no bag or tax, and each
+    # category's budget shown as its own line, over its own period.
     result = run_in(app_copy, """
         from datetime import date
         from streamlit.testing.v1 import AppTest
@@ -242,9 +244,11 @@ def test_logging_other_spending(app_copy):
         folder = day_folder_for(date(2026, 8, 1))
         folder.mkdir(parents=True)
         append_entry(folder / "receipts.csv", "2026-08-01 08:00:00", "Lawson", "Onigiri", 150)
-        append_entry(folder / "receipts.csv", "2026-08-01 09:00:00", "JR East", "Suica top-up", 3000, category="Transport")
+        append_entry(folder / "receipts.csv", "2026-08-01 09:00:00", "Shinjuku → Shibuya", "Suica top-up", 3000,
+                     category="Transport")
         MEAL_RECEIPTS_DIR.mkdir(parents=True, exist_ok=True)
-        save_settings({"budget_amount": 1000, "budget_period": "daily"})
+        save_settings({"budget_amount": 1000, "budget_period": "daily",
+                       "budgets": {"Transport": {"amount": 10000, "period": "monthly"}}})
 
         at = AppTest.from_file(str(SCRIPTS_DIR / "prescripts/pages/meal_receipts.py"), default_timeout=60)
         at.run()
@@ -253,24 +257,29 @@ def test_logging_other_spending(app_copy):
         at.selectbox(key="add_entry_category").set_value("Transport")
         at.run()
         assert at.selectbox(key="add_entry_item").options == ["Suica top-up"]
+        assert not [box for box in at.selectbox if box.key == "add_entry_store"]
+        assert not [box for box in at.checkbox if box.key == "add_entry_bag"]
+        assert not [box for box in at.number_input if box.key == "add_entry_tax"]
         at.selectbox(key="add_entry_item").set_value("Suica top-up")
         at.run()
-        assert at.selectbox(key="add_entry_store").value == "JR East"
+        assert (at.selectbox(key="add_entry_from").value, at.selectbox(key="add_entry_to").value) == ("Shinjuku", "Shibuya")
         assert at.number_input(key="add_entry_cost").value == 3000
-        assert [button for button in at.button if button.label == "Use 10%"]
+        at.selectbox(key="add_entry_to").set_value(None)  # just topped up at Shinjuku
+        at.run()
         next(button for button in at.button if button.label == "Log receipt").click()
         at.run()
         assert not at.exception and not at.warning, (at.exception, at.warning)
 
         entries = load_entries(get_today_folder() / "receipts.csv")
-        assert list(zip(entries["item"], entries["category"])) == [("Suica top-up", "Transport")], entries
+        assert list(zip(entries["item"], entries["store"], entries["category"])) == [
+            ("Suica top-up", "Shinjuku", "Transport")], entries
         assert at.selectbox(key="add_entry_category").value == "Food"  # back to Food for the next one
-        [food] = [metric for metric in at.metric if metric.label == "Today: food"]
-        assert food.value == "¥0" and "vs ¥1,000 budget" in food.delta, (food.value, food.delta)
-        assert any("All spending: ¥3,000 (Transport ¥3,000)" in caption.value for caption in at.caption)
+        [bars] = [block.value for block in at.markdown if "budget-line" in block.value]
+        assert "Food · today" in bars and "¥0 / ¥1,000" in bars, bars
+        assert "Transport · this month" in bars and "¥3,000 / ¥10,000" in bars and "¥7,000 left" in bars, bars
+        assert any("Today: ¥3,000" in block.value for block in at.markdown)
     """)
     assert result.returncode == 0, result.stdout + result.stderr
-
 
 def test_meal_receipts_works_without_powershell(app_copy):
     # Mac/Linux have no PowerShell, so today's folder is made in Python
@@ -630,8 +639,9 @@ def test_overview_tiles_with_no_data_yet(app_copy):
         for expected in ("No flashcards yet.", "No area saved yet -- pick one on the Activities page.",
                          "Not connected yet -- connect your account on the Spotify page."):
             assert expected in captions, (expected, captions)
-        [meal] = [metric for metric in at.metric if metric.label == "Today: food"]
-        assert meal.value == "¥0" and "vs ¥1,500 budget" in meal.delta, (meal.value, meal.delta)
+        budget = [block.value for block in at.markdown if "budget-line" in block.value]
+        assert budget and "Food · today" in budget[0] and "¥0 of ¥1,500" in budget[0], budget
+        assert any("Spent today: ¥0" in block.value for block in at.markdown)
     """)
     assert result.returncode == 0, result.stdout + result.stderr
 

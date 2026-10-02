@@ -59,7 +59,7 @@ def seed_sample_data(copy: Path) -> None:
     assert not prescripts_common.PRIVATE_LOOK, "the copy should be in the public look"
 
     from prescripts.data.japanese.deck import add_card, load_deck, review_card, save_deck, today_jst
-    from prescripts.data.meal_receipts import append_entry, day_folder_for, load_settings, save_settings
+    from prescripts.data.meal_receipts import append_entry, day_folder_for, load_settings, save_budget, save_settings
 
     random.seed(7)
     today = today_jst()
@@ -85,12 +85,14 @@ def seed_sample_data(copy: Path) -> None:
         # Spending besides food: a Suica top-up on the 1st and every Monday,
         # and some shopping.
         if day.day == 1 or day.weekday() == 0:
-            append_entry(folder / "receipts.csv", f"{day} 07:50:00", "JR East", "Suica top-up", 3000,
+            append_entry(folder / "receipts.csv", f"{day} 07:50:00", "Shinjuku", "Suica top-up", 3000,
                          category="Transport")
         if days_ago == min(5, today.day - 1):
             append_entry(folder / "receipts.csv", f"{day} 16:30:00", "Uniqlo", "T-shirt", 1990, category="Shopping")
     settings = load_settings()
-    settings.update({"budget_amount": 7000, "budget_period": "weekly"})
+    save_budget(settings, "Food", {"amount": 7000, "period": "weekly", "carry_over": False})
+    save_budget(settings, "Transport", {"amount": 12000, "period": "monthly", "carry_over": False})
+    save_budget(settings, "Shopping", {"amount": 8000, "period": "monthly", "carry_over": False})
     save_settings(settings)
 
     # A small deck, a few cards already reviewed today.

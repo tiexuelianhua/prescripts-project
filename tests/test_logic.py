@@ -423,6 +423,60 @@ def test_spending_categories(app_copy):
     """)
 
 
+def test_budget_per_category(app_copy):
+    # Food's budget is read from the old top-level settings until it's next
+    # saved; each category has its own amount, period and carry-over; and a
+    # transport receipt's stations go in and out of its store column.
+    _check(app_copy, """
+        from datetime import date
+        from prescripts.data.meal_receipts import (
+            append_entry, budget_for, budget_status, carried_over, day_folder_for, route, save_budget, split_route,
+        )
+
+        old = {"budget_amount": 1000, "budget_period": "daily", "carry_over": True, "carry_over_since": "2026-09-07"}
+        assert budget_for(old, "Food") == {"amount": 1000, "period": "daily", "carry_over": True,
+                                           "carry_over_since": "2026-09-07"}
+        assert budget_for(old, "Transport") == {"amount": 0, "period": "daily", "carry_over": False}
+        settings = dict(old)
+        save_budget(settings, "Food", budget_for(settings, "Food"))
+        assert "budget_amount" not in settings and settings["budgets"]["Food"]["amount"] == 1000
+        save_budget(settings, "Transport", {"amount": 6000, "period": "weekly", "carry_over": False})
+        save_budget(settings, "Shopping", {"amount": 10000, "period": "monthly", "carry_over": False})
+        save_budget(settings, "Other", {"amount": 500, "period": "daily", "carry_over": True,
+                                        "carry_over_since": "2026-09-08"})
+
+        def log(day, item, yen, category="Food"):
+            folder = day_folder_for(day)
+            folder.mkdir(parents=True, exist_ok=True)
+            append_entry(folder / "receipts.csv", f"{day} 12:00:00", None, item, yen, category=category)
+        log(date(2026, 9, 1), "T-shirt", 2000, "Shopping")
+        log(date(2026, 9, 7), "Onigiri", 800)
+        log(date(2026, 9, 8), "Suica top-up", 3000, "Transport")
+        log(date(2026, 9, 9), "Onigiri", 300)
+        log(date(2026, 9, 9), "Socks", 700, "Shopping")
+        log(date(2026, 9, 9), "Stamps", 100, "Other")
+
+        today = date(2026, 9, 9)  # a Wednesday
+        # Food carries its own leftovers (200 + 1,000 on the 8th), not Transport's spending.
+        assert carried_over(settings, today) == carried_over(settings, today, "Food") == 1200
+        assert carried_over(settings, today, "Other") == 500
+        status = {line["category"]: line for line in budget_status(settings, today, today)}
+        assert [status[name]["period"] for name in ("Food", "Transport", "Shopping", "Other")] == [
+            "daily", "weekly", "monthly", "daily"]
+        assert (status["Food"]["spent"], status["Food"]["budget"], status["Food"]["carried"]) == (300, 2200, 1200)
+        assert (status["Transport"]["spent"], status["Transport"]["budget"]) == (3000, 6000)  # Mon 7th to the 9th
+        assert (status["Shopping"]["spent"], status["Shopping"]["budget"]) == (2700, 10000)
+        # Another day: the plain amount, nothing carried.
+        past = {line["category"]: line for line in budget_status(settings, date(2026, 9, 7), today)}
+        assert (past["Food"]["spent"], past["Food"]["budget"], past["Food"]["carried"]) == (800, 1000, 0)
+
+        assert route("Shinjuku", "Shibuya") == "Shinjuku → Shibuya"
+        assert route(" ", "Shibuya") == "Shibuya" and route(None, None) is None
+        assert split_route("Shinjuku → Shibuya") == ("Shinjuku", "Shibuya")
+        assert split_route("Shinjuku") == ("Shinjuku", None) and split_route(float("nan")) == (None, None)
+    """)
+
+
 def test_meals_group_rows(app_copy):
     # Rows logged together (same time and store) are one meal, in the order
     # logged, a blank store included; excluded rows don't count in its total.

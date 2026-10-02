@@ -16,6 +16,7 @@ from datetime import datetime
 
 import streamlit as st
 
+from prescripts.budget_widgets import category_colors, render_budget_bars
 from prescripts.common import (
     JST,
     balanced_columns,
@@ -57,7 +58,12 @@ from prescripts.data.japanese.deck import (
     practice_summary as japanese_practice_summary,
     random_card as japanese_random_card,
 )
-from prescripts.data.meal_receipts import today_summary as meal_receipts_today_summary
+from prescripts.data.meal_receipts import (
+    budget_for as meal_receipts_budget_for,
+    categories as meal_receipts_categories,
+    load_settings as meal_receipts_load_settings,
+    today_summary as meal_receipts_today_summary,
+)
 from prescripts.data.spotify import (
     current_playback as spotify_current_playback,
     describe_item as spotify_describe_item,
@@ -144,45 +150,16 @@ inject_seek_slider_styles("overview_spotify_seek")
 def render_meal_receipts_tile() -> None:
     st.subheader("🧾 Budget")
     data = meal_receipts_today_summary()
-    # With a budget, its numbers are for the budgeted category (Food), with
-    # everything spent today noted under them once there's other spending.
-    category = data["budget_category"].lower()
-    other_spending = data["all_total_yen"] != data["total_yen"]
-    # st.metric only reads a leading "-" to decide the arrow/color for a
-    # string delta, so the sign has to be the very first character.
-    if data["budget_period"] == "weekly" and data["budget_amount"] > 0:
-        week_total = data["week_total_yen"]
-        diff = week_total - data["budget_amount"]
-        diff_str = f"-¥{abs(diff):,.0f}" if diff < 0 else f"¥{diff:,.0f}"
-        st.metric(
-            f"This week: {category}",
-            f"¥{week_total:,.0f}",
-            delta=f"{diff_str} vs ¥{data['budget_amount']:,.0f} allowance",
-            delta_color="inverse",
+    # Every budget as a coloured line (the same as on the Budget page), and
+    # all spending at the bottom whether budgeted or not.
+    if data["budgets"]:
+        render_budget_bars(
+            data["budgets"], category_colors(data["categories"], data["budget_category"], ACCENT_COLOR), compact=True,
         )
-        st.progress(min(week_total / data["budget_amount"], 1.0))
-        today_note = f"Today so far: ¥{data['total_yen']:,.0f} {category}"
-        if other_spending:
-            today_note += f", ¥{data['all_total_yen']:,.0f} in all"
-        st.caption(today_note)
-    elif data["budget_amount"] > 0:
-        # Includes anything carried over from earlier days.
-        budget = data["today_budget_yen"]
-        diff = data["total_yen"] - budget
-        diff_str = f"-¥{abs(diff):,.0f}" if diff < 0 else f"¥{diff:,.0f}"
-        st.metric(
-            f"Today: {category}",
-            f"¥{data['total_yen']:,.0f}",
-            delta=f"{diff_str} vs ¥{budget:,.0f} budget",
-            delta_color="inverse",
-        )
-        st.progress(min(data["total_yen"] / budget, 1.0) if budget > 0 else 1.0)
-        if other_spending:
-            st.caption(f"All spending today: ¥{data['all_total_yen']:,.0f}")
     else:
-        st.metric("Today's total", f"¥{data['all_total_yen']:,.0f}")
+        st.caption("No budgets set yet -- set one in the Budget page's sidebar.")
+    st.markdown(f"**Spent today: ¥{data['today_yen']:,}**  \nThis month: ¥{data['month_yen']:,}")
     st.page_link("prescripts/pages/meal_receipts.py", label="Open Budget", icon="🧾")
-
 
 def render_weather_tile() -> None:
     settings = weather_load_settings()
@@ -447,6 +424,18 @@ def render_activities_tile() -> None:
 # jumps once the next refresh lands. Drawn last, it's current the moment the
 # load finishes. Each tile's spot is reserved (container) in layout order
 # first, so filling them in a different order doesn't change where they show.
+# Measured 2026-10-02: 395px with three budgets, about 75px a line (the
+# other tiles come to about 9px a unit).
+BUDGET_TILE_BASE, BUDGET_TILE_PER_LINE = 19, 8
+
+
+def _budget_height() -> int:
+    # A line per budget set, plus the heading, totals and link.
+    settings = meal_receipts_load_settings()
+    budgets = sum(meal_receipts_budget_for(settings, name)["amount"] > 0 for name in meal_receipts_categories(settings))
+    return BUDGET_TILE_BASE + BUDGET_TILE_PER_LINE * max(budgets, 1)
+
+
 def _weather_height() -> int:
     # The same cached warnings lookup the tile itself makes, so no extra cost.
     try:
@@ -475,7 +464,7 @@ def _spotify_height() -> int:
 # Keyed by its page's url_path: a tile shows only while that page is on, and
 # can be switched off by itself too (Settings page).
 ALL_TILES = {
-    "meal_receipts": (render_meal_receipts_tile, 33, False),
+    "meal_receipts": (render_meal_receipts_tile, _budget_height, False),
     "weather": (render_weather_tile, _weather_height, False),
     "japanese": (render_japanese_tile, _japanese_height, False),
     "activities": (render_activities_tile, _activities_height, False),
