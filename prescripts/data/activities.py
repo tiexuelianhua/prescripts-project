@@ -105,14 +105,38 @@ def _get_json(url: str, data: bytes | None = None, timeout: float = 30):
 @st.cache_data(ttl=7 * 24 * 3600, show_spinner=False)
 def find_area(query: str) -> list[dict]:
     # Up to five matches in Japan for a typed station or area, in Japanese
-    # or English, each {"name", "lat", "lon"}. Names come back in English.
-    url = NOMINATIM_URL + "?" + urllib.parse.urlencode(
-        {"q": query.strip(), "format": "jsonv2", "limit": 5, "countrycodes": "jp", "accept-language": "en"}
-    )
+    # or English, each {"name", "name_ja", "lat", "lon"}. "name" comes back
+    # in English; "name_ja" is the place's own Japanese name ("" if none).
+    url = NOMINATIM_URL + "?" + urllib.parse.urlencode({
+        "q": query.strip(), "format": "jsonv2", "limit": 5, "countrycodes": "jp", "accept-language": "en",
+        "namedetails": 1,
+    })
     return [
-        {"name": result["display_name"], "lat": float(result["lat"]), "lon": float(result["lon"])}
+        {
+            "name": result["display_name"],
+            "name_ja": (result.get("namedetails") or {}).get("name:ja") or (result.get("namedetails") or {}).get("name", ""),
+            "lat": float(result["lat"]),
+            "lon": float(result["lon"]),
+        }
         for result in _get_json(url, timeout=15)
     ]
+
+
+def area_name_ja(settings: dict) -> str:
+    # The saved area's Japanese name, for Overview. Saved with the area
+    # since 2026-10-02; an area saved before then is looked up once (the
+    # match nearest where it was saved) and the answer kept, "" included.
+    if "area_ja" in settings or not settings.get("area"):
+        return settings.get("area_ja", "")
+    try:
+        matches = find_area(settings["area"])
+    except (urllib.error.URLError, TimeoutError, ValueError, KeyError):
+        return ""  # try again next time
+    near = [match for match in matches if distance_m(match["lat"], match["lon"], settings["lat"], settings["lon"]) < 3000]
+    nearest = min(near, key=lambda match: distance_m(match["lat"], match["lon"], settings["lat"], settings["lon"]), default=None)
+    settings["area_ja"] = nearest["name_ja"] if nearest else ""
+    save_settings(settings)
+    return settings["area_ja"]
 
 
 def overpass_query(kind: str, lat: float, lon: float, radius: int) -> str:

@@ -32,6 +32,7 @@ from prescripts.common import (
 from prescripts.data.activities import (
     CATEGORIES as ACTIVITIES_CATEGORIES,
     DEFAULT_RADIUS as ACTIVITIES_DEFAULT_RADIUS,
+    area_name_ja as activities_area_name_ja,
     fetch_places as activities_fetch_places,
     load_settings as activities_load_settings,
     map_link as activities_map_link,
@@ -76,6 +77,7 @@ from prescripts.data.weather import (
     format_condition,
     key_events_headline,
     load_settings as weather_load_settings,
+    office_names_ja as weather_office_names_ja,
     today_conditions,
     translate_to_english,
     weather_codes,
@@ -161,11 +163,21 @@ def render_meal_receipts_tile() -> None:
     st.markdown(f"**Spent today: ¥{data['today_yen']:,}**  \nThis month: ¥{data['month_yen']:,}")
     st.page_link("prescripts/pages/meal_receipts.py", label="Open Budget", icon="🧾")
 
+
+def _with_japanese(english: str, japanese: str) -> str:
+    # "Tokyo · 東京都": an area's English name with its Japanese one, when
+    # there is one that says something more.
+    return f"{english} · {japanese}" if japanese and japanese != english else english
+
+
 def render_weather_tile() -> None:
     settings = weather_load_settings()
     office_code = settings["office_code"]
-    office_name = settings["office_name"]
-    st.subheader(f"🌤️ Weather -- {office_name}")
+    try:
+        office_ja = weather_office_names_ja().get(office_code, "")
+    except (urllib.error.URLError, TimeoutError):
+        office_ja = ""
+    st.subheader(f"🌤️ Weather -- {_with_japanese(settings['office_name'], office_ja)}")
 
     try:
         today = today_conditions(office_code)
@@ -327,7 +339,7 @@ def render_activities_tile() -> None:
     # them has one) and an upcoming event, all re-rolled together.
     settings = activities_load_settings()
     area = settings.get("area")
-    st.subheader(f"📍 Activities -- {area}" if area else "📍 Activities")
+    st.subheader(f"📍 Activities -- {_with_japanese(area, activities_area_name_ja(settings))}" if area else "📍 Activities")
     if not area:
         st.caption("No area saved yet -- pick one on the Activities page.")
     else:

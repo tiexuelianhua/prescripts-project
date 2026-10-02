@@ -65,6 +65,14 @@ def offices() -> dict[str, str]:
     return {code: office["enName"] for code, office in data["offices"].items()}
 
 
+@st.cache_data(ttl=60 * 60 * 24)
+def office_names_ja() -> dict[str, str]:
+    # The same offices by JMA's own (Japanese) names, e.g. "東京都", shown
+    # beside the English one on Overview.
+    data = _fetch_json(AREA_URL)
+    return {code: office["name"] for code, office in data["offices"].items()}
+
+
 @st.cache_data(ttl=60 * 30)
 def weekly_forecast(office_code: str) -> dict:
     return _fetch_json(FORECAST_URL.format(code=office_code))

@@ -214,7 +214,8 @@ def render_location(settings: dict) -> dict | None:
             )
             if st.button("Save as my area"):
                 chosen = matches[choice]
-                settings.update(area=chosen["name"].split(",")[0], lat=chosen["lat"], lon=chosen["lon"])
+                settings.update(area=chosen["name"].split(",")[0], area_ja=chosen["name_ja"],
+                                lat=chosen["lat"], lon=chosen["lon"])
                 save_settings(settings)
                 st.session_state["_activities_saved_query"] = query
                 st.session_state.pop("_activities_here", None)

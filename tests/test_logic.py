@@ -478,6 +478,30 @@ def test_budget_per_category(app_copy):
     """)
 
 
+def test_area_japanese_name(app_copy):
+    # An area saved before Japanese names were kept is looked up once: the
+    # match nearest where it was saved, and the answer (even none) is kept.
+    _check(app_copy, """
+        import prescripts.data.activities as activities
+
+        calls = []
+        def fake_find_area(query):
+            calls.append(query)
+            return [{"name": "Asakusa, Hokkaido", "name_ja": "浅草（北海道）", "lat": 43.0, "lon": 141.0},
+                    {"name": "Asakusa, Taito", "name_ja": "浅草", "lat": 35.7120, "lon": 139.7960}]
+        activities.find_area = fake_find_area
+
+        settings = {"area": "Asakusa", "lat": 35.7118, "lon": 139.7966, "radius": 1000}
+        assert activities.area_name_ja(settings) == "浅草"
+        assert activities.load_settings()["area_ja"] == "浅草"
+        assert activities.area_name_ja(settings) == "浅草" and calls == ["Asakusa"]  # not looked up again
+
+        far = {"area": "Nowhere", "lat": 26.2, "lon": 127.7}
+        assert activities.area_name_ja(far) == "" and far["area_ja"] == ""
+        assert activities.area_name_ja({}) == ""
+    """)
+
+
 def test_meals_group_rows(app_copy):
     # Rows logged together (same time and store) are one meal, in the order
     # logged, a blank store included; excluded rows don't count in its total.
