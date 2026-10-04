@@ -104,6 +104,10 @@ def with_default_columns(entries: pd.DataFrame) -> pd.DataFrame:
     has_reason = reason.notna() & (reason != "")
     entries["excluded_reason"] = reason.where(has_reason, None).astype(object)
     entries["excluded"] = entries["excluded"].fillna(False).astype(bool)
+    # A day whose stores were all left blank reads in as a column of numbers
+    # (all NaN), and the Entries table then won't take a store typed in.
+    if "store" in entries.columns:
+        entries["store"] = entries["store"].astype(object).where(entries["store"].notna(), None)
     if "category" not in entries.columns:
         entries["category"] = None
     category = entries["category"].astype("string").str.strip()

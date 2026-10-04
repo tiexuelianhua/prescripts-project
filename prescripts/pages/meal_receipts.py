@@ -365,8 +365,10 @@ with st.container(key="main_body"):
         st.session_state["_last_autofilled_item"] = None
         st.session_state["add_entry_cost"] = 0
         st.session_state["_reset_add_item"] = False
-    # A meal is logged whole: its items gather here, each {"id", "item",
-    # "cost"}, until "Log meal" saves them together.
+    # A meal is logged whole: its items gather here until "Log meal" saves
+    # them together. Each line keeps the category and store (or stations) it
+    # was added with, so one go can log a whole day's spending: {"id",
+    # "item", "cost", "category", "store"}.
     basket = st.session_state.setdefault("_meal_basket", [])
 
     # Not an st.form: Item needs to live-react to selection (to suggest a
@@ -399,7 +401,6 @@ with st.container(key="main_body"):
         help="Type a new one to add it. Store and item suggestions follow the category.",
     )
     category = (category or "").strip() or budgeted
-    is_food = category == budgeted
     # The chosen category in its own colour (Food's is the accent, like the
     # other boxes' hints) rather than plain white.
     st.markdown(
@@ -410,7 +411,7 @@ with st.container(key="main_body"):
     # their own (drawn after Item too, for the same reason as Store).
     is_transport = category == transport
     if is_transport:
-        from_column, to_column = st.columns(2)
+        from_column, swap_column, to_column = st.columns([6, 1, 6], vertical_alignment="bottom")
     item_column, cost_column, add_column = st.columns([5, 2, 2], vertical_alignment="bottom")
     choices = item_choices(excluded_items, excluded_stores, category)
     item_choice = item_column.selectbox(
@@ -430,12 +431,16 @@ with st.container(key="main_body"):
         if last_entry is not None:
             st.session_state["add_entry_cost"] = int(last_entry["cost_yen"])
             # Just a suggestion -- still an ordinary editable selectbox. Only
-            # for the meal's first item: after that the store is the meal's.
-            # Left blank if the store was left blank last time too.
+            # for this category's first item: after that the store is the
+            # meal's. Left blank if the store was left blank last time too.
             last_store = last_entry["store"]
-            if not basket:
-                st.session_state["add_entry_store"] = str(last_store) if pd.notna(last_store) else None
-                st.session_state["add_entry_from"], st.session_state["add_entry_to"] = split_route(last_store)
+            if not any(line["category"] == category for line in basket):
+                # Only the boxes on show: a food store mustn't turn up as a
+                # station after switching to Transport.
+                if is_transport:
+                    st.session_state["add_entry_from"], st.session_state["add_entry_to"] = split_route(last_store)
+                else:
+                    st.session_state["add_entry_store"] = str(last_store) if pd.notna(last_store) else None
         st.session_state["_last_autofilled_item"] = item_choice
 
     if is_transport:
@@ -444,6 +449,14 @@ with st.container(key="main_body"):
         from_station = from_column.selectbox(
             "From", options=stations, index=None, accept_new_options=True,
             placeholder="Optional -- type or pick a station", key="add_entry_from",
+        )
+        # For the trip back: From and To trade places.
+        swap_column.button(
+            "⇄", key="add_entry_swap", width="stretch", help="Swap From and To",
+            on_click=lambda: st.session_state.update(
+                add_entry_from=st.session_state.get("add_entry_to"),
+                add_entry_to=st.session_state.get("add_entry_from"),
+            ),
         )
         to_station = to_column.selectbox(
             "To", options=stations, index=None, accept_new_options=True,
@@ -465,23 +478,32 @@ with st.container(key="main_body"):
     # registered, and a greyed-out button would swallow it.
     if add_column.button("+ Add item", width="stretch"):
         if item:
-            basket.append({"id": time.time_ns(), "item": item, "cost": int(cost_yen)})
+            basket.append({"id": time.time_ns(), "item": item, "cost": int(cost_yen),
+                           "category": category, "store": store})
             st.session_state["_reset_add_item"] = True
             st.rerun()
         st.caption("Type or pick an item first.")
 
     for index, line in enumerate(basket):
         name_column, price_column, remove_column = st.columns([7, 2, 1], vertical_alignment="center")
-        name_column.write(line["item"])
+        # Its category in its colour, then where from, so a mixed day reads
+        # at a glance.
+        line_color = colors.get(line["category"], ACCENT_COLOR)
+        name_column.markdown(
+            f"{html.escape(line['item'])} <small><span style='color: {line_color}'>{html.escape(line['category'])}</span>"
+            + (f" · {html.escape(line['store'])}" if line["store"] else "") + "</small>",
+            unsafe_allow_html=True,
+        )
         price_column.write(f"¥{line['cost']:,}")
         remove_column.button("✕", key=f"meal_remove_{line['id']}", help="Take this item out of the meal",
                              on_click=basket.pop, args=(index,))
 
     # An item picked but not added yet still goes in when the meal's logged:
     # a single item needs no "+ Add item" first.
-    pending = [(item, int(cost_yen))] if item else []
-    items = [(line["item"], line["cost"]) for line in basket] + pending
-    subtotal = sum(cost for _item, cost in items)
+    pending = [{"item": item, "cost": int(cost_yen), "category": category, "store": store}] if item else []
+    items = basket + pending
+    subtotal = sum(line["cost"] for line in items)
+    line_categories = {line["category"] for line in items} | {category}
 
     # A bag and the receipt's tax line each go in as a row of their own. The
     # bag box ticks itself whenever the store changes to a konbini (bags are
@@ -498,16 +520,23 @@ with st.container(key="main_body"):
     # rounded down, for a receipt that adds tax on top; it can still be
     # typed over to match the receipt, as stores round differently. Every
     # other category gets the standard 10%.
-    tax_rate = 8 if is_food else 10
+    def tax_rate(line_category):
+        return 0 if line_category == transport else 8 if line_category == budgeted else 10
+
+    rates = sorted({tax_rate(name) for name in line_categories} - {0})
+    rate_label = "/".join(f"{rate}%" for rate in rates)
+    tax_on_items = sum(line["cost"] * tax_rate(line["category"]) for line in items) // 100
     # Fares and top-ups have neither, so Transport leaves both out.
     tax_yen, with_bag, bag_yen = 0, False, 0
     if not is_transport:
         # Tax at the left with its button, lined up under the items, and the
         # bag box on its own line below.
         tax_column, rate_column, _ = st.columns([3, 2, 4], vertical_alignment="bottom")
+        # 8% on food and 10% on the rest when a basket mixes them; fares
+        # have none.
         rate_column.button(
-            f"Use {tax_rate}%", width="stretch", help=f"Fill in {tax_rate}% of the items so far",
-            on_click=lambda amount: st.session_state.update(add_entry_tax=amount), args=(subtotal * tax_rate // 100,),
+            f"Use {rate_label}", width="stretch", help=f"Fill in {rate_label} of the items so far",
+            on_click=lambda amount: st.session_state.update(add_entry_tax=amount), args=(tax_on_items,),
         )
         tax_yen = tax_column.number_input(
             "Tax (¥)", min_value=0, step=1, key="add_entry_tax",
@@ -543,7 +572,13 @@ with st.container(key="main_body"):
         "from the **Excluded** column in Entries.",
         key="add_entry_excluded",
     )
-    log_clicked = st.button("Log meal" if is_food else "Log receipt")
+    if line_categories == {budgeted}:
+        log_label = "Log meal"
+    elif len(line_categories) == 1:
+        log_label = "Log receipt"
+    else:
+        log_label = "Log all"
+    log_clicked = st.button(log_label)
     if log_clicked and not items:
         st.warning("Add an item first.")
     elif log_clicked:
@@ -559,22 +594,24 @@ with st.container(key="main_body"):
             target_folder.mkdir(parents=True, exist_ok=True)
         target_csv = target_folder / "receipts.csv"
         timestamp = datetime.combine(entry_date, datetime.now(JST).time())
-        # Every row shares the meal's time, store and exclusion: that's what
-        # groups them back into one meal under Entries.
-        rows = list(items)
+        # Every row shares the time and exclusion, and rows from one store
+        # share it too: that's what groups them back into one meal under
+        # Entries. The bag and tax go with the store the form is on.
+        rows = [(line["item"], line["cost"], line["category"], line["store"]) for line in items]
         if with_bag:
-            rows.append((BAG_ITEM, bag_yen))
+            rows.append((BAG_ITEM, bag_yen, category, store))
         if tax_yen:
-            rows.append((TAX_ITEM, tax_yen))
-        for row_item, row_yen in rows:
+            rows.append((TAX_ITEM, tax_yen, category, store))
+        for row_item, row_yen, row_category, row_store in rows:
             append_entry(
-                target_csv, timestamp.strftime("%Y-%m-%d %H:%M:%S"), store, row_item, row_yen,
-                excluded, excluded_reason, category,
+                target_csv, timestamp.strftime("%Y-%m-%d %H:%M:%S"), row_store, row_item, row_yen,
+                excluded, excluded_reason, row_category,
             )
         # A newly typed category joins the saved list, so it's offered from
         # now on in the order it was added.
-        if category not in category_names:
-            settings["categories"] = category_names + [category]
+        new_categories = [name for name in dict.fromkeys(row[2] for row in rows) if name not in category_names]
+        if new_categories:
+            settings["categories"] = category_names + new_categories
             save_settings(settings)
         # No st.form here, so nothing clears itself automatically -- but the
         # actual field reset can't happen right here (Streamlit forbids
@@ -588,10 +625,14 @@ with st.container(key="main_body"):
         excluded_note = ""
         if excluded:
             excluded_note = " (not counted toward totals)"
-        what = items[0][0] if len(items) == 1 else f"{len(items)} items"
-        category_note = "" if is_food else f" ({category})"
+        what = items[0]["item"] if len(items) == 1 else f"{len(items)} items"
+        logged_categories = list(dict.fromkeys(line["category"] for line in items))
+        category_note = "" if logged_categories == [budgeted] else f" ({', '.join(logged_categories)})"
+        stores = {line["store"] for line in items}
+        logged_store = next(iter(stores)) if len(stores) == 1 else None
         st.session_state["_add_entry_confirmation"] = (
-            f"[Logged {what}{category_note}{f' at {store}' if store else ''} for ¥{meal_total:,.0f}{excluded_note}]"
+            f"[Logged {what}{category_note}{f' at {logged_store}' if logged_store else ''} "
+            f"for ¥{meal_total:,.0f}{excluded_note}]"
         )
         st.rerun()
     else:
@@ -667,6 +708,8 @@ with st.container(key="main_body"):
                     # Free text: a dropdown here can't take anything not
                     # already listed.
                     "excluded_reason": st.column_config.TextColumn("Notes"),
+                    # Text even on a day with no store given yet.
+                    "store": st.column_config.TextColumn("store"),
                     # Same: a new category is typed on the add form first.
                     "category": st.column_config.SelectboxColumn(
                         "Category", options=category_names, default=budgeted,

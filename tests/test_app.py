@@ -293,6 +293,60 @@ def test_logging_other_spending(app_copy):
     """)
     assert result.returncode == 0, result.stdout + result.stderr
 
+
+def test_logging_a_whole_day_at_once(app_copy):
+    # One basket can mix categories: each line keeps the category and store
+    # or stations it was added with, and ⇄ swaps From and To for the trip
+    # back. A day with no store anywhere still takes one typed in Entries.
+    result = run_in(app_copy, """
+        from datetime import date
+        from streamlit.testing.v1 import AppTest
+        from prescripts.common import SCRIPTS_DIR
+        from prescripts.data.meal_receipts import append_entry, day_folder_for, get_today_folder, load_entries
+
+        folder = day_folder_for(date(2026, 8, 1))
+        folder.mkdir(parents=True)
+        append_entry(folder / "receipts.csv", "2026-08-01 08:00:00", "Lawson", "Onigiri", 150)
+        append_entry(folder / "receipts.csv", "2026-08-01 09:00:00", "Shinjuku → Shibuya", "Transit fee", 178,
+                     category="Transport")
+
+        at = AppTest.from_file(str(SCRIPTS_DIR / "prescripts/pages/meal_receipts.py"), default_timeout=60)
+        at.run()
+        def add():
+            next(button for button in at.button if button.label == "+ Add item").click()
+            at.run()
+        at.selectbox(key="add_entry_item").set_value("Onigiri")
+        at.run()
+        add()
+        at.selectbox(key="add_entry_category").set_value("Transport")
+        at.run()
+        at.selectbox(key="add_entry_item").set_value("Transit fee")
+        at.run()
+        assert (at.selectbox(key="add_entry_from").value, at.selectbox(key="add_entry_to").value) == ("Shinjuku", "Shibuya")
+        add()
+        at.button(key="add_entry_swap").click()
+        at.run()
+        assert (at.selectbox(key="add_entry_from").value, at.selectbox(key="add_entry_to").value) == ("Shibuya", "Shinjuku")
+        at.number_input(key="add_entry_cost").set_value(178)  # no item: a transit fee
+        at.run()
+        next(button for button in at.button if button.label == "Log all").click()
+        at.run()
+        assert not at.exception and not at.warning, (at.exception, at.warning)
+
+        entries = load_entries(get_today_folder() / "receipts.csv")
+        assert list(zip(entries["item"], entries["category"], entries["store"])) == [
+            ("Onigiri", "Food", "Lawson"),
+            ("Transit fee", "Transport", "Shinjuku → Shibuya"),
+            ("Transit fee", "Transport", "Shibuya → Shinjuku"),
+        ], entries
+
+        blank = day_folder_for(date(2026, 8, 2))
+        blank.mkdir(parents=True)
+        append_entry(blank / "receipts.csv", "2026-08-02 09:00:00", None, "Transit fee", 178, category="Transport")
+        assert load_entries(blank / "receipts.csv")["store"].dtype == object
+    """)
+    assert result.returncode == 0, result.stdout + result.stderr
+
 def test_meal_receipts_works_without_powershell(app_copy):
     # Mac/Linux have no PowerShell, so today's folder is made in Python
     # there. It must be the same folder the .ps1 scripts give, and the page
