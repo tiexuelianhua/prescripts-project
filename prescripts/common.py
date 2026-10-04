@@ -468,7 +468,8 @@ def keep_typed_selectbox_text(*keys: str) -> None:
     # first, whenever they leave one of these boxes (by clicking elsewhere, or
     # Tab) while its list is still open with something typed -- the same
     # thing Enter itself would have done. Clicks on the list's own options,
-    # or on the same box, are left alone.
+    # or on the same box, are left alone. Losing focus any other way, e.g.
+    # switching to another window, does the same.
     #
     # Listeners go on the document once per browser tab (the flag), keyed by
     # these widgets' st-key-* classes, so reruns and page switches don't
@@ -479,8 +480,7 @@ def keep_typed_selectbox_text(*keys: str) -> None:
         window._keepTypedSelectors = new Set([...(window._keepTypedSelectors || []), ...{selectors}]);
         if (!window._keepTypedInstalled) {{
             window._keepTypedInstalled = true;
-            const pending = () => {{
-                const input = document.activeElement;
+            const pending = (input = document.activeElement) => {{
                 if (!input || input.tagName !== "INPUT" || !input.value.trim()) return null;
                 if (input.getAttribute("aria-expanded") !== "true") return null;
                 return [...window._keepTypedSelectors].some(s => input.matches(s)) ? input : null;
@@ -499,6 +499,14 @@ def keep_typed_selectbox_text(*keys: str) -> None:
                 if (event.key !== "Tab") return;
                 const input = pending();
                 if (input) pressEnter(input);
+            }}, true);
+            // Runs before the box's own blur handling, which drops the text.
+            document.addEventListener("focusout", event => {{
+                const input = pending(event.target);
+                if (!input) return;
+                const next = event.relatedTarget;
+                if (next && (next.closest('[role="listbox"]') || input.closest(".stSelectbox").contains(next))) return;
+                pressEnter(input);
             }}, true);
         }}
         </script>""",
