@@ -4,6 +4,7 @@
 # without each one redefining its own copy.
 
 import json
+import re
 import time
 from datetime import timedelta, timezone
 from pathlib import Path
@@ -108,6 +109,10 @@ PAGES = [
 # developer app of their own before it does anything. The author's own copy
 # (the private look) starts with everything on.
 OFF_BY_DEFAULT = set() if PRIVATE_LOOK else {"spotify_page"}
+# Hiragana, katakana and kanji: text a reader with no Japanese can't read.
+JAPANESE_TEXT = re.compile(r"[぀-ヿ㐀-䶿一-鿿]")
+# After something that only comes in Japanese, when English only is on.
+IN_JAPANESE = "<small>(in Japanese)</small>"
 
 
 # App-wide preferences that don't belong to any one page (currently just the
@@ -164,7 +169,33 @@ def page_shown(url_path: str, settings: dict | None = None) -> bool:
     if page.get("always_on"):
         return True
     settings = load_app_settings() if settings is None else settings
-    return settings.get("pages", {}).get(url_path, url_path not in OFF_BY_DEFAULT)
+    # With English only on, the Japanese page starts off too.
+    default = url_path not in OFF_BY_DEFAULT and not (url_path == "japanese" and english_only(settings))
+    return settings.get("pages", {}).get(url_path, default)
+
+
+def english_only(settings: dict | None = None) -> bool:
+    # The Settings switch for friends who don't read Japanese: Japanese
+    # text is dropped or put in English, and what only comes in Japanese
+    # is tagged. Public version only, on to start; the author's copy (the
+    # private look) has no switch and is never English only.
+    if PRIVATE_LOOK:
+        return False
+    settings = load_app_settings() if settings is None else settings
+    return settings.get("english_only", True)
+
+
+def has_japanese(text) -> bool:
+    return isinstance(text, str) and bool(JAPANESE_TEXT.search(text))
+
+
+def place_name(name: str, name_en: str, english: bool) -> tuple[str, bool]:
+    # A place or event's name as shown: "Japanese · English" normally; with
+    # English only, the English name when there is one. The flag says it's
+    # left in Japanese, for an (in Japanese) tag where one's wanted.
+    if not english:
+        return (f"{name} · {name_en}" if name_en else name), False
+    return (name_en, False) if name_en else (name, has_japanese(name))
 
 
 def shown_pages(settings: dict | None = None) -> list[dict]:

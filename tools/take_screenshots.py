@@ -64,6 +64,9 @@ def seed_sample_data(copy: Path) -> None:
     random.seed(7)
     today = today_jst()
 
+    # English only starts the Japanese page off; the README still shows it.
+    prescripts_common.save_app_settings({"pages": {"japanese": True}})
+
     # This month so far: two or three meals a day, one entry left out of totals.
     meals = [
         ("Lawson", "Onigiri (salmon)", 160), ("Lawson", "Karaage-kun", 238),

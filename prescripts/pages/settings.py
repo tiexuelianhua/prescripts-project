@@ -1,4 +1,5 @@
-# Settings page: which pages and Overview tiles are switched on. Saved in
+# Settings page: English only, and which pages and Overview tiles are
+# switched on. Saved in
 # app_settings.json beside the other app-wide settings (see page_shown and
 # tile_shown in common.py, which every page list reads). Hiding only hides:
 # a page's data stays where it is.
@@ -6,6 +7,8 @@ import streamlit as st
 
 from prescripts.common import (
     PAGES,
+    PRIVATE_LOOK,
+    english_only,
     inject_body_fade_in,
     load_app_settings,
     page_shown,
@@ -52,7 +55,24 @@ def _switch(kind: str, url_path: str) -> None:
 settings = load_app_settings()
 pages = {page["url_path"]: page for page in PAGES}
 
+def _switch_english_only() -> None:
+    settings = load_app_settings()
+    settings["english_only"] = st.session_state["settings_english_only"]
+    save_app_settings(settings)
+
+
 with st.container(key="main_body"):
+    # Not in the author's own copy, which keeps its Japanese.
+    if not PRIVATE_LOOK:
+        st.subheader("Language")
+        st.session_state["settings_english_only"] = english_only(settings)
+        st.toggle(
+            "English only", key="settings_english_only", on_change=_switch_english_only,
+            help="Puts Japanese text in English, or leaves it out. Things that only come in Japanese, like some "
+            "event names and the collab news, are marked (in Japanese). The Japanese page starts off too, "
+            "unless you've switched it on below.",
+        )
+
     st.subheader("Pages")
     st.caption("Switch off what you don't use. Hiding a page keeps its data, "
                "so switching it back on brings everything back.")

@@ -479,7 +479,7 @@ def month_comparison(today: date) -> dict:
 
 def monthly_history(
     today: date, budget_amount: int = 0, budget_period: str = "daily", months: int = 6,
-    budget_category: str | None = None,
+    budget_category: str | None = None, english: bool = False,
 ) -> pd.DataFrame:
     # One row per month, oldest first, for the last `months` months up to and
     # including this one -- starting from the first of them with any receipts,
@@ -497,7 +497,9 @@ def monthly_history(
         days = today.day if is_current else month_days
         total = sum(totals.values())
         rows.append({
-            "month": f"{year}年{month}月" + (" (so far)" if is_current else ""),
+            # "Sep 2026" with English only (Settings).
+            "month": (date(year, month, 1).strftime("%b %Y") if english else f"{year}年{month}月")
+            + (" (so far)" if is_current else ""),
             "total_yen": total,
             "per_day_yen": round(total / days),
             "budgeted_yen": sum(budgeted.values()),
@@ -607,6 +609,9 @@ def budget_status(settings: dict, day: date, today: date) -> list[dict]:
 # Bags and tax are logged as rows of their own beside the item (see the add
 # form), so a receipt's lines still add up to what was paid.
 BAG_ITEM = "Bag (袋)"
+# How it's shown with English only. Still saved as BAG_ITEM, so a bag's
+# last price is found either way.
+BAG_ITEM_EN = "Bag"
 TAX_ITEM = "Tax"
 DEFAULT_BAG_YEN = 3
 # What a transport receipt is logged as when no item is given.

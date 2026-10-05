@@ -15,6 +15,7 @@ import streamlit as st
 from prescripts.budget_widgets import category_colors, render_budget_bars
 from prescripts.common import (
     JST,
+    english_only,
     inject_body_fade_in,
     keep_typed_selectbox_text,
     render_page_title,
@@ -25,6 +26,7 @@ from prescripts.common import (
 from prescripts.data.activities import is_konbini
 from prescripts.data.meal_receipts import (
     BAG_ITEM,
+    BAG_ITEM_EN,
     PERIODS,
     TAX_ITEM,
     TRANSIT_FEE_ITEM,
@@ -100,6 +102,13 @@ budgeted = budget_category(settings)
 transport = transport_category(settings)
 colors = category_colors(category_names, budgeted, ACCENT_COLOR)
 today_jst = datetime.now(JST).date()
+# English only (Settings): the bag is "Bag", not "Bag (袋)", and months
+# are "Sep 2026".
+english = english_only()
+
+
+def shown_item(name):
+    return BAG_ITEM_EN if english and name == BAG_ITEM else name
 
 with st.sidebar:
     st.header("Settings")
@@ -564,7 +573,7 @@ with st.container(key="main_body"):
         )
         bag_column, bag_yen_column, _ = st.columns([3, 2, 4], vertical_alignment="center")
         with_bag = bag_column.checkbox(
-            "+ 袋 bag", key="add_entry_bag",
+            "+ Bag" if english else "+ 袋 bag", key="add_entry_bag",
             help="Logs the bag as its own row. Its price starts at what one last cost at this store.",
         )
         if with_bag:
@@ -711,7 +720,7 @@ with st.container(key="main_body"):
                 if rows["excluded"].all():
                     summary.append("not counted")
                 lines = "".join(
-                    f"<div>{html.escape(str(row.item) if pd.notna(row.item) else '')}"
+                    f"<div>{html.escape(str(shown_item(row.item)) if pd.notna(row.item) else '')}"
                     f" · ¥{int(row.cost_yen) if pd.notna(row.cost_yen) else 0:,}"
                     + (" <small>(not counted)</small>" if row.excluded and not rows["excluded"].all() else "")
                     + (f" <small>· {html.escape(row.excluded_reason)}</small>" if pd.notna(row.excluded_reason) else "")
@@ -723,7 +732,7 @@ with st.container(key="main_body"):
                             unsafe_allow_html=True)
             st.caption("Change, add or delete rows here. Changes save straight away.")
             edited_entries = st.data_editor(
-                day_entries,
+                day_entries.assign(item=day_entries["item"].map(shown_item)),
                 num_rows="dynamic",
                 width="stretch",
                 key=f"editor_{selected_date}",
@@ -756,6 +765,9 @@ with st.container(key="main_body"):
                 how="all",
                 subset=[c for c in edited_entries.columns if c not in ("excluded", "excluded_reason", "category")],
             )
+            # Saved under its usual name, whatever it was shown as.
+            if english:
+                edited_entries["item"] = edited_entries["item"].replace(BAG_ITEM_EN, BAG_ITEM)
             # Saved as soon as anything in the table changes (the user asked
             # for edits to save by default, not wait on a button) -- except
             # while a row is missing its time, item or cost, e.g. one
@@ -862,13 +874,17 @@ with st.container(key="main_body"):
         # by category (step 3 of #25).
         food_budget = budget_for(settings, budgeted)
         budget_amount, budget_period = food_budget["amount"], food_budget["period"]
-        history = monthly_history(today_date, budget_amount, budget_period, budget_category=budgeted)
+        history = monthly_history(today_date, budget_amount, budget_period, budget_category=budgeted,
+                                  english=english)
         if len(history) < 2:
             st.write("Month-by-month comparisons appear once there's more than one month of receipts.")
         else:
             # Labels without "(so far)" -- the chart's slanted labels cut it off.
             chart = history.assign(month=history["month"].str.replace(" (so far)", "", regex=False))
-            st.bar_chart(chart.set_index("month")["total_yen"], x_label="", y_label="Total (¥)", color=ACCENT_COLOR)
+            # In the order given (oldest first): sorted, "2026年10月" came
+            # before "2026年9月".
+            st.bar_chart(chart.set_index("month")["total_yen"], x_label="", y_label="Total (¥)", color=ACCENT_COLOR,
+                         sort=False)
             table = pd.DataFrame({
                 "Month": history["month"],
                 "Total": history["total_yen"].map("¥{:,.0f}".format),

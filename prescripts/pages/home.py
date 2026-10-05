@@ -15,6 +15,7 @@ from prescripts.common import (
     PRIVATE_LOOK,
     SCRIPTS_DIR,
     TYPE_AFTER_GLITCH_SECONDS,
+    english_only,
     show_logo,
     shown_pages,
     theme_colors,
@@ -68,7 +69,7 @@ JAPANESE_PROMPTS = [
 
 user_quotes = load_quotes()
 all_quotes = BUILT_IN_QUOTES + user_quotes
-PROMPTS = FUNCTIONAL_PROMPTS + [quote["line"] for quote in all_quotes] + JAPANESE_PROMPTS
+PROMPTS = FUNCTIONAL_PROMPTS + [quote["line"] for quote in all_quotes] + ([] if english_only() else JAPANESE_PROMPTS)
 
 
 def _credit_for(prompt: str) -> str:

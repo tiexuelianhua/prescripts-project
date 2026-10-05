@@ -9,7 +9,7 @@ from datetime import date
 
 import streamlit as st
 
-from prescripts.common import inject_body_fade_in, render_page_title, show_logo
+from prescripts.common import IN_JAPANESE, english_only, inject_body_fade_in, place_name, render_page_title, show_logo
 from prescripts.data.activities import (
     CATEGORIES,
     OTHER,
@@ -78,6 +78,9 @@ QUICK_SEARCHES = {
     "Art exhibitions this month": "東京 展覧会 今月",
     "Gigs this weekend": "東京 ライブ 今週末",
 }
+# Read once per run: English only (Settings) shows names in English where
+# there's one and tags what only comes in Japanese.
+ENGLISH_ONLY = english_only()
 
 is_first_load = "_activities_title_played" not in st.session_state
 inject_body_fade_in("main_body")
@@ -187,7 +190,9 @@ def render_location(settings: dict) -> dict | None:
     search_column, locate_column = st.columns([3, 1], vertical_alignment="bottom")
     with search_column:
         query = st.text_input(
-            "Area", placeholder="A station or area, e.g. 渋谷駅 or Takadanobaba", key="activities_area_query"
+            "Area", placeholder="A station or area, e.g. "
+            + ("Shibuya Station" if ENGLISH_ONLY else "渋谷駅") + " or Takadanobaba",
+            key="activities_area_query",
         )
     with locate_column:
         if st.button("📍 My location", width="stretch", help="Look around where this computer is for this visit"):
@@ -323,7 +328,7 @@ def render_list(places: list[dict], list_key: str) -> None:
     # Only for the rows on show: each new one is a lookup, the first time.
     photos = place_photos(places[:limit])
     for place in places[:limit]:
-        name = _plain(place["name"]) + (f" · {_plain(place['name_en'])}" if place["name_en"] else "")
+        name = _plain(place_name(place["name"], place["name_en"], ENGLISH_ONLY)[0])
         details = [format_distance(place["distance"])]
         if place["category"] == "shrine_temple":
             details.append({"shinto": "Shinto shrine", "buddhist": "Buddhist temple"}.get(place["religion"], ""))
@@ -377,7 +382,8 @@ def _add_event() -> None:
 
 
 def render_event_row(event: dict, today: date) -> None:
-    name = _plain(event["name"]) + (f" · {_plain(event['name_en'])}" if event["name_en"] else "")
+    shown, left_in_japanese = place_name(event["name"], event["name_en"], ENGLISH_ONLY)
+    name = _plain(shown) + (f" {IN_JAPANESE}" if left_in_japanese else "")
     details = [format_dates(event), _plain(event["place"])]
     if event["hours"]:
         details.append(_plain(event["hours"]))
@@ -444,11 +450,12 @@ def render_events() -> None:
         if st.session_state.get("_activities_event_note"):
             st.caption(st.session_state.pop("_activities_event_note"))
 
-    with st.expander("Collab and pop-up news"):
+    with st.expander("Collab and pop-up news" + (" (in Japanese)" if ENGLISH_ONLY else "")):
         words = st.text_input(
             "Watch for", value=", ".join(settings.get("news_words", [])),
             placeholder="Series or characters, e.g. 鬼滅の刃, ハローキティ", key="activities_news_words",
-            help="Leave empty to see every collab and pop-up headline",
+            help="Leave empty to see every collab and pop-up headline"
+            + (". The headlines are in Japanese, so watch words work best written in Japanese." if ENGLISH_ONLY else ""),
         )
         watched = [word.strip() for word in words.replace("、", ",").split(",") if word.strip()]
         if watched != settings.get("news_words", []):
@@ -467,7 +474,8 @@ def render_events() -> None:
                         unsafe_allow_html=True)
         st.caption("Headlines from [Anime!Anime!](https://animeanime.jp). Nothing free lists pop-ups as such, "
                    "so these search the web instead: "
-                   + " · ".join(f"[{label}]({web_search(query)})" for label, query in QUICK_SEARCHES.items()))
+                   + " · ".join(f"[{label}]({web_search(query)})" for label, query in QUICK_SEARCHES.items())
+                   + (" (results in Japanese)" if ENGLISH_ONLY else ""))
 
 
 settings = load_settings()

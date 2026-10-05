@@ -12,7 +12,7 @@ A personal dashboard app for everyday life in Japan, themed on the Prescripts of
 | **Activities** | Food and things to do within walking distance of a station, an area, or where you are, plus festivals, markets and other events coming up around Tokyo |
 | **Spotify** | See and control what's playing, with lyrics (needs a one-off setup, below) |
 | **Japanese** | Vocabulary and kanji flashcards with spaced-repetition reviews |
-| **Settings** | Switch pages and Overview tiles on or off (Spotify starts off) |
+| **Settings** | English only, and switching pages and Overview tiles on or off (Spotify starts off) |
 
 ![The Overview page: a tile each for Meal Receipts, Weather, Japanese and Spotify](docs/screenshots/overview.png)
 
@@ -130,6 +130,8 @@ Want it open (minimised) whenever you sign in? Press **Win+R**, type `shell:star
 
 > You'll also see `ThePrescriptsLauncher.exe` / `LauncherSrc` mentioned in the code. That's a small launcher the original author compiles for themselves. It isn't included in the repo, and the shortcut above does the same job.
 
+The app starts in English only, with the Japanese page switched off. Both can be changed on the **Settings** page. Things that only come in Japanese, like some event names, are marked (in Japanese).
+
 ## Optional: connect Spotify
 
 Every page except Spotify works straight away. Spotify starts switched off: turn it on in the app's **Settings** page first. It needs your own (free) Spotify developer app, because Spotify doesn't let apps like this share one. Until you set it up, the page just says no credentials were found.
@@ -165,7 +167,7 @@ Prescripts\
 ├── Activities\           ← your saved area and walking distance, events you've added, plus recent searches
 ├── Spotify\              ← your Spotify keys + connection
 ├── quotes.json           ← quotes you add on Home
-└── app_settings.json     ← app-wide preferences: zoom level, which pages and tiles are on
+└── app_settings.json     ← app-wide preferences: zoom level, English only, which pages and tiles are on
 ```
 
 Back up the `Prescripts` folder to back up everything.
@@ -188,7 +190,7 @@ The project has automated tests. They load every page and check the rules undern
 .venv\Scripts\python -m pytest
 ```
 
-It takes about four minutes and should finish with `52 passed`. Close the app first if it's running: installing packages while it's open can fail, because Windows locks files the app is using.
+It takes about four minutes and should finish with `53 passed`. Close the app first if it's running: installing packages while it's open can fail, because Windows locks files the app is using.
 
 To check the code for mistakes like unused or undefined names, and for import order, run `.venv\Scripts\ruff check .` (add `--fix` to sort the imports for you). The settings are in `pyproject.toml`.
 
@@ -230,7 +232,7 @@ On Mac and Linux, the app runs in your web browser. The app window (`desktop_app
 
    As on Windows, press **Enter** if Streamlit asks for an email, and **Ctrl+C** to stop it.
 
-Everywhere else in this README, use `.venv/bin/python` in place of `.venv\Scripts\python`. The tests usually finish with `49 passed, 3 skipped`: the three skipped tests check PowerShell scripts, and they only run if PowerShell is installed.
+Everywhere else in this README, use `.venv/bin/python` in place of `.venv\Scripts\python`. The tests usually finish with `50 passed, 3 skipped`: the three skipped tests check PowerShell scripts, and they only run if PowerShell is installed.
 
 ## How it's built
 

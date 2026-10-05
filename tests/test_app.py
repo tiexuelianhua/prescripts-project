@@ -33,8 +33,10 @@ _RUN_EVERY_PAGE = """
 
 def switch_every_page_on(app_copy):
     # For tests that visit every page or tile: a new public install starts
-    # with Spotify switched off (OFF_BY_DEFAULT in common.py).
-    (app_copy.parent / "app_settings.json").write_text('{"pages": {"spotify_page": true}}', encoding="utf-8")
+    # with Spotify switched off (OFF_BY_DEFAULT in common.py), and Japanese
+    # too while English only is on (as it starts).
+    (app_copy.parent / "app_settings.json").write_text(
+        '{"pages": {"spotify_page": true, "japanese": true}}', encoding="utf-8")
 
 
 def test_every_page_loads(app_copy):
@@ -463,7 +465,7 @@ def test_activities_page(app_copy):
         at.run()
         assert not at.exception, at.exception
         shown = [block.value for block in at.markdown if "<b class='place-name'>" in block.value]
-        assert "Lawson" in shown[0] and "すき家 · Sukiya" in shown[1], shown
+        assert "Lawson" in shown[0] and "Sukiya" in shown[1] and "すき家" not in shown[1], shown  # English only
         # Punctuation in names shows as typed (an apostrophe once came out as &#x27;).
         assert "Matsukawa's Eel &amp; Rice" in shown[2], shown
         assert any("3 within 800 m of Shibuya Station" in caption.value for caption in at.caption)
@@ -505,7 +507,7 @@ def test_activities_page(app_copy):
             return next(block.value for block in at.markdown if "overview-place-name" in block.value
                         and "<div" in block.value)
         first = picked()
-        assert any(name in first for name in ("Lawson", "すき家", "うなぎ")), first
+        assert any(name in first for name in ("Lawson", "Sukiya", "Eel")), first  # English only
         at.button(key="overview_activities_another").click()
         at.run()
         assert picked() != first
@@ -768,15 +770,17 @@ def test_overview_button_goes_to_overview(app_copy):
 
 
 def test_switching_pages_and_tiles(app_copy):
-    # A new public install starts with Spotify off; Settings switches a page
-    # off everywhere (sidebar, Home's commands, its tile) without touching its
+    # A new public install starts with Spotify off, and English only on, so
+    # Japanese is off until English only is; Settings switches a page off
+    # everywhere (sidebar, Home's commands, its tile) without touching its
     # data, a tile off on its own, and Overview off takes its button too.
     result = run_in(app_copy, """
         from streamlit.testing.v1 import AppTest
-        from prescripts.common import SCRIPTS_DIR, load_app_settings, page_shown, shown_pages, tile_shown
+        from prescripts.common import SCRIPTS_DIR, english_only, load_app_settings, page_shown, shown_pages, tile_shown
         from prescripts.data.home import route_command
 
-        assert not page_shown("spotify_page") and page_shown("japanese") and page_shown("settings")
+        assert english_only() and not page_shown("japanese")
+        assert not page_shown("spotify_page") and page_shown("settings")
         assert route_command("spotify", shown_pages()).get("page", {}).get("title") != "Spotify"
 
         at = AppTest.from_file(str(SCRIPTS_DIR / "app.py"), default_timeout=120)
@@ -784,6 +788,10 @@ def test_switching_pages_and_tiles(app_copy):
         at.switch_page("prescripts/pages/settings.py")
         at.run()
         assert not at.exception, at.exception
+        at.toggle(key="settings_english_only").set_value(False)
+        at.run()
+        assert not english_only() and page_shown("japanese")
+        assert at.toggle(key="settings_pages_japanese").value
         at.toggle(key="settings_pages_japanese").set_value(False)
         at.run()
         at.toggle(key="settings_tiles_activities").set_value(False)

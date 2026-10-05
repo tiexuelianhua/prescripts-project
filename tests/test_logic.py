@@ -502,6 +502,32 @@ def test_area_japanese_name(app_copy):
     """)
 
 
+def test_english_only(app_copy):
+    # English only (Settings) shows a name in English where there is one,
+    # says when one's left in Japanese, and writes months out in English.
+    # The public look starts with it on; the author's copy never has it.
+    _check(app_copy, """
+        from datetime import date
+        from prescripts.common import english_only, has_japanese, place_name
+        from prescripts.data.meal_receipts import append_entry, day_folder_for, monthly_history
+
+        assert english_only({}) and not english_only({"english_only": False})
+        assert place_name("浅草寺", "Senso-ji", english=False) == ("浅草寺 · Senso-ji", False)
+        assert place_name("浅草寺", "Senso-ji", english=True) == ("Senso-ji", False)
+        assert place_name("コミックマーケット", "", english=True) == ("コミックマーケット", True)
+        assert place_name("Blue Note Tokyo", "", english=True) == ("Blue Note Tokyo", False)
+        assert has_japanese("ラーメン") and not has_japanese("Ramen") and not has_japanese(None)
+
+        for day in (date(2026, 8, 3), date(2026, 9, 3)):
+            folder = day_folder_for(day)
+            folder.mkdir(parents=True)
+            append_entry(folder / "receipts.csv", f"{day} 12:00:00", None, "Onigiri", 150)
+        today = date(2026, 9, 10)
+        assert list(monthly_history(today, english=True)["month"]) == ["Aug 2026", "Sep 2026 (so far)"]
+        assert list(monthly_history(today)["month"]) == ["2026年8月", "2026年9月 (so far)"]
+    """)
+
+
 def test_meals_group_rows(app_copy):
     # Rows logged together (same time and store) are one meal, in the order
     # logged, a blank store included; excluded rows don't count in its total.

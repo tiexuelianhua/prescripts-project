@@ -18,10 +18,13 @@ import streamlit as st
 
 from prescripts.budget_widgets import category_colors, render_budget_bars
 from prescripts.common import (
+    IN_JAPANESE,
     JST,
     balanced_columns,
+    english_only,
     inject_body_fade_in,
     load_app_settings,
+    place_name,
     render_page_title,
     show_logo,
     theme_colors,
@@ -131,12 +134,15 @@ if is_first_load:
 @st.fragment(run_every=1)
 def render_jst_clock() -> None:
     now = datetime.now(JST)
-    japanese_date = f"{now.year}年{now.month}月{now.day}日"
+    if english_only():
+        date_text = f"{now:%a} {now.day} {now:%b %Y}"
+    else:
+        date_text = f"{now.year}年{now.month}月{now.day}日"
     st.markdown(
         f"""
         <div style="text-align: right; font-variant-numeric: tabular-nums;">
             <div style="font-size: 1.4rem; font-weight: bold; color: {ACCENT_COLOR};">{now:%H:%M:%S}</div>
-            <div style="font-size: 0.8rem; color: {TEXT_COLOR}; opacity: 0.7;">{japanese_date} JST</div>
+            <div style="font-size: 0.8rem; color: {TEXT_COLOR}; opacity: 0.7;">{date_text} JST</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -166,8 +172,17 @@ def render_meal_receipts_tile() -> None:
 
 def _with_japanese(english: str, japanese: str) -> str:
     # "Tokyo · 東京都": an area's English name with its Japanese one, when
-    # there is one that says something more.
+    # there is one that says something more. Just English with English only.
+    if english_only():
+        return english
     return f"{english} · {japanese}" if japanese and japanese != english else english
+
+
+def _shown_name(item: dict, tag: bool = False) -> str:
+    # A place or event's name for the tile, escaped: see place_name. Only
+    # events get the tag: a shop's sign is in Japanese anyway.
+    name, left_in_japanese = place_name(item["name"], item["name_en"], english_only())
+    return html.escape(name) + (f" {IN_JAPANESE}" if tag and left_in_japanese else "")
 
 
 def render_weather_tile() -> None:
@@ -350,12 +365,11 @@ def render_activities_tile() -> None:
             st.caption("No food places found within walking distance.")
         else:
             place = _pick("overview_activities_place", food, lambda place: place["id"])
-            english = f" · {html.escape(place['name_en'])}" if place["name_en"] else ""
             details = [ACTIVITIES_CATEGORIES["food"][place["category"]][0].removesuffix("s"), _distance(place)]
             details += [html.escape(detail) for detail in (place["cuisine"], place["hours"]) if detail]
             st.markdown(
                 f"<div class='overview-pick-label'>🍜 To eat</div>"
-                f'<div class="overview-place-name" lang="ja">{html.escape(place["name"])}{english}</div>'
+                f'<div class="overview-place-name" lang="ja">{_shown_name(place)}</div>'
                 f"<small>{' · '.join(details)} · "
                 f"<a href='{activities_map_link(place)}' target='_blank'>Map</a></small>",
                 unsafe_allow_html=True,
@@ -377,7 +391,6 @@ def render_activities_tile() -> None:
             # "place of worship".
             kind_of_place = {"shinto": "Shinto shrine", "buddhist": "Buddhist temple"}.get(
                 thing["religion"], thing["type"].replace("_", " "))
-            english = f" · {html.escape(thing['name_en'])}" if thing["name_en"] else ""
             # A box with the photo as its background, cropped to fill it:
             # Streamlit's own image styles keep an <img> at its own width.
             picture = (f"<div class='overview-photo' style=\"background-image: url('{html.escape(photo['url'])}')\"></div>"
@@ -385,7 +398,7 @@ def render_activities_tile() -> None:
                        if photo else "")
             st.markdown(
                 f"<div class='overview-pick-label'>⛩️ Somewhere to go</div>"
-                f"{picture}<div class='overview-place-name' lang='ja'>{html.escape(thing['name'])}{english}</div>"
+                f"{picture}<div class='overview-place-name' lang='ja'>{_shown_name(thing)}</div>"
                 f"<small>{html.escape(kind_of_place)} · {_distance(thing)} · "
                 f"<a href='{activities_map_link(thing)}' target='_blank'>Map</a></small>",
                 unsafe_allow_html=True,
@@ -400,10 +413,9 @@ def render_activities_tile() -> None:
     coming_up = [event for event in upcoming(today_jst(), big_sight) if event["group"] != "convention"]
     if coming_up:
         event = _pick("overview_activities_event", coming_up, lambda event: f"{event['name']}|{event['start']}")
-        english = f" · {html.escape(event['name_en'])}" if event["name_en"] else ""
         st.markdown(
             f"<div class='overview-pick-label'>📅 Coming up</div>"
-            f"<div class='overview-event-name' lang='ja'>{html.escape(event['name'])}{english}</div>"
+            f"<div class='overview-event-name' lang='ja'>{_shown_name(event, tag=True)}</div>"
             f"<small>{html.escape(format_dates(event))} · {html.escape(event['place'])}</small>",
             unsafe_allow_html=True,
         )
