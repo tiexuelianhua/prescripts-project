@@ -411,6 +411,20 @@ def last_entry_for_item(item: str, store: str | None = None, category: str | Non
     return matches.sort_values("timestamp").iloc[-1]
 
 
+def last_fare(from_station: str | None, to_station: str | None, category: str) -> int | None:
+    # What a fare between two stations cost last time, in either direction
+    # (a trip back costs the same), so typing the stations fills in the
+    # price. Only fares count, not a top-up that happened to note stations.
+    if not (from_station and to_station):
+        return None
+    routes = {route(from_station, to_station), route(to_station, from_station)}
+    matches = entries_in(category)
+    matches = matches[(matches["item"] == TRANSIT_FEE_ITEM) & matches["store"].isin(routes)]
+    if matches.empty:
+        return None
+    return int(matches.sort_values("timestamp").iloc[-1]["cost_yen"])
+
+
 def daily_totals_for_month(year: int, month: int, category: str | None = None) -> dict[date, int]:
     # Counted total per logged day of one month, keyed by date (read from the
     # day folders' dd-mm-yyyy names). Days with no receipts.csv are absent.

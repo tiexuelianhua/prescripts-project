@@ -179,7 +179,8 @@ def test_logging_a_meal(app_copy):
     # Items gather into one meal with a running total and can be taken out
     # again; tax starts at 0, and "Use 8%" fills in 8% of the items; "Log meal"
     # saves every row at one time and store, and Entries shows them as one
-    # meal with its total.
+    # meal with its total, the store in Food's colour. An item's own note is
+    # kept on its row.
     result = run_in(app_copy, """
         from datetime import date
         from streamlit.testing.v1 import AppTest
@@ -201,7 +202,10 @@ def test_logging_a_meal(app_copy):
         def total():
             return next(block.value for block in at.markdown if "Total:" in block.value)
         for item in ("Onigiri", "Karaage", "Tea"):
+            if item == "Karaage":
+                at.text_input(key="add_entry_item_note").input("extra crispy")
             add(item)
+        assert at.text_input(key="add_entry_item_note").value == ""  # cleared with the item
         assert at.selectbox(key="add_entry_item").value is None  # cleared for the next item
         assert at.selectbox(key="add_entry_store").value == "Olympic"
         assert at.number_input(key="add_entry_tax").value == 0  # prices usually include tax
@@ -225,8 +229,12 @@ def test_logging_a_meal(app_copy):
         entries = load_entries(get_today_folder() / "receipts.csv")
         assert list(zip(entries["item"], entries["cost_yen"])) == [
             ("Onigiri", 150), ("Karaage", 250), ("Tea", 100), (TAX_ITEM, 30)], entries
+        assert entries["excluded_reason"].isna().tolist() == [True, False, True, True], entries
+        assert entries["excluded_reason"][1] == "extra crispy", entries
         assert entries["timestamp"].nunique() == 1 and set(entries["store"]) == {"Olympic"}
-        assert [line for line in at.markdown if "<details>" in line.value and "Olympic · ¥530 · 3 items" in line.value]
+        from prescripts.common import ACCENT_COLOR
+        assert [line for line in at.markdown if "<details>" in line.value
+                and f"<span style='color: {ACCENT_COLOR}'>Olympic</span> · ¥530 · 3 items" in line.value]
         assert at.number_input(key="add_entry_tax").value == 0 and not at.selectbox(key="add_entry_store").value
     """)
     assert result.returncode == 0, result.stdout + result.stderr
@@ -297,7 +305,8 @@ def test_logging_other_spending(app_copy):
 def test_logging_a_whole_day_at_once(app_copy):
     # One basket can mix categories: each line keeps the category and store
     # or stations it was added with, and ⇄ swaps From and To for the trip
-    # back. A day with no store anywhere still takes one typed in Entries.
+    # back, filling in that fare from last time (either direction). A day
+    # with no store anywhere still takes one typed in Entries.
     result = run_in(app_copy, """
         from datetime import date
         from streamlit.testing.v1 import AppTest
@@ -327,8 +336,7 @@ def test_logging_a_whole_day_at_once(app_copy):
         at.button(key="add_entry_swap").click()
         at.run()
         assert (at.selectbox(key="add_entry_from").value, at.selectbox(key="add_entry_to").value) == ("Shibuya", "Shinjuku")
-        at.number_input(key="add_entry_cost").set_value(178)  # no item: a transit fee
-        at.run()
+        assert at.number_input(key="add_entry_cost").value == 178  # no item: a transit fee, its fare remembered
         next(button for button in at.button if button.label == "Log all").click()
         at.run()
         assert not at.exception and not at.warning, (at.exception, at.warning)

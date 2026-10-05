@@ -43,6 +43,7 @@ from prescripts.data.meal_receipts import (
     known_stations,
     known_values,
     last_entry_for_item,
+    last_fare,
     load_entries,
     load_settings,
     meals,
@@ -364,11 +365,14 @@ with st.container(key="main_body"):
         st.session_state["add_entry_item"] = None
         st.session_state["_last_autofilled_item"] = None
         st.session_state["add_entry_cost"] = 0
+        st.session_state["add_entry_item_note"] = ""
+        # The same stations fill in their fare again for the next one.
+        st.session_state["_last_fare_route"] = None
         st.session_state["_reset_add_item"] = False
     # A meal is logged whole: its items gather here until "Log meal" saves
     # them together. Each line keeps the category and store (or stations) it
     # was added with, so one go can log a whole day's spending: {"id",
-    # "item", "cost", "category", "store"}.
+    # "item", "cost", "category", "store", "note"}.
     basket = st.session_state.setdefault("_meal_basket", [])
 
     # Not an st.form: Item needs to live-react to selection (to suggest a
@@ -412,7 +416,7 @@ with st.container(key="main_body"):
     is_transport = category == transport
     if is_transport:
         from_column, swap_column, to_column = st.columns([6, 1, 6], vertical_alignment="bottom")
-    item_column, cost_column, add_column = st.columns([5, 2, 2], vertical_alignment="bottom")
+    item_column, cost_column, note_column, add_column = st.columns([4, 2, 3, 2], vertical_alignment="bottom")
     choices = item_choices(excluded_items, excluded_stores, category)
     item_choice = item_column.selectbox(
         "Item", options=choices, format_func=item_choice_label, index=None,
@@ -463,6 +467,15 @@ with st.container(key="main_body"):
             placeholder="Optional -- type or pick a station", key="add_entry_to",
         )
         store = route(from_station, to_station)
+        # A fare between these stations fills in what it cost last time
+        # (either way round), once per pair so a typed price stays. Not
+        # for a picked item like a top-up, which brings its own price.
+        if (from_station and to_station and (item is None or item == TRANSIT_FEE_ITEM)
+                and st.session_state.get("_last_fare_route") != store):
+            fare = last_fare(from_station, to_station, category)
+            if fare is not None:
+                st.session_state["add_entry_cost"] = fare
+            st.session_state["_last_fare_route"] = store
     else:
         store = store_column.selectbox(
             "Store", options=known_values("store", exclude=excluded_stores, category=category), index=None,
@@ -472,6 +485,11 @@ with st.container(key="main_body"):
             key="add_entry_store",
         )
     cost_yen = cost_column.number_input("Cost (¥)", min_value=0, step=1, key="add_entry_cost")
+    # This item's own note; the Notes box further down is for the whole meal.
+    item_note = note_column.text_input(
+        "Note", placeholder="Optional", key="add_entry_item_note",
+        help="A note for just this item. It shows under the meal in Entries.",
+    ).strip() or None
     if is_transport and not item and cost_yen:
         item = TRANSIT_FEE_ITEM
     # Never greyed out: a click can land before an item just typed has
@@ -479,7 +497,7 @@ with st.container(key="main_body"):
     if add_column.button("+ Add item", width="stretch"):
         if item:
             basket.append({"id": time.time_ns(), "item": item, "cost": int(cost_yen),
-                           "category": category, "store": store})
+                           "category": category, "store": store, "note": item_note})
             st.session_state["_reset_add_item"] = True
             st.rerun()
         st.caption("Type or pick an item first.")
@@ -491,7 +509,8 @@ with st.container(key="main_body"):
         line_color = colors.get(line["category"], ACCENT_COLOR)
         name_column.markdown(
             f"{html.escape(line['item'])} <small><span style='color: {line_color}'>{html.escape(line['category'])}</span>"
-            + (f" · {html.escape(line['store'])}" if line["store"] else "") + "</small>",
+            + (f" · {html.escape(line['store'])}" if line["store"] else "")
+            + (f" · <i>{html.escape(line['note'])}</i>" if line.get("note") else "") + "</small>",
             unsafe_allow_html=True,
         )
         price_column.write(f"¥{line['cost']:,}")
@@ -500,7 +519,8 @@ with st.container(key="main_body"):
 
     # An item picked but not added yet still goes in when the meal's logged:
     # a single item needs no "+ Add item" first.
-    pending = [{"item": item, "cost": int(cost_yen), "category": category, "store": store}] if item else []
+    pending = [{"item": item, "cost": int(cost_yen), "category": category, "store": store,
+                "note": item_note}] if item else []
     items = basket + pending
     subtotal = sum(line["cost"] for line in items)
     line_categories = {line["category"] for line in items} | {category}
@@ -596,16 +616,21 @@ with st.container(key="main_body"):
         timestamp = datetime.combine(entry_date, datetime.now(JST).time())
         # Every row shares the time and exclusion, and rows from one store
         # share it too: that's what groups them back into one meal under
-        # Entries. The bag and tax go with the store the form is on.
-        rows = [(line["item"], line["cost"], line["category"], line["store"]) for line in items]
+        # Entries. The bag and tax go with the store the form is on. An
+        # item's own note comes first, then the whole meal's.
+        def note_for(line_note=None):
+            return "; ".join(note for note in (line_note, excluded_reason) if note) or None
+
+        rows = [(line["item"], line["cost"], line["category"], line["store"], note_for(line.get("note")))
+                for line in items]
         if with_bag:
-            rows.append((BAG_ITEM, bag_yen, category, store))
+            rows.append((BAG_ITEM, bag_yen, category, store, note_for()))
         if tax_yen:
-            rows.append((TAX_ITEM, tax_yen, category, store))
-        for row_item, row_yen, row_category, row_store in rows:
+            rows.append((TAX_ITEM, tax_yen, category, store, note_for()))
+        for row_item, row_yen, row_category, row_store, row_note in rows:
             append_entry(
                 target_csv, timestamp.strftime("%Y-%m-%d %H:%M:%S"), row_store, row_item, row_yen,
-                excluded, excluded_reason, row_category,
+                excluded, row_note, row_category,
             )
         # A newly typed category joins the saved list, so it's offered from
         # now on in the order it was added.
@@ -667,7 +692,13 @@ with st.container(key="main_body"):
                 rows = meal["rows"]
                 item_count = int((~rows["item"].isin([BAG_ITEM, TAX_ITEM])).sum())
                 no_store = "No stations" if set(rows["category"]) == {transport} else "No store"
-                summary = [meal["time"][11:16], html.escape(meal["store"] or no_store), f"¥{meal['total']:,}",
+                # The store (or stations) in its category's colour, so a
+                # restaurant is in Food's blue like the rest of Food.
+                bought = rows[~rows["item"].isin([BAG_ITEM, TAX_ITEM])]
+                store_color = colors.get((bought if not bought.empty else rows)["category"].iloc[0], ACCENT_COLOR)
+                summary = [meal["time"][11:16],
+                           f"<span style='color: {store_color}'>{html.escape(meal['store'] or no_store)}</span>",
+                           f"¥{meal['total']:,}",
                            f"{item_count} item{'s' if item_count != 1 else ''}"]
                 # Food is most of them, so only other categories are named,
                 # each in its own colour.
