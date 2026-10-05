@@ -8,7 +8,7 @@ from datetime import datetime
 
 import streamlit as st
 
-from prescripts.common import inject_body_fade_in, render_page_title, show_logo, theme_colors
+from prescripts.common import english_only, inject_body_fade_in, render_page_title, show_logo, theme_colors
 from prescripts.data.weather import (
     CATEGORY_EMOJI,
     DEFAULT_OFFICE_CODE,
@@ -127,8 +127,10 @@ with st.container(key="main_body"):
             except (urllib.error.URLError, TimeoutError):
                 translated = None
             st.warning(translated or headline)
+            # The original under it, unless English only (Settings) is on.
             if translated:
-                st.caption(headline)
+                if not english_only():
+                    st.caption(headline)
             else:
                 st.caption("(English translation unavailable right now -- showing the original)")
         else:

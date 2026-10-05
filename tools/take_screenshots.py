@@ -34,6 +34,9 @@ WIDTH = 1280
 # (file name, page's url path, element that means it's loaded, height to capture)
 SHOTS = [
     ("home", "", "details summary", 800),
+    # Before Overview: its tile uses the places this page looks up.
+    # Not an event's name (.event-name): those show before the places do.
+    ("activities", "activities", ".place-name:not(.event-name)", 1400),
     ("overview", "overview", "[data-testid^=stBaseButton]", 1100),
     ("meal_receipts", "meal_receipts", ".st-key-add_entry_item input", 1500),
     ("japanese", "japanese", "[data-testid^=stBaseButton]", 1060),
@@ -66,6 +69,11 @@ def seed_sample_data(copy: Path) -> None:
 
     # English only starts the Japanese page off; the README still shows it.
     prescripts_common.save_app_settings({"pages": {"japanese": True}})
+
+    # A saved area, so Activities and its Overview tile have places to show.
+    # These come from OpenStreetMap, so they're real.
+    from prescripts.data.activities import save_settings as save_activities_settings
+    save_activities_settings({"area": "Asakusa", "area_ja": "浅草", "lat": 35.7118, "lon": 139.7966, "radius": 1000})
 
     # This month so far: two or three meals a day, one entry left out of totals.
     meals = [
@@ -177,6 +185,15 @@ async def take_shots(app_port: int, cdp_port: int, out_dir: Path) -> list[Path]:
                             "document.querySelector('[data-testid=stApp]').dataset.testScriptState !== 'running'"):
                     break
                 await asyncio.sleep(0.5)
+            # OpenStreetMap's place search is a shared service that's
+            # sometimes busy: the page offers "Try again", so take it.
+            for _ in range(5 if name == "activities" else 0):
+                retry = ("[...document.querySelectorAll('button')]"
+                         ".find(b => b.innerText.trim() === 'Try again')")
+                if not await js(f"!!{retry}"):
+                    break
+                await js(f"{retry}.click()")
+                await asyncio.sleep(10)
             await asyncio.sleep(4)  # page titles type themselves in, then content fades in
             if name == "japanese":
                 await js("[...document.querySelectorAll('button')].find(b => b.innerText.trim() === 'Show answer')?.click()")

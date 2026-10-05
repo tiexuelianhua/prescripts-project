@@ -14,7 +14,7 @@ A personal dashboard app for everyday life in Japan, themed on the Prescripts of
 | **Japanese** | Vocabulary and kanji flashcards with spaced-repetition reviews |
 | **Settings** | English only, and switching pages and Overview tiles on or off (Spotify starts off) |
 
-![The Overview page: a tile each for Meal Receipts, Weather, Japanese and Spotify](docs/screenshots/overview.png)
+![The Overview page: a tile each for Budget, Weather, Activities and Japanese](docs/screenshots/overview.png)
 
 <details>
 <summary><b>More screenshots</b></summary>
@@ -24,6 +24,9 @@ A personal dashboard app for everyday life in Japan, themed on the Prescripts of
 
 **Budget** (called Meal Receipts until October 2026): log a receipt item by item with a running total, and see the day's spending. Each receipt has a category (Food, Transport, Shopping, Other, or one you add), and each category can have its own budget, shown as a coloured bar. Transport receipts take From/To stations instead of a store, with a button to swap them for the trip back. One go can mix categories, so a whole day can be logged at once.
 ![Budget page](docs/screenshots/meal_receipts.png)
+
+**Activities**: places to eat and things to do around a saved area, nearest first, then events coming up. Places come from OpenStreetMap, so many only have a Japanese name.
+![Activities page](docs/screenshots/activities.png)
 
 **Japanese**: flashcard reviews, graded Again / Hard / Good / Easy.
 ![Japanese page](docs/screenshots/japanese.png)
