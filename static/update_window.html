@@ -24,8 +24,9 @@ html, body { margin: 0; height: 100%; background: #000; color: var(--text); over
 .cursor { display: inline-block; width: .55em; border-bottom: 2px solid var(--accent);
           animation: blink 1s steps(1) infinite; }
 @keyframes blink { 50% { opacity: 0; } }
-/* Written as a comment too, in the same grey. */
-.credit { position: fixed; right: 10px; bottom: 8px; font-size: 12px; color: #6b7080;
+/* Written as a comment too, in the same grey, size and indent, on its own
+   row at the bottom (below the longest easter egg's last line). */
+.credit { position: fixed; left: 28px; bottom: 12px; color: #6b7080; white-space: pre;
           opacity: 0; transition: opacity .6s; }
 .fading { transition: opacity .6s; opacity: 0; }
 /* The comment is greyed like an editor's comments; the lyrics, far fainter. */
