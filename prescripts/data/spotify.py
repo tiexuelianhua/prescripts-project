@@ -57,9 +57,37 @@ SCOPES = [
 
 
 def load_settings() -> dict:
-    if SETTINGS_PATH.exists():
-        return json.loads(SETTINGS_PATH.read_text(encoding="utf-8"))
-    return {}
+    # Read as bytes so json picks the encoding itself: a file saved from
+    # PowerShell can be UTF-16 or start with a BOM. A file that won't parse
+    # counts as empty here; setup_problem() says why on the Spotify page.
+    try:
+        settings = json.loads(SETTINGS_PATH.read_bytes())
+    except (FileNotFoundError, ValueError):
+        return {}
+    return settings if isinstance(settings, dict) else {}
+
+
+def setup_problem() -> str | None:
+    # What's stopping the keys file from working, in words for someone
+    # following the README by hand, or None once both keys are in.
+    if not SETTINGS_PATH.exists():
+        if SETTINGS_PATH.with_name("settings.json.txt").exists():
+            return (
+                f"Found `settings.json.txt` in `{SPOTIFY_DIR}`. Windows added `.txt` to the name: "
+                "rename it to `settings.json` (in File Explorer, tick View → Show → File name "
+                "extensions to see the full name)."
+            )
+        return f"No keys file yet. Create `settings.json` in `{SPOTIFY_DIR}` (see the README's Spotify steps)."
+    try:
+        settings = json.loads(SETTINGS_PATH.read_bytes())
+    except ValueError as error:
+        return (
+            f"`{SETTINGS_PATH}` couldn't be read ({error}). Check the quotes are plain \" marks "
+            "and there's a comma at the end of the client_id line."
+        )
+    if not isinstance(settings, dict) or not settings.get("client_id") or not settings.get("client_secret"):
+        return f"`{SETTINGS_PATH}` needs both a \"client_id\" and a \"client_secret\"."
+    return None
 
 
 def save_settings(settings: dict) -> None:

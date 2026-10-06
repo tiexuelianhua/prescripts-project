@@ -669,6 +669,34 @@ def test_spotify_control_guards(app_copy):
     """)
 
 
+def test_spotify_keys_file_problems(app_copy):
+    # The keys file is made by hand from the README, so the Spotify page says
+    # what's wrong with it instead of crashing or a vague "not found":
+    # Notepad's hidden .txt, a typo in the JSON, a missing key. A file saved
+    # from PowerShell (UTF-16, or UTF-8 with a BOM) still reads.
+    _check(app_copy, """
+        import json
+        from prescripts.data.spotify import SETTINGS_PATH, SPOTIFY_DIR, is_configured, setup_problem
+
+        assert "No keys file yet" in setup_problem() and not is_configured()
+        SPOTIFY_DIR.mkdir()
+        txt = SETTINGS_PATH.with_name("settings.json.txt")
+        txt.write_text("{}", encoding="utf-8")
+        assert "settings.json.txt" in setup_problem()
+        txt.unlink()
+
+        SETTINGS_PATH.write_text('{"client_id": "a" "client_secret": "b"}', encoding="utf-8")
+        assert "couldn't be read" in setup_problem() and not is_configured()
+        SETTINGS_PATH.write_text('{"client_id": "a"}', encoding="utf-8")
+        assert "client_secret" in setup_problem()
+
+        keys = json.dumps({"client_id": "a", "client_secret": "b"})
+        for encoding in ("utf-8", "utf-8-sig", "utf-16"):
+            SETTINGS_PATH.write_text(keys, encoding=encoding)
+            assert setup_problem() is None and is_configured(), encoding
+    """)
+
+
 def test_activities_places(app_copy):
     # What the Activities page makes of OpenStreetMap's answer: named places of a
     # known category only, nearest first, outlines placed at their centre,

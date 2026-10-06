@@ -137,34 +137,38 @@ The app starts in English only, with the Japanese page switched off. Both can be
 
 ## Optional: connect Spotify
 
-Every page except Spotify works straight away. Spotify starts switched off: turn it on in the app's **Settings** page first. It needs your own (free) Spotify developer app, because Spotify doesn't let apps like this share one. Until you set it up, the page just says no credentials were found.
+Every page except Spotify works straight away. Spotify needs your own (free) Spotify developer app, because Spotify doesn't let apps like this share one.
 
-1. Go to the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard), sign in with your Spotify account, and click **Create app**.
-2. Give it any name and description. Under **Redirect URIs**, add exactly:
+1. In the app, open **Settings** and switch the **Spotify** page on. It starts off, so until you do this it won't show up in the page list.
+2. Go to the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard), sign in with your Spotify account, and click **Create app**.
+3. Give it any name and description. Under **Redirect URIs**, add exactly:
    ```
    http://127.0.0.1:8501/spotify_page
    ```
    Tick **Web API**, agree to the terms, and save.
-3. Open the app's **Settings** and copy its **Client ID** and **Client secret** (click "View client secret").
-4. In your `Prescripts` folder (next to `prescripts-project`, not inside it), create a folder called `Spotify`. In it, create a file called `settings.json` with this in it, using your two values:
+4. Open your Spotify app's settings on the dashboard and copy its **Client ID** and **Client secret** (click "View client secret").
+5. In your `Prescripts` folder (next to `prescripts-project`, not inside it), create a folder called `Spotify`. In it, create a file called `settings.json` with this in it, using your two values:
    ```json
    {
      "client_id": "paste your Client ID here",
      "client_secret": "paste your Client secret here"
    }
    ```
-5. Restart the app, open the Spotify page, and click **Connect to Spotify**.
+   In Notepad, set **Save as type** to **All files** before saving, or Windows names it `settings.json.txt`.
+6. Open the Spotify page and click **Connect to Spotify**. If the keys file has a problem, the page says what it is.
 
 Playback controls act on whichever device you're already playing Spotify on (phone, desktop app, …). Spotify only allows remote control with a **Premium** account.
 
 ## Where your data lives
 
-Everything is saved as ordinary files in folders beside the code, never inside it. You can update the code, or delete and re-clone it, without losing anything:
+Everything is saved as ordinary files in folders beside the code, never inside it. You can update the code, or delete and re-clone it, without losing anything.
+
+Each folder or file appears the first time you save something on that page or change a setting, so a fresh install has only `prescripts-project` (plus `Spotify` once you make it). Once you've used everything, it looks like this:
 
 ```
 Prescripts\
 ├── prescripts-project\   ← the code (this repository)
-├── Meal Receipts\        ← the Budget page's receipts, created when you first log one
+├── Meal Receipts\        ← the Budget page's receipts
 ├── Japanese\             ← your flashcards
 ├── Weather\              ← your chosen forecast area (default: Tokyo)
 ├── Activities\           ← your saved area and walking distance, events you've added, plus recent searches
@@ -193,7 +197,7 @@ The project has automated tests. They load every page and check the rules undern
 .venv\Scripts\python -m pytest
 ```
 
-It takes about four minutes and should finish with `54 passed`. Close the app first if it's running: installing packages while it's open can fail, because Windows locks files the app is using.
+It takes about four minutes and should finish with `55 passed`. Close the app first if it's running: installing packages while it's open can fail, because Windows locks files the app is using.
 
 To check the code for mistakes like unused or undefined names, and for import order, run `.venv\Scripts\ruff check .` (add `--fix` to sort the imports for you). The settings are in `pyproject.toml`.
 
@@ -235,7 +239,7 @@ On Mac and Linux, the app runs in your web browser. The app window (`desktop_app
 
    As on Windows, press **Enter** if Streamlit asks for an email, and **Ctrl+C** to stop it.
 
-Everywhere else in this README, use `.venv/bin/python` in place of `.venv\Scripts\python`. The tests usually finish with `51 passed, 3 skipped`: the three skipped tests check PowerShell scripts, and they only run if PowerShell is installed.
+Everywhere else in this README, use `.venv/bin/python` in place of `.venv\Scripts\python`. The tests usually finish with `52 passed, 3 skipped`: the three skipped tests check PowerShell scripts, and they only run if PowerShell is installed.
 
 ## How it's built
 

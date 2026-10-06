@@ -20,7 +20,6 @@ from prescripts.data.spotify import (
     describe_item,
     disconnect,
     exchange_code_for_tokens,
-    is_configured,
     is_connected,
     is_read_only,
     is_saved,
@@ -33,6 +32,7 @@ from prescripts.data.spotify import (
     set_read_only,
     set_shuffle,
     set_volume,
+    setup_problem,
     skip_to_queued,
     unsave_item,
 )
@@ -64,12 +64,9 @@ with header_title:
 if is_first_load:
     st.session_state["_spotify_title_played"] = True
 
-if not is_configured():
-    st.error(
-        "No Spotify app credentials found -- add \"client_id\" and "
-        "\"client_secret\" to Spotify/settings.json (a sibling of the "
-        "Meal Receipts/Weather data folders, outside this git repo)."
-    )
+problem = setup_problem()
+if problem:
+    st.error(problem)
     st.stop()
 
 # Spotify redirects back here with ?code=... after the user approves on its
