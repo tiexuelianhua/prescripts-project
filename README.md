@@ -12,7 +12,7 @@ A personal dashboard app for everyday life in Japan, themed on the Prescripts of
 | **Activities** | Food and things to do within walking distance of a station, an area, or where you are, plus festivals, markets and other events coming up around Tokyo |
 | **Spotify** | See and control what's playing, with lyrics (needs a one-off setup, below) |
 | **Japanese** | Vocabulary and kanji flashcards with spaced-repetition reviews |
-| **Settings** | English only, and switching pages and Overview tiles on or off (Spotify starts off) |
+| **Settings** | English only, switching pages and Overview tiles on or off (Spotify starts off), and updates |
 
 ![The Overview page: a tile each for Budget, Weather, Activities and Japanese](docs/screenshots/overview.png)
 
@@ -181,7 +181,8 @@ Back up the `Prescripts` folder to back up everything.
 - The **🎛️** button next to it, or **Ctrl+Shift+O** from any page, goes to Overview.
 - The **− 100% +** buttons at the top of every page except Home zoom the page. The zoom level is remembered.
 - Times and dates are in **Japan time (JST)** whatever your computer's clock says, and the Weather page covers Japan only.
-- To update to the newest version: close the app, run `git pull` in the `prescripts-project` folder, then run step 4 again. Installed from the ZIP instead? Download it again and copy what's inside `prescripts-project-main` over your `prescripts-project` folder, replacing the files, then run step 4. Your data isn't in that folder, so nothing is lost either way.
+- **Updates:** the **Settings** page shows when there's a new version and what's changed. Click **Update and restart**, and the app updates and opens again by itself. It only offers versions that passed the automated tests, and never updates without the click. This works if you installed with `git clone`. Installed from the ZIP? Download it again and copy what's inside `prescripts-project-main` over your `prescripts-project` folder, replacing the files, then run step 4. Your data isn't in that folder, so nothing is lost either way.
+- To update by hand instead (or when running in the browser): close the app, run `git pull` in the `prescripts-project` folder, then run step 4 again.
 
 ## Checking it works
 
@@ -192,7 +193,7 @@ The project has automated tests. They load every page and check the rules undern
 .venv\Scripts\python -m pytest
 ```
 
-It takes about four minutes and should finish with `56 passed`. Close the app first if it's running: installing packages while it's open can fail, because Windows locks files the app is using.
+It takes about four minutes and should finish with `58 passed`. Close the app first if it's running: installing packages while it's open can fail, because Windows locks files the app is using.
 
 To check the code for mistakes like unused or undefined names, and for import order, run `.venv\Scripts\ruff check .` (add `--fix` to sort the imports for you). The settings are in `pyproject.toml`.
 
@@ -234,7 +235,7 @@ On Mac and Linux, the app runs in your web browser. The app window (`desktop_app
 
    As on Windows, press **Enter** if Streamlit asks for an email, and **Ctrl+C** to stop it.
 
-Everywhere else in this README, use `.venv/bin/python` in place of `.venv\Scripts\python`. The tests usually finish with `53 passed, 3 skipped`: the three skipped tests check PowerShell scripts, and they only run if PowerShell is installed.
+Everywhere else in this README, use `.venv/bin/python` in place of `.venv\Scripts\python`. The tests usually finish with `55 passed, 3 skipped`: the three skipped tests check PowerShell scripts, and they only run if PowerShell is installed.
 
 ## How it's built
 
@@ -254,6 +255,7 @@ prescripts/
     ├── activities.py        → OpenStreetMap (Nominatim for areas, Overpass for places), Wikimedia for photos
     ├── events.py            → Tokyo Big Sight's open data, Anime!Anime! news, yearly_events.json
     ├── spotify.py, lyrics.py → Spotify Web API, LRCLIB
+    ├── updates.py           → GitHub (the newest version whose tests passed), git
     └── japanese/            → Japanese\cards.json, Jisho, kanjiapi.dev
                                (deck, lookups, typed answers, spelling check)
 ```

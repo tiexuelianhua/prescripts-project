@@ -1,8 +1,11 @@
-# Settings page: English only, and which pages and Overview tiles are
-# switched on. Saved in
+# Settings page: English only, which pages and Overview tiles are
+# switched on, and updates (data/updates.py). Saved in
 # app_settings.json beside the other app-wide settings (see page_shown and
 # tile_shown in common.py, which every page list reads). Hiding only hides:
 # a page's data stays where it is.
+import urllib.error
+from datetime import date
+
 import streamlit as st
 
 from prescripts.common import (
@@ -16,6 +19,14 @@ from prescripts.common import (
     save_app_settings,
     show_logo,
     tile_shown,
+)
+from prescripts.data.updates import (
+    CHANGES_SHOWN,
+    PIP_PENDING,
+    apply_update,
+    check_for_update,
+    in_desktop_window,
+    local_version,
 )
 
 PAGE_TITLE = "Settings"
@@ -61,6 +72,62 @@ def _switch_english_only() -> None:
     save_app_settings(settings)
 
 
+def render_updates() -> None:
+    # Public version only: the author's copy is where changes are made.
+    st.subheader("Updates")
+    local = local_version()
+    if local is None:
+        st.caption(
+            "This copy was installed from the ZIP, so it can't update itself. To update, download the ZIP "
+            "again (see \"Handy to know\" in the README), or reinstall with git to update from here."
+        )
+        return
+    try:
+        status = check_for_update(local["sha"])
+    except (urllib.error.URLError, TimeoutError, ValueError, KeyError):
+        status = None
+    version = f"Version {local['sha'][:7]}, from {date.fromisoformat(local['date']):%d %b %Y}."
+    if status is None:
+        st.caption(f"{version} Couldn't check for updates just now.")
+    elif status["state"] == "up_to_date":
+        st.caption(f"{version} This is the newest version.")
+    elif status["state"] == "own_changes":
+        st.caption(f"{version} This copy has changes of its own that aren't on GitHub, so it isn't updated from here.")
+    else:
+        changes = status["changes"]
+        st.caption(version)
+        st.info(f"A new version is ready, with {len(changes)} change{'s' if len(changes) != 1 else ''}:")
+        lines = [f"- {title}" for title in changes[:CHANGES_SHOWN]]
+        if len(changes) > CHANGES_SHOWN:
+            lines.append(f"- and {len(changes) - CHANGES_SHOWN} more")
+        st.markdown("\n".join(lines))
+        desktop = in_desktop_window()
+        if st.button("Update and restart" if desktop else "Update", key="settings_update"):
+            with st.spinner("Updating..."):
+                problem, needs_pip = apply_update(status["sha"])
+            if problem:
+                st.error(problem)
+                return
+            check_for_update.clear()
+            if desktop:
+                if needs_pip:
+                    PIP_PENDING.touch()
+                st.success("Updated. Restarting...")
+                # The window closes and desktop_app.py starts it again (with
+                # pip first when the packages changed). See _Api.restart.
+                st.html("<script>window.pywebview.api.restart();</script>", unsafe_allow_javascript=True)
+            else:
+                st.success(
+                    "Updated. Stop the app (Ctrl+C in PowerShell)"
+                    + (", run install step 4 again, as the packages changed," if needs_pip else "")
+                    + " and start it again to finish."
+                )
+            return
+    if st.button("Check again", key="settings_check_updates"):
+        check_for_update.clear()
+        st.rerun()
+
+
 with st.container(key="main_body"):
     # Not in the author's own copy, which keeps its Japanese.
     if not PRIVATE_LOOK:
@@ -98,3 +165,6 @@ with st.container(key="main_body"):
                 disabled=not page_shown(url_path, settings),
                 on_change=_switch, args=("tiles", url_path),
             )
+
+    if not PRIVATE_LOOK:
+        render_updates()

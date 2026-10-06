@@ -24,6 +24,17 @@ PORT = 8501
 URL = f"http://127.0.0.1:{PORT}"
 # Not committed (see .gitignore) -- purely local runtime state.
 PID_FILE = SCRIPTS_DIR / ".desktop_app.pid"
+# Left by the Settings page's update when requirements.txt changed (same
+# path as PIP_PENDING in prescripts/data/updates.py), with pip's output
+# kept beside it in case the install goes wrong.
+PIP_PENDING = SCRIPTS_DIR / ".update_needs_pip"
+PIP_LOG = SCRIPTS_DIR / ".update_pip.log"
+_UPDATING_HTML = """
+<body style="background:#000;color:#f0f8ff;font-family:sans-serif;display:flex;
+             align-items:center;justify-content:center;height:90vh;margin:0">
+  <p>Installing the update. The Prescripts opens again in a minute or two...</p>
+</body>
+"""
 # Same check as PRIVATE_LOOK in prescripts/common.py (not imported from
 # there, since that pulls in all of Streamlit): the original author's own
 # logo, kept outside the repo, picks their private look over the public one.
@@ -94,11 +105,19 @@ class _Api:
     # fired". Isolated with a minimal repro outside the app before touching
     # this file again: renaming to `_window` alone was the entire fix.
     _window: "webview.Window | None" = None
+    # Set by restart(): once the window's closed and the server's stopped,
+    # main() starts a fresh copy of this script.
+    _restart = False
 
     def toggle_fullscreen(self) -> None:
         self._window.toggle_fullscreen()
 
     def quit(self) -> None:
+        self._window.destroy()
+
+    def restart(self) -> None:
+        # Called by the Settings page after an update.
+        self._restart = True
         self._window.destroy()
 
 
@@ -180,10 +199,64 @@ def _wait_for_server(timeout_s: float = 30) -> None:
             time.sleep(0.2)
 
 
+def _install_update_packages(api: _Api) -> None:
+    # An update changed requirements.txt: pip runs now, with nothing of the
+    # app's running to lock files, behind a small window saying so, then
+    # the app restarts as normal. The flag goes either way, so a failed
+    # install can't keep the app from ever opening; pip's output is in
+    # .update_pip.log, and install step 4 in the README redoes it by hand.
+    window = webview.create_window(
+        "The Prescripts", html=_UPDATING_HTML, width=520, height=200, resizable=False
+    )
+    api._window = window
+
+    def install(window: "webview.Window") -> None:
+        result = subprocess.run(
+            [sys.executable, "-m", "pip", "install", "-r", "requirements.txt"],
+            cwd=SCRIPTS_DIR, capture_output=True, text=True,
+            creationflags=subprocess.CREATE_NO_WINDOW,
+        )
+        PIP_LOG.write_text(result.stdout + result.stderr, encoding="utf-8")
+        PIP_PENDING.unlink(missing_ok=True)
+        api.restart()
+
+    webview.start(install, window, icon=str(ICON_PATH) if ICON_PATH.exists() else None)
+
+
+def _relaunch() -> None:
+    # A fresh process, not a loop inside this one: the new code (and any
+    # new packages) only load in a new Python. Its parent is gone by the time
+    # it checks for a previous instance, and this one's pidfile is already
+    # removed, so nothing kills it. Opens normally even if this one was
+    # started minimised: the user just clicked Update.
+    args = [arg for arg in sys.argv[1:] if arg != "--minimized"]
+    subprocess.Popen(
+        [sys.executable, str(Path(__file__).resolve()), *args],
+        cwd=SCRIPTS_DIR,
+        creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
+        close_fds=True,
+    )
+
+
 def main() -> None:
     _kill_previous_instance()
     PID_FILE.write_text(str(os.getpid()), encoding="utf-8")
+    api = _Api()
+    try:
+        if PIP_PENDING.exists():
+            _install_update_packages(api)
+        else:
+            _run_app(api)
+    finally:
+        try:
+            PID_FILE.unlink()
+        except OSError:
+            pass
+    if api._restart:
+        _relaunch()
 
+
+def _run_app(api: _Api) -> None:
     server = subprocess.Popen(
         [
             sys.executable,
@@ -200,10 +273,11 @@ def main() -> None:
             *(_PRIVATE_THEME_FLAGS if PRIVATE_LOOK else []),
         ],
         cwd=SCRIPTS_DIR,
+        # Tells the Settings page it can offer "Update and restart".
+        env={**os.environ, "PRESCRIPTS_DESKTOP": "1"},
     )
     try:
         _wait_for_server()
-        api = _Api()
         # The Startup-folder shortcut passes --minimized (through
         # ThePrescriptsLauncher.exe), so at sign-in the window waits in the
         # taskbar instead of popping up over everything else starting.
@@ -233,10 +307,6 @@ def main() -> None:
             server.wait(timeout=10)
         except subprocess.TimeoutExpired:
             server.kill()
-        try:
-            PID_FILE.unlink()
-        except OSError:
-            pass
 
 
 if __name__ == "__main__":

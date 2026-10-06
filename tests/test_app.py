@@ -718,6 +718,47 @@ def test_spotify_keys_pasted_into_the_page(app_copy):
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+def test_update_from_settings(app_copy):
+    # #42. A ZIP install is pointed to the README. A git install with a newer
+    # tested version lists what changed and updates on a click (stand-ins for
+    # GitHub and git); run in the browser, it says to restart by hand.
+    result = run_in(app_copy, """
+        from streamlit.testing.v1 import AppTest
+        import prescripts.data.updates as updates
+        from prescripts.common import SCRIPTS_DIR
+
+        def settings_page():
+            at = AppTest.from_file(str(SCRIPTS_DIR / "app.py"), default_timeout=120)
+            at.run()
+            at.switch_page("prescripts/pages/settings.py")
+            at.run()
+            assert not at.exception, at.exception
+            return at
+
+        at = settings_page()
+        assert any("installed from the ZIP" in c.value for c in at.caption), [c.value for c in at.caption]
+
+        updates.local_version = lambda: {"sha": "a" * 40, "date": "2026-10-06"}
+        updates._get = lambda url: (
+            {"status": "ahead", "commits": [{"commit": {"message": f"Change {n}"}} for n in range(10)]}
+            if "/compare/" in url else {"workflow_runs": [{"head_sha": "b" * 40}]})
+        applied = []
+        updates.apply_update = lambda sha: applied.append(sha) or (None, True)
+        at = settings_page()
+        assert any("Version aaaaaaa, from 06 Oct 2026" in c.value for c in at.caption)
+        assert any("10 changes" in i.value for i in at.info)
+        listed = at.markdown[-1].value
+        assert listed.startswith("- Change 9") and listed.endswith("- and 2 more"), listed
+        next(b for b in at.button if b.label == "Update").click()
+        at.run()
+        assert not at.exception, at.exception
+        assert applied == ["b" * 40]
+        assert any("run install step 4 again" in s.value for s in at.success), [s.value for s in at.success]
+        assert not updates.PIP_PENDING.exists()  # only the desktop window installs packages itself
+    """)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 def test_home_credits_only_the_quote_showing(app_copy):
     # The corner note names the one quote on screen (built-in or added), and
     # nothing when the prompt isn't a quote. Added quotes live outside the

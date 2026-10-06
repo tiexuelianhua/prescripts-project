@@ -697,6 +697,72 @@ def test_spotify_keys_file_problems(app_copy):
     """)
 
 
+def test_updates(app_copy):
+    # #42. What GitHub says (stood in for here) decides what Settings offers:
+    # a newer tested version, nothing, or nothing because the copy has
+    # commits of its own. Updating is a real git fast-forward from a stand-in
+    # "GitHub" folder: refused while the code has edits of its own, and it
+    # notices when requirements.txt changed, so pip runs on the restart.
+    _check(app_copy, """
+        import subprocess
+        import urllib.error
+        from pathlib import Path
+        import prescripts.data.updates as updates
+
+        assert updates.local_version() is None  # the test copy has no .git: a ZIP install
+        origin = Path(updates.SCRIPTS_DIR).parent / "origin.git"
+        git = lambda *args, cwd=updates.SCRIPTS_DIR: subprocess.run(
+            ["git", "-c", "user.name=Test", "-c", "user.email=test@example.com", *args],
+            cwd=cwd, check=True, capture_output=True, text=True).stdout.strip()
+        git("init", "-q", "--bare", "-b", "main", str(origin))
+        git("init", "-q", "-b", "main")
+        git("add", "-A")
+        git("commit", "-q", "-m", "First")
+        git("remote", "add", "origin", str(origin))
+        git("push", "-q", "origin", "main")
+        first = updates.local_version()["sha"]
+
+        # Someone else pushes two changes, one to the packages.
+        other = origin.parent / "other"
+        git("clone", "-q", str(origin), str(other), cwd=origin.parent)
+        (other / "README.md").write_text("new readme", encoding="utf-8")
+        git("commit", "-q", "-am", "Change the README", cwd=other)
+        with open(other / "requirements.txt", "a", encoding="utf-8") as file:
+            file.write("# new package\\n")
+        git("commit", "-q", "-am", "Add a package\\n\\nWith a body that isn't shown.", cwd=other)
+        git("push", "-q", "origin", "main", cwd=other)
+        latest = git("rev-parse", "HEAD", cwd=other)
+
+        replies = {}
+        def fake_get(url):
+            if "/compare/" in url:
+                reply = replies["compare"]
+                if reply == 404:
+                    raise urllib.error.HTTPError(url, 404, "Not Found", {}, None)
+                return reply
+            return {"workflow_runs": [{"head_sha": latest}]}
+        updates._get = fake_get
+        commit = lambda title: {"commit": {"message": title}}
+        replies["compare"] = {"status": "ahead", "commits": [commit("Change the README"), commit("Add a package\\n\\nbody")]}
+        status = updates.check_for_update(first)
+        assert status == {"state": "available", "sha": latest, "changes": ["Add a package", "Change the README"]}, status
+        for reply, state in (({"status": "identical"}, "up_to_date"), ({"status": "behind"}, "up_to_date"),
+                             ({"status": "diverged"}, "own_changes"), (404, "own_changes")):
+            updates.check_for_update.clear()
+            replies["compare"] = reply
+            assert updates.check_for_update(first)["state"] == state, reply
+
+        (updates.SCRIPTS_DIR / "README.md").write_text("my edit", encoding="utf-8")
+        problem, _ = updates.apply_update(latest)
+        assert "edits of its own" in problem and updates.local_version()["sha"] == first
+        git("checkout", "--", "README.md")
+
+        assert updates.apply_update(latest) == (None, True)
+        assert updates.local_version()["sha"] == latest
+        assert (updates.SCRIPTS_DIR / "README.md").read_text(encoding="utf-8") == "new readme"
+    """)
+
+
 def test_activities_places(app_copy):
     # What the Activities page makes of OpenStreetMap's answer: named places of a
     # known category only, nearest first, outlines placed at their centre,

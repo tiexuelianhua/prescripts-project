@@ -3,3 +3,5 @@ __pycache__/
 *.pyc
 ThePrescriptsLauncher.exe
 .desktop_app.pid
+.update_needs_pip
+.update_pip.log
