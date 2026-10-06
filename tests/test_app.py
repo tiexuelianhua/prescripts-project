@@ -694,6 +694,26 @@ def test_spotify_keys_pasted_into_the_page(app_copy):
         assert not at.exception, at.exception
         assert spotify.load_settings() == {"client_id": "my-id", "client_secret": "my-secret"}
         assert any(e.label == "Use different keys" for e in at.expander)
+
+        # From the desktop window, Spotify sends the user back to a tab in
+        # their own browser: that tab saves the connection and says the tab
+        # can be closed (the window notices the file on its own, see
+        # wait_for_connection). Nothing reaches the real Spotify.
+        def exchange(code):
+            assert code == "abc", code
+            spotify.save_settings({**spotify.load_settings(), "access_token": "a",
+                                   "refresh_token": "r", "token_expires_at": 9e12})
+        spotify.exchange_code_for_tokens = exchange
+        spotify._api_request = lambda *args, **kwargs: None
+        browser = AppTest.from_file(str(SCRIPTS_DIR / "app.py"), default_timeout=120)
+        browser.run()
+        browser.switch_page("prescripts/pages/spotify.py")
+        browser.query_params["code"] = "abc"
+        browser.run()
+        assert not browser.exception, browser.exception
+        assert spotify.is_connected()
+        assert any("close this browser tab" in s.value for s in browser.success), [s.value for s in browser.success]
+        assert not any(b.label == "Connect to Spotify" for b in browser.get("link_button"))
     """)
     assert result.returncode == 0, result.stdout + result.stderr
 

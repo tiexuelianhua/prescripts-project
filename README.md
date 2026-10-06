@@ -148,7 +148,7 @@ Every page except Spotify works straight away. Spotify needs your own (free) Spo
    Tick **Web API**, agree to the terms, and save.
 4. Open your Spotify app's settings on the dashboard and copy its **Client ID** and **Client secret** (click "View client secret").
 5. In The Prescripts, open the **Spotify** page, paste the two keys in, and click **Save keys**. The page checks them with Spotify first, so a mistyped key shows up straight away.
-6. Click **Connect to Spotify** and approve it on Spotify's page.
+6. Click **Connect to Spotify**. Spotify opens in your web browser: approve it there, and the app window connects by itself a moment later. You can close the browser tab.
 
 The keys are saved in `Spotify\settings.json` in your `Prescripts` folder. To use a different Spotify app later, open **Use different keys** under the Connect button.
 

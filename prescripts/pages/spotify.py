@@ -124,15 +124,35 @@ if auth_code and not is_connected():
     except (urllib.error.URLError, TimeoutError) as error:
         st.error(f"Couldn't reach Spotify to complete the connection: {error}")
         st.stop()
+    st.session_state["_spotify_just_connected"] = True
     st.rerun()
+
+
+# "Connect to Spotify" opens a new tab -- from the desktop window, a tab in
+# the user's own browser -- and Spotify sends them back *there*, so the
+# connection is saved by that tab's session while the page they started on
+# still shows Connect. This checks the saved file every couple of seconds
+# and swaps that page over once it's in.
+@st.fragment(run_every=2)
+def wait_for_connection() -> None:
+    if is_connected():
+        st.rerun(scope="app")
+
 
 with st.container(key="main_body"):
     if not is_connected():
         st.write("Connect your Spotify account to see what's playing and control it from here.")
         st.link_button("Connect to Spotify", authorize_url())
+        st.caption("Spotify opens in your web browser. Once you approve there, this page connects by itself.")
         with st.expander("Use different keys"):
             render_keys_form()
+        wait_for_connection()
     else:
+        if st.session_state.pop("_spotify_just_connected", False):
+            st.success(
+                "Connected to Spotify. If you started from The Prescripts window, "
+                "you can close this browser tab and go back to it."
+            )
         with st.sidebar:
             st.header("Settings")
             read_only = st.toggle(
