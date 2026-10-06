@@ -244,6 +244,7 @@ _CREDITS_HTML = f"""
     {_LOGO_CREDIT}
     The arrival glitch was inspired by Limbus Company's
     <a href="https://youtu.be/Y2-VkdfA2os" target="_blank">[000] trailer</a>.
+    The update window's rare easter eggs quote Mili's "world.execute(me);" and "sustain++".
     Colours and button style:
     <a href="https://prescript.neocities.org/" target="_blank">prescript.neocities.org</a>.
     Font: <a href="https://github.com/quiple/galmuri" target="_blank">Galmuri</a> by quiple (OFL-1.1).

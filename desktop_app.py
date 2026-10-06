@@ -7,7 +7,9 @@
 #
 # ThePrescriptsLauncher.exe launches this (via pythonw.exe, hidden) in place
 # of running Streamlit directly.
+import base64
 import ctypes
+import json
 import os
 import socket
 import subprocess
@@ -29,12 +31,10 @@ PID_FILE = SCRIPTS_DIR / ".desktop_app.pid"
 # kept beside it in case the install goes wrong.
 PIP_PENDING = SCRIPTS_DIR / ".update_needs_pip"
 PIP_LOG = SCRIPTS_DIR / ".update_pip.log"
-_UPDATING_HTML = """
-<body style="background:#000;color:#f0f8ff;font-family:sans-serif;display:flex;
-             align-items:center;justify-content:center;height:90vh;margin:0">
-  <p>Installing the update. The Prescripts opens again in a minute or two...</p>
-</body>
-"""
+# The window shown meanwhile, and what of pip's output it shows (cut to fit).
+UPDATE_WINDOW = SCRIPTS_DIR / "static" / "update_window.html"
+_PIP_STEPS = ("Collecting", "Downloading", "Requirement already satisfied", "Installing", "Successfully")
+_STATUS_WIDTH = 42
 # Same check as PRIVATE_LOOK in prescripts/common.py (not imported from
 # there, since that pulls in all of Streamlit): the original author's own
 # logo, kept outside the repo, picks their private look over the public one.
@@ -199,25 +199,65 @@ def _wait_for_server(timeout_s: float = 30) -> None:
             time.sleep(0.2)
 
 
-def _install_update_packages(api: _Api) -> None:
+def _update_window_html() -> str:
+    font = base64.b64encode((SCRIPTS_DIR / "static" / "Galmuri14.woff2").read_bytes()).decode()
+    accent = _PRIVATE_DARK_PALETTE["primaryColor"] if PRIVATE_LOOK else "#7578b2"
+    return UPDATE_WINDOW.read_text(encoding="utf-8").replace("__FONT__", font).replace("__ACCENT__", accent)
+
+
+def _pip_status(line: str) -> str | None:
+    # One of pip's progress lines, shortened to fit the window, or None for
+    # the rest (warnings, notices, blank lines).
+    line = line.strip()
+    if not line.startswith(_PIP_STEPS):
+        return None
+    return line if len(line) <= _STATUS_WIDTH else line[: _STATUS_WIDTH - 1] + "…"
+
+
+def _install_update_packages(api: _Api, pip_command: list[str] | None = None) -> None:
     # An update changed requirements.txt: pip runs now, with nothing of the
-    # app's running to lock files, behind a small window saying so, then
-    # the app restarts as normal. The flag goes either way, so a failed
-    # install can't keep the app from ever opening; pip's output is in
-    # .update_pip.log, and install step 4 in the README redoes it by hand.
+    # app's running to lock files, behind a small window following its
+    # progress, then the app restarts as normal. The flag goes either way,
+    # so a failed install can't keep the app from ever opening; pip's output
+    # is in .update_pip.log, and install step 4 in the README redoes it by
+    # hand. `pip_command` stands in for pip when trying the window out.
+    # 536 x 240 leaves a 520 x 200 page under the title bar, the size the
+    # window's design was tried at.
     window = webview.create_window(
-        "The Prescripts", html=_UPDATING_HTML, width=520, height=200, resizable=False
+        "The Prescripts", html=_update_window_html(), width=536, height=240, resizable=False
     )
     api._window = window
+    # python.exe rather than pythonw.exe (what the shortcut runs), so pip
+    # has an output to stream; CREATE_NO_WINDOW keeps its console hidden.
+    python = Path(sys.executable).with_name("python.exe")
+    command = pip_command or [str(python if python.exists() else sys.executable),
+                              "-m", "pip", "install", "-r", "requirements.txt"]
 
     def install(window: "webview.Window") -> None:
-        result = subprocess.run(
-            [sys.executable, "-m", "pip", "install", "-r", "requirements.txt"],
-            cwd=SCRIPTS_DIR, capture_output=True, text=True,
+        window.events.loaded.wait()
+        process = subprocess.Popen(
+            command, cwd=SCRIPTS_DIR, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            text=True, encoding="utf-8", errors="replace",
+            env={**os.environ, "PYTHONIOENCODING": "utf-8"},
             creationflags=subprocess.CREATE_NO_WINDOW,
         )
-        PIP_LOG.write_text(result.stdout + result.stderr, encoding="utf-8")
+        output = []
+        for line in process.stdout:
+            output.append(line)
+            status = _pip_status(line)
+            if status:
+                window.evaluate_js(f"setStatus({json.dumps(status)})")
+        process.wait()
+        PIP_LOG.write_text("".join(output), encoding="utf-8")
         PIP_PENDING.unlink(missing_ok=True)
+        if process.returncode != 0:
+            window.evaluate_js(f"setStatus({json.dumps('pip had a problem, see .update_pip.log')})")
+        # Lets the lines (and an easter egg, if one's playing) finish before
+        # the window goes, but never holds the restart up for long.
+        deadline = time.time() + 20
+        while time.time() < deadline and not window.evaluate_js("window.animationDone"):
+            time.sleep(0.3)
+        time.sleep(1.5)
         api.restart()
 
     webview.start(install, window, icon=str(ICON_PATH) if ICON_PATH.exists() else None)

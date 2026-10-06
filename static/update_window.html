@@ -1,0 +1,149 @@
+<!doctype html>
+<!--
+  The small window desktop_app.py shows while an update installs its
+  packages (#42). Filled in there: __FONT__ (Galmuri14, inlined, since this
+  page has no server to load it from) and __ACCENT__ (the look's colour).
+  desktop_app.py feeds pip's progress in with setStatus() and waits for
+  window.animationDone before restarting.
+
+  The command types out, and two lines print under it like a terminal's
+  output; the second line follows pip as it works. Now and then (EGG_CHANCE)
+  there's an easter egg from one of Mili's songs, credited in the corner
+  once it's shown, the same way Home credits its quotes.
+-->
+<html><head><meta charset="utf-8">
+<style>
+@font-face { font-family: Galmuri14; src: url(data:font/woff2;base64,__FONT__) format("woff2"); }
+:root { --accent: __ACCENT__; --text: #f0f8ff; }
+html, body { margin: 0; height: 100%; background: #000; color: var(--text); overflow: hidden;
+             font: 16px Galmuri14, sans-serif; user-select: none; cursor: default; }
+/* Anchored from the top, so a line coming or going never moves the rest. */
+#lines { padding: 28px 28px 0; }
+.line { white-space: pre; min-height: 1.5em; }
+.kw { color: var(--accent); }
+.cursor { display: inline-block; width: .55em; border-bottom: 2px solid var(--accent);
+          animation: blink 1s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+/* Written as a comment too, in the same grey. */
+.credit { position: fixed; right: 10px; bottom: 8px; font-size: 12px; color: #6b7080;
+          opacity: 0; transition: opacity .6s; }
+.fading { transition: opacity .6s; opacity: 0; }
+/* The comment is greyed like an editor's comments; the lyrics, far fainter. */
+.comment { color: #6b7080; }
+.lyric { color: #24272f; }
+</style></head>
+<body>
+<div id="lines"></div>
+<div class="credit" id="credit"></div>
+<script>
+const EGG_CHANCE = 0.01;
+const TYPE_MS = 45;          // per letter
+const LINE_PAUSE_MS = 350;
+const LYRIC_HOLD_MS = 2200;
+// Each easter egg: the song (for the credit) and its line.
+const EGGS = {
+  retype: { song: "world.execute(me);", lyric: "Fill in my data, parameters, initialization" },
+  sustain: { song: "sustain++", lyric: "Can't you understand me?\nYou turn my screen #0000ff" },
+};
+
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+const lines = document.getElementById("lines");
+const cursor = document.createElement("span");
+cursor.className = "cursor";
+cursor.innerHTML = "&nbsp;";
+
+// pip's latest line, shown on line 2 once that line has typed itself out.
+let status = null;
+let statusSpan = null;
+window.setStatus = text => {
+  status = text;
+  if (statusSpan) statusSpan.textContent = "  " + text;
+};
+window.animationDone = false;
+
+function newLine(after) {
+  const div = document.createElement("div");
+  div.className = "line";
+  if (after) after.after(div); else lines.appendChild(div);
+  return div;
+}
+async function typeInto(div, parts) {
+  const spans = [];
+  for (const [cls, text] of parts) {
+    const span = document.createElement("span");
+    span.className = cls;
+    div.appendChild(span);
+    div.appendChild(cursor);
+    for (const ch of text) {
+      span.textContent += ch;
+      await sleep(TYPE_MS);
+    }
+    spans.push(span);
+  }
+  return spans;
+}
+async function erase(span) {
+  span.parentNode.appendChild(cursor);
+  while (span.textContent) {
+    span.textContent = span.textContent.slice(0, -1);
+    await sleep(TYPE_MS / 2);
+  }
+  span.remove();
+}
+// The lyric (one or more lines) types out under `after`, barely lighter
+// than the background so it takes a second look, stays a moment, and fades.
+async function lyric(after, text) {
+  const divs = [];
+  for (const part of text.split("\n")) {
+    const div = newLine(divs.at(-1) || after);
+    div.classList.add("lyric");
+    divs.push(div);
+    await typeInto(div, [["", "  " + part]]);
+  }
+  await sleep(LYRIC_HOLD_MS);
+  after.appendChild(cursor);  // so it isn't faded out with the lyric
+  for (const div of divs) div.classList.add("fading");
+  await sleep(650);
+  for (const div of divs) div.remove();
+}
+function credit(song) {
+  const note = document.getElementById("credit");
+  note.textContent = `// A nod to "${song}" by Mili.`;
+  note.style.opacity = 1;
+}
+
+async function play() {
+  const egg = Math.random() < EGG_CHANCE ? (Math.random() < 0.5 ? "retype" : "sustain") : null;
+  await typeInto(newLine(), [["kw", "prescripts"], ["", ".execute("], ["kw", "update"], ["", ");"]]);
+  await sleep(LINE_PAUSE_MS);
+
+  const second = newLine();
+  if (egg === "retype") {
+    const [song] = await typeInto(second, [["", "  " + EGGS.retype.song]]);
+    credit(EGGS.retype.song);
+    await sleep(300);
+    await lyric(second, EGGS.retype.lyric);
+    await sleep(300);
+    await erase(song);
+    await sleep(250);
+  }
+  [statusSpan] = await typeInto(second, [["", "  installing the new version"]]);
+  if (status) statusSpan.textContent = "  " + status;
+  await sleep(LINE_PAUSE_MS);
+
+  const third = newLine();
+  await typeInto(third, [["", "  The Prescripts opens again in a minute or two"]]);
+  if (egg === "sustain") {
+    await sleep(LINE_PAUSE_MS);
+    const fourth = newLine();
+    // A comment line: level with the command, like code would be.
+    await typeInto(fourth, [["comment", "// " + EGGS.sustain.song]]);
+    credit(EGGS.sustain.song);
+    await sleep(300);
+    await lyric(fourth, EGGS.sustain.lyric);
+  }
+  window.animationDone = true;
+}
+play();
+</script>
+</body></html>

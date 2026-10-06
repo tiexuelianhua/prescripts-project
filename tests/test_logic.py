@@ -4,6 +4,10 @@
 # Spotify's gaps and the guards on its controls, and which places the
 # Activities page shows. Same setup
 # as test_app.py -- each test runs in a temp copy of the code (conftest.py).
+import sys
+
+import pytest
+
 from conftest import run_in
 
 
@@ -760,6 +764,27 @@ def test_updates(app_copy):
         assert updates.apply_update(latest) == (None, True)
         assert updates.local_version()["sha"] == latest
         assert (updates.SCRIPTS_DIR / "README.md").read_text(encoding="utf-8") == "new readme"
+    """)
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="the desktop window is Windows-only")
+def test_update_window(app_copy):
+    # The window shown while an update installs packages: the page is filled
+    # in (the font inlined, the look's colour), and line 2 only shows pip's
+    # progress lines, cut to fit.
+    _check(app_copy, """
+        import desktop_app
+
+        page = desktop_app._update_window_html()
+        assert "__FONT__" not in page and "__ACCENT__" not in page
+        assert "--accent: #7578b2" in page  # the public look
+        assert "world.execute(me);" in page and "sustain++" in page and "by Mili" in page
+        status = desktop_app._pip_status
+        assert status("Collecting pandas==3.0.6\\n") == "Collecting pandas==3.0.6"
+        long = status("Requirement already satisfied: pandas==3.0.6 in c:\\\\somewhere\\\\long")
+        assert len(long) == desktop_app._STATUS_WIDTH and long.endswith("…")
+        assert status("[notice] A new release of pip is available") is None
+        assert status("") is None
     """)
 
 
