@@ -8,8 +8,8 @@
 
   The command types out, and two lines print under it like a terminal's
   output; the second line follows pip as it works. Now and then (EGG_CHANCE)
-  there's an easter egg from one of Mili's songs, credited in the corner
-  once it's shown, the same way Home credits its quotes.
+  there's an easter egg from one of Mili's songs, credited in a comment line
+  once it's over, the same way Home credits its quotes.
 -->
 <html><head><meta charset="utf-8">
 <style>
@@ -24,18 +24,14 @@ html, body { margin: 0; height: 100%; background: #000; color: var(--text); over
 .cursor { display: inline-block; width: .55em; border-bottom: 2px solid var(--accent);
           animation: blink 1s steps(1) infinite; }
 @keyframes blink { 50% { opacity: 0; } }
-/* Written as a comment too, in the same grey, size and indent, on its own
-   row at the bottom (below the longest easter egg's last line). */
-.credit { position: fixed; left: 28px; bottom: 12px; color: #6b7080; white-space: pre;
-          opacity: 0; transition: opacity .6s; }
 .fading { transition: opacity .6s; opacity: 0; }
-/* The comment is greyed like an editor's comments; the lyrics, far fainter. */
+/* Comments (the sustain++ one and the credit) are greyed like an editor's
+   comments; the lyrics, far fainter. */
 .comment { color: #6b7080; }
 .lyric { color: #24272f; }
 </style></head>
 <body>
 <div id="lines"></div>
-<div class="credit" id="credit"></div>
 <script>
 const EGG_CHANCE = 0.01;
 const TYPE_MS = 45;          // per letter
@@ -107,10 +103,11 @@ async function lyric(after, text) {
   await sleep(650);
   for (const div of divs) div.remove();
 }
-function credit(song) {
-  const note = document.getElementById("credit");
-  note.textContent = `// A nod to "${song}" by Mili.`;
-  note.style.opacity = 1;
+// Once the easter egg is over, its credit types as a comment on the next
+// free line: under // sustain++, or where that comment would have gone.
+async function credit(song) {
+  await sleep(LINE_PAUSE_MS);
+  await typeInto(newLine(), [["comment", `// A nod to "${song}" by Mili.`]]);
 }
 
 async function play() {
@@ -121,7 +118,6 @@ async function play() {
   const second = newLine();
   if (egg === "retype") {
     const [song] = await typeInto(second, [["", "  " + EGGS.retype.song]]);
-    credit(EGGS.retype.song);
     await sleep(300);
     await lyric(second, EGGS.retype.lyric);
     await sleep(300);
@@ -139,10 +135,10 @@ async function play() {
     const fourth = newLine();
     // A comment line: level with the command, like code would be.
     await typeInto(fourth, [["comment", "// " + EGGS.sustain.song]]);
-    credit(EGGS.sustain.song);
     await sleep(300);
     await lyric(fourth, EGGS.sustain.lyric);
   }
+  if (egg) await credit(EGGS[egg].song);
   window.animationDone = true;
 }
 play();

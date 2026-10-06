@@ -221,11 +221,10 @@ def _install_update_packages(api: _Api, pip_command: list[str] | None = None) ->
     # so a failed install can't keep the app from ever opening; pip's output
     # is in .update_pip.log, and install step 4 in the README redoes it by
     # hand. `pip_command` stands in for pip when trying the window out.
-    # 536 x 260 leaves a 520 x 220 page under the title bar, the size the
-    # window's design was tried at: room for the longest easter egg plus
-    # the credit's own row at the bottom.
+    # 536 x 240 leaves a 520 x 200 page under the title bar, the size the
+    # window's design was tried at: room for the longest easter egg.
     window = webview.create_window(
-        "The Prescripts", html=_update_window_html(), width=536, height=260, resizable=False
+        "The Prescripts", html=_update_window_html(), width=536, height=240, resizable=False
     )
     api._window = window
     # python.exe rather than pythonw.exe (what the shortcut runs), so pip
