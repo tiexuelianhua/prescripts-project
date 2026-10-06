@@ -68,16 +68,17 @@ def load_settings() -> dict:
 
 
 def setup_problem() -> str | None:
-    # What's stopping the keys file from working, in words for someone
-    # following the README by hand, or None once both keys are in.
+    # What's wrong with a keys file made by hand (the way before keys could
+    # be pasted into the page), or None: no file at all isn't a problem, the
+    # page just asks for the keys. Shown above that form, since saving there
+    # writes a fresh settings.json anyway.
     if not SETTINGS_PATH.exists():
         if SETTINGS_PATH.with_name("settings.json.txt").exists():
             return (
                 f"Found `settings.json.txt` in `{SPOTIFY_DIR}`. Windows added `.txt` to the name: "
-                "rename it to `settings.json` (in File Explorer, tick View → Show → File name "
-                "extensions to see the full name)."
+                "rename it to `settings.json`, or paste the keys below instead."
             )
-        return f"No keys file yet. Create `settings.json` in `{SPOTIFY_DIR}` (see the README's Spotify steps)."
+        return None
     try:
         settings = json.loads(SETTINGS_PATH.read_bytes())
     except ValueError as error:
@@ -132,12 +133,43 @@ def authorize_url() -> str:
     return f"{AUTHORIZE_URL}?{urllib.parse.urlencode(params)}"
 
 
-def _token_request(body: dict) -> dict:
+def save_keys(client_id: str, client_secret: str) -> str | None:
+    # Keys pasted into the Spotify page. Checked with Spotify first (an
+    # app-only token needs nothing but the two keys), so a wrong secret shows
+    # up here rather than as an error after the Connect round trip. Returns
+    # what's wrong, or None once saved. New keys mean a different app, so any
+    # connection made with the old ones is dropped.
+    client_id, client_secret = client_id.strip(), client_secret.strip()
+    if not client_id or not client_secret:
+        return "Paste both the Client ID and the Client secret."
+    try:
+        _token_request({"grant_type": "client_credentials"}, (client_id, client_secret))
+    except urllib.error.HTTPError as error:
+        if error.code in (400, 401):
+            return (
+                "Spotify didn't accept these keys. Copy them again from your app's "
+                "settings on the dashboard (the secret is under \"View client secret\")."
+            )
+        return f"Spotify couldn't check the keys just now (HTTP {error.code}). Try again in a minute."
+    except (urllib.error.URLError, TimeoutError):
+        return "Couldn't reach Spotify to check the keys. Check the internet connection and try again."
+    settings = load_settings()
+    for key in ("access_token", "refresh_token", "token_expires_at"):
+        settings.pop(key, None)
+    settings["client_id"], settings["client_secret"] = client_id, client_secret
+    save_settings(settings)
+    return None
+
+
+def _token_request(body: dict, keys: tuple[str, str] | None = None) -> dict:
     # Spotify's token endpoint authenticates the app via HTTP Basic auth
     # (base64 "client_id:client_secret"), not as body parameters -- sending
     # them in the body instead (an earlier bug here) gets silently rejected.
-    settings = load_settings()
-    credentials = f"{settings['client_id']}:{settings['client_secret']}"
+    # `keys` checks a pair not saved yet; otherwise the saved ones are used.
+    if keys is None:
+        settings = load_settings()
+        keys = (settings["client_id"], settings["client_secret"])
+    credentials = f"{keys[0]}:{keys[1]}"
     basic_auth = base64.b64encode(credentials.encode()).decode()
     request = urllib.request.Request(
         TOKEN_URL, data=urllib.parse.urlencode(body).encode(), method="POST"

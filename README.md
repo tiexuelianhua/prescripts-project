@@ -147,15 +147,10 @@ Every page except Spotify works straight away. Spotify needs your own (free) Spo
    ```
    Tick **Web API**, agree to the terms, and save.
 4. Open your Spotify app's settings on the dashboard and copy its **Client ID** and **Client secret** (click "View client secret").
-5. In your `Prescripts` folder (next to `prescripts-project`, not inside it), create a folder called `Spotify`. In it, create a file called `settings.json` with this in it, using your two values:
-   ```json
-   {
-     "client_id": "paste your Client ID here",
-     "client_secret": "paste your Client secret here"
-   }
-   ```
-   In Notepad, set **Save as type** to **All files** before saving, or Windows names it `settings.json.txt`.
-6. Open the Spotify page and click **Connect to Spotify**. If the keys file has a problem, the page says what it is.
+5. In The Prescripts, open the **Spotify** page, paste the two keys in, and click **Save keys**. The page checks them with Spotify first, so a mistyped key shows up straight away.
+6. Click **Connect to Spotify** and approve it on Spotify's page.
+
+The keys are saved in `Spotify\settings.json` in your `Prescripts` folder. To use a different Spotify app later, open **Use different keys** under the Connect button.
 
 Playback controls act on whichever device you're already playing Spotify on (phone, desktop app, …). Spotify only allows remote control with a **Premium** account.
 
@@ -163,7 +158,7 @@ Playback controls act on whichever device you're already playing Spotify on (pho
 
 Everything is saved as ordinary files in folders beside the code, never inside it. You can update the code, or delete and re-clone it, without losing anything.
 
-Each folder or file appears the first time you save something on that page or change a setting, so a fresh install has only `prescripts-project` (plus `Spotify` once you make it). Once you've used everything, it looks like this:
+Each folder or file appears the first time you save something on that page or change a setting, so a fresh install has only `prescripts-project`. Once you've used everything, it looks like this:
 
 ```
 Prescripts\
@@ -186,7 +181,7 @@ Back up the `Prescripts` folder to back up everything.
 - The **🎛️** button next to it, or **Ctrl+Shift+O** from any page, goes to Overview.
 - The **− 100% +** buttons at the top of every page except Home zoom the page. The zoom level is remembered.
 - Times and dates are in **Japan time (JST)** whatever your computer's clock says, and the Weather page covers Japan only.
-- To update to the newest version: `git pull` in the `prescripts-project` folder, then run step 4 again.
+- To update to the newest version: close the app, run `git pull` in the `prescripts-project` folder, then run step 4 again. Installed from the ZIP instead? Download it again and copy what's inside `prescripts-project-main` over your `prescripts-project` folder, replacing the files, then run step 4. Your data isn't in that folder, so nothing is lost either way.
 
 ## Checking it works
 
@@ -197,7 +192,7 @@ The project has automated tests. They load every page and check the rules undern
 .venv\Scripts\python -m pytest
 ```
 
-It takes about four minutes and should finish with `55 passed`. Close the app first if it's running: installing packages while it's open can fail, because Windows locks files the app is using.
+It takes about four minutes and should finish with `56 passed`. Close the app first if it's running: installing packages while it's open can fail, because Windows locks files the app is using.
 
 To check the code for mistakes like unused or undefined names, and for import order, run `.venv\Scripts\ruff check .` (add `--fix` to sort the imports for you). The settings are in `pyproject.toml`.
 
@@ -239,7 +234,7 @@ On Mac and Linux, the app runs in your web browser. The app window (`desktop_app
 
    As on Windows, press **Enter** if Streamlit asks for an email, and **Ctrl+C** to stop it.
 
-Everywhere else in this README, use `.venv/bin/python` in place of `.venv\Scripts\python`. The tests usually finish with `52 passed, 3 skipped`: the three skipped tests check PowerShell scripts, and they only run if PowerShell is installed.
+Everywhere else in this README, use `.venv/bin/python` in place of `.venv\Scripts\python`. The tests usually finish with `53 passed, 3 skipped`: the three skipped tests check PowerShell scripts, and they only run if PowerShell is installed.
 
 ## How it's built
 

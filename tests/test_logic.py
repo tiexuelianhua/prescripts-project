@@ -678,7 +678,7 @@ def test_spotify_keys_file_problems(app_copy):
         import json
         from prescripts.data.spotify import SETTINGS_PATH, SPOTIFY_DIR, is_configured, setup_problem
 
-        assert "No keys file yet" in setup_problem() and not is_configured()
+        assert setup_problem() is None and not is_configured()  # no file: the page just asks for keys
         SPOTIFY_DIR.mkdir()
         txt = SETTINGS_PATH.with_name("settings.json.txt")
         txt.write_text("{}", encoding="utf-8")

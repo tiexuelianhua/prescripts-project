@@ -13,6 +13,7 @@ from prescripts.common import inject_body_fade_in, render_page_title, show_logo,
 from prescripts.data.lyrics import current_line_index, lyrics_status
 from prescripts.data.play_history import merge_with_api
 from prescripts.data.spotify import (
+    REDIRECT_URI,
     add_to_queue,
     authorize_url,
     current_playback,
@@ -20,6 +21,7 @@ from prescripts.data.spotify import (
     describe_item,
     disconnect,
     exchange_code_for_tokens,
+    is_configured,
     is_connected,
     is_read_only,
     is_saved,
@@ -28,6 +30,7 @@ from prescripts.data.spotify import (
     playlists,
     recently_played,
     save_item,
+    save_keys,
     saved_flags,
     set_read_only,
     set_shuffle,
@@ -64,9 +67,42 @@ with header_title:
 if is_first_load:
     st.session_state["_spotify_title_played"] = True
 
-problem = setup_problem()
-if problem:
-    st.error(problem)
+
+def render_keys_form() -> None:
+    # Where the two keys from the user's own Spotify developer app go, so
+    # nobody has to make Spotify/settings.json by hand.
+    with st.form("spotify_keys", border=False):
+        client_id = st.text_input("Client ID")
+        client_secret = st.text_input("Client secret", type="password")
+        if st.form_submit_button("Save keys"):
+            with st.spinner("Checking the keys with Spotify..."):
+                problem = save_keys(client_id, client_secret)
+            if problem:
+                st.error(problem)
+            else:
+                st.rerun()
+
+
+if not is_configured():
+    problem = setup_problem()
+    if problem:
+        st.error(problem)
+    st.write(
+        "Spotify needs keys from your own free developer app (Spotify doesn't let apps like this share one). "
+        "You only do this once."
+    )
+    st.markdown(
+        "1. Go to the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard), sign in, "
+        "and click **Create app**.\n"
+        "2. Give it any name and description. Under **Redirect URIs**, add exactly this, "
+        "then tick **Web API**, agree to the terms, and save:"
+    )
+    st.code(REDIRECT_URI, language=None)
+    st.markdown(
+        "3. Open your app's settings on the dashboard, and paste its **Client ID** and "
+        "**Client secret** (click \"View client secret\") here:"
+    )
+    render_keys_form()
     st.stop()
 
 # Spotify redirects back here with ?code=... after the user approves on its
@@ -94,6 +130,8 @@ with st.container(key="main_body"):
     if not is_connected():
         st.write("Connect your Spotify account to see what's playing and control it from here.")
         st.link_button("Connect to Spotify", authorize_url())
+        with st.expander("Use different keys"):
+            render_keys_form()
     else:
         with st.sidebar:
             st.header("Settings")

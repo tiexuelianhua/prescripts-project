@@ -654,6 +654,50 @@ def test_overview_translates_last(app_copy):
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+def test_spotify_keys_pasted_into_the_page(app_copy):
+    # A friend's first install couldn't connect Spotify after making the keys
+    # file by hand (2026-10-06), so the page takes the keys itself. Spotify
+    # checks them before they're saved: a rejected pair stays unsaved, an
+    # accepted one (pasted with stray spaces) brings up Connect. A stand-in
+    # replaces Spotify's token check.
+    switch_every_page_on(app_copy)
+    result = run_in(app_copy, """
+        import io
+        import urllib.error
+        from streamlit.testing.v1 import AppTest
+        import prescripts.data.spotify as spotify
+        from prescripts.common import SCRIPTS_DIR
+
+        def token_check(body, keys=None):
+            if keys != ("my-id", "my-secret"):
+                raise urllib.error.HTTPError(spotify.TOKEN_URL, 400, "Bad Request", {}, io.BytesIO(b""))
+            return {"access_token": "app-only"}
+        spotify._token_request = token_check
+
+        at = AppTest.from_file(str(SCRIPTS_DIR / "app.py"), default_timeout=120)
+        at.run()
+        at.switch_page("prescripts/pages/spotify.py")
+        at.run()
+        assert not at.exception, at.exception
+        assert any(spotify.REDIRECT_URI in c.value for c in at.code)
+
+        at.text_input[0].input("my-id")
+        at.text_input[1].input("wrong")
+        next(b for b in at.button if b.label == "Save keys").click()
+        at.run()
+        assert any("didn't accept" in e.value for e in at.error), [e.value for e in at.error]
+        assert not spotify.SETTINGS_PATH.exists()
+
+        at.text_input[1].input(" my-secret ")
+        next(b for b in at.button if b.label == "Save keys").click()
+        at.run()
+        assert not at.exception, at.exception
+        assert spotify.load_settings() == {"client_id": "my-id", "client_secret": "my-secret"}
+        assert any(e.label == "Use different keys" for e in at.expander)
+    """)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 def test_home_credits_only_the_quote_showing(app_copy):
     # The corner note names the one quote on screen (built-in or added), and
     # nothing when the prompt isn't a quote. Added quotes live outside the
