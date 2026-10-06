@@ -364,7 +364,8 @@ with st.container(key="main_body"):
         st.session_state["add_entry_excluded"] = False
         st.session_state["add_entry_excluded_reason"] = None
         st.session_state["add_entry_tax"] = 0
-        st.session_state["add_entry_bag"] = False
+        st.session_state["_bag_ticked"] = False
+        st.session_state["_bag_set_by_hand"] = False
         st.session_state["_bag_ticked_for_store"] = None
         st.session_state["_meal_basket"] = []
         st.session_state["_reset_add_item"] = True
@@ -536,14 +537,19 @@ with st.container(key="main_body"):
 
     # A bag and the receipt's tax line each go in as a row of their own. The
     # bag box ticks itself whenever the store changes to a konbini (bags are
-    # usual there) and can still be unticked.
+    # usual there) -- until it's ticked or unticked by hand, which then
+    # holds until the meal's logged, whatever the store or category.
     # Its price starts at what a bag last cost at this store, and can be
     # changed (one store's chain doesn't always charge the same) -- the
     # price logged is then what's offered there next time.
     if store != st.session_state.get("_bag_ticked_for_store"):
-        st.session_state["add_entry_bag"] = is_konbini(store)
+        if not st.session_state.get("_bag_set_by_hand"):
+            st.session_state["_bag_ticked"] = is_konbini(store)
         st.session_state["add_entry_bag_yen"] = bag_price(store)
         st.session_state["_bag_ticked_for_store"] = store
+    # Kept apart from the box's own key, which Streamlit drops while
+    # Transport hides the box.
+    st.session_state["add_entry_bag"] = st.session_state.get("_bag_ticked", False)
     # Tax starts at 0, since most prices (konbini ones especially) already
     # include it. "Use 8%" fills in food's reduced rate on the items so far,
     # rounded down, for a receipt that adds tax on top; it can still be
@@ -575,6 +581,9 @@ with st.container(key="main_body"):
         with_bag = bag_column.checkbox(
             "+ Bag" if english else "+ 袋 bag", key="add_entry_bag",
             help="Logs the bag as its own row. Its price starts at what one last cost at this store.",
+            on_change=lambda: st.session_state.update(
+                _bag_ticked=st.session_state["add_entry_bag"], _bag_set_by_hand=True,
+            ),
         )
         if with_bag:
             # Gone from session state while the box was unticked.

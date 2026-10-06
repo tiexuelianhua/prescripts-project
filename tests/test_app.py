@@ -145,6 +145,48 @@ def test_konbini_bag_and_tax_get_rows_of_their_own(app_copy):
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+def test_bag_choice_holds_until_logged(app_copy):
+    # Once the bag box is ticked or unticked by hand, changing store or
+    # category (Transport hides the box) doesn't undo it.
+    result = run_in(app_copy, """
+        from datetime import date
+        from streamlit.testing.v1 import AppTest
+        from prescripts.data.meal_receipts import append_entry, day_folder_for
+        from prescripts.common import SCRIPTS_DIR
+
+        folder = day_folder_for(date(2026, 8, 1))
+        folder.mkdir(parents=True)
+        append_entry(folder / "receipts.csv", "2026-08-01 12:00:00", "Lawson", "Onigiri", 150)
+        append_entry(folder / "receipts.csv", "2026-08-01 18:00:00", "Olympic", "Bread", 200)
+
+        at = AppTest.from_file(str(SCRIPTS_DIR / "prescripts/pages/meal_receipts.py"), default_timeout=60)
+        at.run()
+        at.selectbox(key="add_entry_item").set_value("Onigiri")
+        at.run()
+        assert at.checkbox(key="add_entry_bag").value is True  # Lawson is a konbini
+        at.checkbox(key="add_entry_bag").uncheck()  # brought my own
+        at.run()
+        next(button for button in at.button if button.label == "+ Add item").click()
+        at.run()
+        at.selectbox(key="add_entry_category").set_value("Transport")
+        at.run()
+        at.selectbox(key="add_entry_category").set_value("Food")
+        at.run()
+        at.selectbox(key="add_entry_store").set_value("Olympic")
+        at.run()
+        at.selectbox(key="add_entry_store").set_value("Lawson")  # a konbini again
+        at.run()
+        assert not at.exception, at.exception
+        assert at.checkbox(key="add_entry_bag").value is False
+        at.checkbox(key="add_entry_bag").check()
+        at.run()
+        at.selectbox(key="add_entry_store").set_value("Olympic")
+        at.run()
+        assert at.checkbox(key="add_entry_bag").value is True
+    """)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 def test_setting_todays_budget(app_copy):
     # "Set today's budget" makes today's whole budget that amount, carried
     # over included, and says so; "Start fresh" goes back to the plain budget.
