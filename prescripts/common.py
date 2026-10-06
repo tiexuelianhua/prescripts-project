@@ -499,8 +499,9 @@ def keep_typed_selectbox_text(*keys: str) -> None:
     # first, whenever they leave one of these boxes (by clicking elsewhere, or
     # Tab) while its list is still open with something typed -- the same
     # thing Enter itself would have done. Clicks on the list's own options,
-    # or on the same box, are left alone. Losing focus any other way, e.g.
-    # switching to another window, does the same.
+    # or on the same box, are left alone. Losing focus any other way does the
+    # same, except switching to another window: then the text is typed back
+    # in on return, to carry on with.
     #
     # Listeners go on the document once per browser tab (the flag), keyed by
     # these widgets' st-key-* classes, so reruns and page switches don't
@@ -537,8 +538,31 @@ def keep_typed_selectbox_text(*keys: str) -> None:
                 if (!input) return;
                 const next = event.relatedTarget;
                 if (next && (next.closest('[role="listbox"]') || input.closest(".stSelectbox").contains(next))) return;
+                // The window itself lost focus (another window, or Win+Space's
+                // language switcher mid-word). Entering the text here would
+                // make it the box's value, and the next key typed on return
+                // would start a new search, wiping it. So it's kept aside and
+                // typed back in on return instead (below).
+                if (!next && !document.hasFocus()) {{
+                    window._keepTypedResume = {{
+                        selector: [...window._keepTypedSelectors].find(s => input.matches(s)), text: input.value,
+                    }};
+                    return;
+                }}
                 pressEnter(input);
             }}, true);
+            // Back in the window, focus is still on the box (that's how the
+            // browser restores it). Cleared first so the box counts what
+            // follows as fresh typing even over a value it already had.
+            window.addEventListener("focus", () => {{
+                const resume = window._keepTypedResume;
+                window._keepTypedResume = null;
+                const input = document.activeElement;
+                if (!resume || !input || !input.matches(resume.selector)) return;
+                input.select();
+                document.execCommand("delete");
+                document.execCommand("insertText", false, resume.text);
+            }});
         }}
         </script>""",
         unsafe_allow_javascript=True,
