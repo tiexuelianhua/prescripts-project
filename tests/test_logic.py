@@ -246,6 +246,42 @@ def test_parts_of_speech(app_copy):
     """)
 
 
+def test_which_reading_a_word_uses(app_copy):
+    # A kanji's reading in a word: on or kun, and whether that's a sure
+    # thing or a best guess (the reading changed to fit, or both kinds fit).
+    _check(app_copy, """
+        from prescripts.data.japanese.learning import kanji_in, reading_in_word, words_using
+
+        eat = {"front": "食", "onyomi": "ショク、ジキ", "kunyomi": "く.う、た.べる"}
+        study = {"front": "学", "onyomi": "ガク", "kunyomi": "まな.ぶ"}
+        school = {"front": "校", "onyomi": "コウ", "kunyomi": ""}
+        hand = {"front": "手", "onyomi": "シュ", "kunyomi": "て、-て、て-"}
+        paper = {"front": "紙", "onyomi": "シ", "kunyomi": "かみ"}
+
+        def uses(kanji, word, reading):
+            found = reading_in_word(kanji, word, reading)
+            return found and (found["kind"], found["reading"], found["sure"])
+
+        assert uses(eat, "食べる", "たべる") == ("kun", "た.べる", True)
+        assert uses(eat, "食事", "しょくじ") == ("on", "ショク", True)
+        assert uses(study, "学校", "がっこう") == ("on", "ガク", False)  # がく cut short to がっ
+        assert uses(school, "学校", "がっこう") == ("on", "コウ", True)
+        assert uses(paper, "手紙", "てがみ") == ("kun", "かみ", False)  # か voiced to が
+        assert uses(hand, "手紙", "てがみ") == ("kun", "て", True)
+        assert uses(study, "学生", "") is None  # no reading to go on
+        assert uses(school, "食べる", "たべる") is None  # not in the word
+
+        deck = {"cards": [
+            {"kind": "vocab", "front": "食べる", "reading": "たべる"},
+            {"kind": "vocab", "front": "学校", "reading": "がっこう"},
+            {"kind": "kanji", "front": "学", "onyomi": "ガク", "kunyomi": "まな.ぶ"},
+            {"kind": "kanji", "front": "校", "onyomi": "コウ", "kunyomi": ""},
+        ]}
+        assert [use["card"]["front"] for use in words_using(deck, study)] == ["学校"]
+        assert [card["front"] for card in kanji_in(deck, deck["cards"][1])] == ["学", "校"]
+    """)
+
+
 def test_weather_parsing(app_copy):
     # JMA's feeds are faked with the fields the page reads. Only today's rain
     # chances count, and a live reading JMA flags as unreliable is left out.

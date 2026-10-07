@@ -4,6 +4,10 @@
 # Cards are words/kanji the user already knows, entered by hand:
 # - vocab: front = the word as written (kanji), back = reading (hiragana) + meaning,
 #          plus its part of speech ("pos", e.g. "Godan verb, Transitive")
+#
+# Any card can also have the user's own "note" (e.g. a mnemonic), and a new
+# one can start in Learn ("learning": True): studied at its own pace, kept
+# out of reviews until "Got it".
 # - kanji: front = the kanji,                   back = meaning
 #
 # Everything lives in one JSON file outside the repo (like Meal Receipts'
@@ -56,6 +60,8 @@ def load_deck() -> dict:
         card.setdefault("onyomi", "")
         card.setdefault("kunyomi", "")
         card.setdefault("pos", "")
+        card.setdefault("note", "")
+        card.setdefault("learning", False)
     return deck
 
 
@@ -79,10 +85,11 @@ def find_duplicate(deck: dict, kind: str, front: str, exclude_id: str | None = N
 
 def add_card(
     deck: dict, kind: str, front: str, reading: str, meaning: str, onyomi: str = "", kunyomi: str = "",
-    pos: str = "",
+    pos: str = "", note: str = "", learning: bool = False,
 ) -> dict:
     # New cards are due straight away: they're things the user already
     # knows, so the first review just confirms it and starts the schedule.
+    # One that's new to them (learning) goes to Learn first instead.
     # `reading` is for vocab; kanji have their on'yomi / kun'yomi instead
     # (each a 、-separated list, kun'yomi okurigana marked with a dot as
     # KANJIDIC does: まな.ぶ).
@@ -95,6 +102,8 @@ def add_card(
         "onyomi": onyomi.strip() if kind == "kanji" else "",
         "kunyomi": kunyomi.strip() if kind == "kanji" else "",
         "pos": pos.strip() if kind == "vocab" else "",
+        "note": note.strip(),
+        "learning": learning,
         "added": today_jst().isoformat(),
         "due": today_jst().isoformat(),
         "interval": 0,
@@ -113,13 +122,32 @@ def update_card(deck: dict, card_id: str, **fields) -> None:
     # with no kun'yomi.
     for card in deck["cards"]:
         if card["id"] == card_id:
-            for name in ("front", "reading", "meaning", "onyomi", "kunyomi", "pos"):
+            for name in ("front", "reading", "meaning", "onyomi", "kunyomi", "pos", "note"):
                 if name not in fields:
                     continue
                 value = "" if pd.isna(fields[name]) else str(fields[name]).strip()
                 if value or name not in ("front", "meaning"):
                     card[name] = value
             return
+
+
+def set_learning(deck: dict, card_id: str, learning: bool) -> None:
+    # Into Learn (e.g. a card that's been forgotten), or out of it with "Got
+    # it": then it starts the schedule afresh, first review tomorrow, since
+    # it's just been studied.
+    for card in deck["cards"]:
+        if card["id"] == card_id and card.get("learning", False) != learning:
+            card["learning"] = learning
+            if not learning:
+                card.update(interval=0, reps=0, due=(today_jst() + timedelta(days=1)).isoformat())
+            return
+
+
+def learning_cards(deck: dict, kinds: list[str] | None = None) -> list[dict]:
+    # Oldest added first.
+    kinds = kinds or KINDS
+    return sorted((card for card in deck["cards"] if card.get("learning") and card["kind"] in kinds),
+                  key=lambda card: card["added"])
 
 
 def delete_cards(deck: dict, card_ids: set[str]) -> None:
@@ -190,7 +218,8 @@ def due_cards(deck: dict, kinds: list[str] | None = None, shuffle_seed: str | No
     # "Again" today still waits behind them, oldest miss first.
     today = today_jst().isoformat()
     kinds = kinds or KINDS
-    due = [card for card in deck["cards"] if card["kind"] in kinds and card["due"] <= today]
+    # Cards still in Learn wait there until "Got it".
+    due = [card for card in deck["cards"] if card["kind"] in kinds and card["due"] <= today and not card.get("learning")]
     if shuffle_seed is None:
         return sorted(due, key=lambda card: (card["due"], card["last_reviewed"] or ""))
 
@@ -225,7 +254,8 @@ def search_cards(deck: dict, query: str, kinds: list[str] | None = None) -> list
         if card["kind"] in kinds
         and (
             not query
-            or any(query in card[field].lower() for field in ("front", "reading", "meaning", "onyomi", "kunyomi", "pos"))
+            or any(query in card[field].lower()
+                   for field in ("front", "reading", "meaning", "onyomi", "kunyomi", "pos", "note"))
         )
     ]
 
@@ -269,4 +299,5 @@ def practice_summary() -> dict:
         "total": {kind: sum(card["kind"] == kind for card in deck["cards"]) for kind in KINDS},
         "due": {kind: len(due_cards(deck, [kind])) for kind in KINDS},
         "reviewed_today": deck["reviews"].get(today, 0),
+        "learning": len(learning_cards(deck)),
     }

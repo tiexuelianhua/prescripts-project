@@ -1187,6 +1187,55 @@ def test_practising_picked_cards(app_copy):
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+def test_learning_new_cards(app_copy):
+    # A card added as new goes to Learn, not the reviews; it shows the
+    # deck's words that use it and takes a note; "Got it" puts it in the
+    # reviews from tomorrow.
+    result = run_in(app_copy, """
+        from datetime import timedelta
+        from streamlit.testing.v1 import AppTest
+        from prescripts.common import SCRIPTS_DIR
+        import prescripts.data.japanese.spelling as spelling
+        from prescripts.data.japanese.deck import add_card, due_cards, load_deck, practice_summary, save_deck, today_jst
+
+        spelling.check_new_card = lambda *args: []  # the typo check goes online; not what's tested here
+        deck = load_deck()
+        add_card(deck, "vocab", "食べる", "たべる", "to eat")
+        save_deck(deck)
+
+        at = AppTest.from_file(str(SCRIPTS_DIR / "prescripts/pages/japanese.py"), default_timeout=60)
+        at.run()
+        assert not [box for box in at.text_area if box.key and box.key.startswith("japanese_learn_note")]  # nothing to learn
+        at.segmented_control(key="japanese_add_kind").set_value("kanji").run()
+        at.text_input(key="japanese_add_front").input("食")
+        at.text_input(key="japanese_add_meaning").input("eat, food")
+        at.text_input(key="japanese_add_onyomi").input("ショク")
+        at.text_input(key="japanese_add_kunyomi").input("た.べる")
+        at.segmented_control(key="japanese_add_as").set_value("New to me")
+        at.button(key="japanese_add_button").click().run()
+        assert not at.exception, at.exception
+
+        deck = load_deck()
+        [kanji] = [card for card in deck["cards"] if card["kind"] == "kanji"]
+        assert kanji["learning"] and kanji not in due_cards(deck)
+        assert load_deck()["settings"]["add_as_learning"]  # remembered for the next card
+        assert practice_summary()["learning"] == 1
+
+        at.run()
+        assert any("Your words with it" in block.value and "食べる" in block.value and "kun た(べる)" in block.value
+                   for block in at.markdown), [block.value for block in at.markdown]
+        at.text_area(key=f"japanese_learn_note_{kanji['id']}").input("A person eating under a roof").run()
+        assert load_deck()["cards"][-1]["note"] == "A person eating under a roof"
+
+        at.button(key="japanese_learn_got_it").click().run()
+        assert not at.exception, at.exception
+        kanji = load_deck()["cards"][-1]
+        assert not kanji["learning"] and kanji["due"] == (today_jst() + timedelta(days=1)).isoformat(), kanji
+        assert not [button for button in at.button if button.key == "japanese_learn_got_it"]  # Learn is empty again
+    """)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 def test_page_addresses_stay_the_same(app_copy):
     # A page's address mustn't change when its file moves or is renamed:
     # bookmarks would break, and Spotify only accepts the exact redirect

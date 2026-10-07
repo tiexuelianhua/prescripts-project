@@ -311,7 +311,9 @@ def render_japanese_tile() -> None:
         st.caption(
             " · ".join(f"{KIND_LABELS[kind]}: {data['due'][kind]} due of {data['total'][kind]}" for kind in data["total"])
         )
-        st.caption(f"Reviewed today: {data['reviewed_today']}")
+        # Cards still in Learn on the same line, so the tile's height holds.
+        learning_note = f" · {data['learning']} to learn" if data.get("learning") else ""
+        st.caption(f"Reviewed today: {data['reviewed_today']}{learning_note}")
     st.page_link("prescripts/pages/japanese.py", label="Open Japanese", icon="🈁")
 
 
