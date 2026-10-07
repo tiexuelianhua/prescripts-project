@@ -246,6 +246,8 @@ desktop_app.py               starts the Streamlit server and shows it in its own
 app.py                       shared look, top bar, and navigation between pages
 prescripts/
 ├── common.py                what every page shares: the page list, the Prescripts styling, JST
+├── budget_widgets.py        the coloured budget bars, used by both the Budget page and Overview
+├── drawing_widget.py        the box for drawing a mnemonic over a Japanese card
 ├── spotify_widgets.py       Spotify controls used by both the Spotify page and Overview
 ├── pages/                   home, overview, meal_receipts, weather, activities, spotify, japanese, settings
 └── data/

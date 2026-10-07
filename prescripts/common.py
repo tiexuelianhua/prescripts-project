@@ -546,6 +546,23 @@ def keep_typed_selectbox_text(*keys: str) -> None:
                 }}
             }}, true);
             document.addEventListener("focusin", event => {{ event.target._keepTypedArrowed = false; }}, true);
+            // Clicking into a box that already has something in it selects
+            // all of it (as Tab already does), so what's typed replaces it
+            // whole. Otherwise the box keeps the old text around the new
+            // and swaps it for just the new part itself -- which, mid
+            // Japanese conversion, garbled the text ("ふファミマ") or brought
+            // the old store back.
+            document.addEventListener("pointerdown", event => {{
+                const box = event.target;
+                if (!box.matches || ![...window._keepTypedSelectors].some(s => box.matches(s))) return;
+                box._keepTypedSelectAll = document.activeElement !== box && !!box.value;
+            }}, true);
+            document.addEventListener("pointerup", event => {{
+                const box = event.target;
+                if (!box._keepTypedSelectAll) return;
+                box._keepTypedSelectAll = false;
+                if (box.selectionStart === box.selectionEnd) box.select();
+            }}, true);
             // Runs before the box's own blur handling, which drops the text.
             document.addEventListener("focusout", event => {{
                 const input = pending(event.target);
