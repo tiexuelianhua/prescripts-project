@@ -2,7 +2,8 @@
 # schedule: loading and saving cards, grading reviews, and picking what's due.
 #
 # Cards are words/kanji the user already knows, entered by hand:
-# - vocab: front = the word as written (kanji), back = reading (hiragana) + meaning
+# - vocab: front = the word as written (kanji), back = reading (hiragana) + meaning,
+#          plus its part of speech ("pos", e.g. "Godan verb, Transitive")
 # - kanji: front = the kanji,                   back = meaning
 #
 # Everything lives in one JSON file outside the repo (like Meal Receipts'
@@ -49,11 +50,12 @@ def load_deck() -> dict:
     deck.setdefault("cards", [])
     deck.setdefault("reviews", {})
     deck.setdefault("settings", {})
-    # Kanji readings were added after the first cards were made -- older
-    # cards just have them blank.
+    # Kanji readings and parts of speech were added after the first cards
+    # were made -- older cards just have them blank.
     for card in deck["cards"]:
         card.setdefault("onyomi", "")
         card.setdefault("kunyomi", "")
+        card.setdefault("pos", "")
     return deck
 
 
@@ -76,7 +78,8 @@ def find_duplicate(deck: dict, kind: str, front: str, exclude_id: str | None = N
 
 
 def add_card(
-    deck: dict, kind: str, front: str, reading: str, meaning: str, onyomi: str = "", kunyomi: str = ""
+    deck: dict, kind: str, front: str, reading: str, meaning: str, onyomi: str = "", kunyomi: str = "",
+    pos: str = "",
 ) -> dict:
     # New cards are due straight away: they're things the user already
     # knows, so the first review just confirms it and starts the schedule.
@@ -91,6 +94,7 @@ def add_card(
         "meaning": meaning.strip(),
         "onyomi": onyomi.strip() if kind == "kanji" else "",
         "kunyomi": kunyomi.strip() if kind == "kanji" else "",
+        "pos": pos.strip() if kind == "vocab" else "",
         "added": today_jst().isoformat(),
         "due": today_jst().isoformat(),
         "interval": 0,
@@ -109,7 +113,7 @@ def update_card(deck: dict, card_id: str, **fields) -> None:
     # with no kun'yomi.
     for card in deck["cards"]:
         if card["id"] == card_id:
-            for name in ("front", "reading", "meaning", "onyomi", "kunyomi"):
+            for name in ("front", "reading", "meaning", "onyomi", "kunyomi", "pos"):
                 if name not in fields:
                     continue
                 value = "" if pd.isna(fields[name]) else str(fields[name]).strip()
@@ -210,8 +214,9 @@ def format_interval(days: int) -> str:
 
 
 def search_cards(deck: dict, query: str, kinds: list[str] | None = None) -> list[dict]:
-    # Matches the written form, any reading, or the meaning (case-insensitive
-    # for the English side). Empty query = every card of those kinds.
+    # Matches the written form, any reading, the meaning or the part of
+    # speech (case-insensitive for the English side, so "verb" finds every
+    # verb). Empty query = every card of those kinds.
     kinds = kinds or KINDS
     query = query.strip().lower()
     return [
@@ -220,7 +225,7 @@ def search_cards(deck: dict, query: str, kinds: list[str] | None = None) -> list
         if card["kind"] in kinds
         and (
             not query
-            or any(query in card[field].lower() for field in ("front", "reading", "meaning", "onyomi", "kunyomi"))
+            or any(query in card[field].lower() for field in ("front", "reading", "meaning", "onyomi", "kunyomi", "pos"))
         )
     ]
 

@@ -1090,6 +1090,47 @@ def test_month_by_month_by_category(app_copy):
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+def test_parts_of_speech_on_cards(app_copy):
+    # A vocab card picked from Jisho comes with its part of speech, and older
+    # cards can have theirs filled in from the Your cards table.
+    result = run_in(app_copy, """
+        from streamlit.testing.v1 import AppTest
+        import prescripts.data.japanese.lookups as lookups
+        import prescripts.data.japanese.spelling as spelling
+        from prescripts.common import SCRIPTS_DIR
+        from prescripts.data.japanese.deck import add_card, load_deck, save_deck
+
+        jisho = {
+            "食べる": [{"japanese": [{"word": "食べる", "reading": "たべる"}], "is_common": True,
+                        "senses": [{"english_definitions": ["to eat"],
+                                    "parts_of_speech": ["Ichidan verb", "Transitive verb"]}]}],
+            "静か": [{"japanese": [{"word": "静か", "reading": "しずか"}],
+                      "senses": [{"english_definitions": ["quiet"], "parts_of_speech": ["Na-adjective (keiyodoshi)"]}]}],
+        }
+        lookups.jisho_results = spelling.jisho_results = lambda query: jisho.get(query, [])
+        deck = load_deck()
+        add_card(deck, "vocab", "静か", "しずか", "quiet")  # made before parts of speech
+        save_deck(deck)
+
+        at = AppTest.from_file(str(SCRIPTS_DIR / "prescripts/pages/japanese.py"), default_timeout=60)
+        at.run()
+        at.text_input(key="japanese_add_lookup").input("食べる").run()
+        assert at.text_input(key="japanese_add_pos").value == "Ichidan verb, Transitive"
+        assert "Ichidan verb, Transitive" in at.radio[0].options[0], at.radio[0].options
+        at.button(key="japanese_add_button").click().run()
+        assert not at.exception, at.exception
+        [eat] = [card for card in load_deck()["cards"] if card["front"] == "食べる"]
+        assert eat["pos"] == "Ichidan verb, Transitive", eat
+
+        at.button(key="japanese_fill_pos").click().run()
+        assert not at.exception, at.exception
+        [quiet] = [card for card in load_deck()["cards"] if card["front"] == "静か"]
+        assert quiet["pos"] == "Na-adjective", quiet
+        assert not [button for button in at.button if button.key == "japanese_fill_pos"]  # nothing left to fill
+    """)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 def test_page_addresses_stay_the_same(app_copy):
     # A page's address mustn't change when its file moves or is renamed:
     # bookmarks would break, and Spotify only accepts the exact redirect

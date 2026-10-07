@@ -207,6 +207,45 @@ def test_typo_check_when_adding_a_card(app_copy):
     """)
 
 
+def test_parts_of_speech(app_copy):
+    # Jisho's names are shortened for a card, and an older card finds its
+    # entry by what's written on it (kana words by their reading). Jisho is
+    # faked, with its real answers for these words on 2026-10-07.
+    _check(app_copy, """
+        import prescripts.data.japanese.lookups as lookups
+        from prescripts.data.japanese.lookups import part_of_speech_for, short_parts_of_speech
+
+        assert short_parts_of_speech(["Noun", "Suru verb", "Transitive verb"]) == "Noun, Suru verb, Transitive"
+        assert short_parts_of_speech(["Godan verb with 'ku' ending", "Transitive verb"]) == "Godan verb, Transitive"
+        assert short_parts_of_speech(["Kuru verb - special class", "Intransitive verb"]) == "Irregular verb, Intransitive"
+        assert short_parts_of_speech(["Suru verb - included"]) == "Irregular verb"
+        assert short_parts_of_speech(["Na-adjective (keiyodoshi)", "Noun"]) == "Na-adjective, Noun"
+        assert short_parts_of_speech(["Pre-noun adjectival (rentaishi)"]) == "Pre-noun adjectival"
+        assert short_parts_of_speech(["Pronoun"]) == "Pronoun"
+        assert short_parts_of_speech(["Noun", "Noun which may take the genitive case particle 'no'"]) == "Noun, No-adjective"
+        assert short_parts_of_speech(["Expressions (phrases, clauses, etc.)"]) == "Expressions"
+        assert short_parts_of_speech(["Wikipedia definition"]) == ""
+
+        jisho = {
+            "食べる": [{"japanese": [{"word": "食べる", "reading": "たべる"}],
+                        "senses": [{"parts_of_speech": ["Ichidan verb", "Transitive verb"]}]}],
+            "とても": [{"japanese": [{"word": "迚も", "reading": "とても"}],
+                        "senses": [{"parts_of_speech": ["Adverb (fukushi)"]}]}],
+            "ありがとう": [{"japanese": [{"word": "有難う", "reading": "ありがとう"}],
+                          "senses": [{"parts_of_speech": []}, {"parts_of_speech": ["Interjection (kandoushi)"]}]}],
+            "上手": [{"japanese": [{"word": "上手", "reading": "うわて"}], "senses": [{"parts_of_speech": ["Noun"]}]},
+                     {"japanese": [{"word": "上手", "reading": "じょうず"}],
+                      "senses": [{"parts_of_speech": ["Na-adjective (keiyodoshi)"]}]}],
+        }
+        lookups.jisho_results = lambda query: jisho.get(query, [])
+        assert part_of_speech_for("食べる", "たべる") == "Ichidan verb, Transitive"
+        assert part_of_speech_for("とても") == "Adverb"  # a kana word, written in kanji on Jisho
+        assert part_of_speech_for("ありがとう") == "Interjection"  # its first sense has none
+        assert part_of_speech_for("上手", "じょうず") == "Na-adjective"  # the entry with the card's reading
+        assert part_of_speech_for("知らない言葉") == ""
+    """)
+
+
 def test_weather_parsing(app_copy):
     # JMA's feeds are faked with the fields the page reads. Only today's rain
     # chances count, and a live reading JMA flags as unreliable is left out.

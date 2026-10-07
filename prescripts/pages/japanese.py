@@ -39,7 +39,7 @@ from prescripts.data.japanese.deck import (
     today_jst,
     update_card,
 )
-from prescripts.data.japanese.lookups import jisho_lookup, kanji_lookup
+from prescripts.data.japanese.lookups import jisho_lookup, kanji_lookup, part_of_speech_for
 from prescripts.data.japanese.spelling import check_new_card
 
 TEXT_COLOR, ACCENT_COLOR = theme_colors()
@@ -93,6 +93,11 @@ st.markdown(
         font-size: 1.3rem;
         margin-top: 0.5rem;
     }}
+    .flashcard-pos {{
+        opacity: 0.6;
+        font-size: 0.85em;
+        margin-top: 0.4rem;
+    }}
     .flashcard-kanji-reading {{
         margin-top: 0.4rem;
     }}
@@ -113,6 +118,8 @@ def render_flashcard(card: dict, show_back: bool) -> None:
         if has_distinct_reading(card):
             back += f'<div class="flashcard-reading">{html.escape(card["reading"])}</div>'
         back += f'<div class="flashcard-meaning">{html.escape(card["meaning"])}</div>'
+        if card.get("pos"):
+            back += f'<div class="flashcard-pos">{html.escape(card["pos"])}</div>'
         # Kanji: meaning first, then each kind of reading -- the order typed
         # mode asks for them in.
         for field, label in (("onyomi", "On"), ("kunyomi", "Kun")):
@@ -151,6 +158,7 @@ ADD_FIELD_KEYS = {
     "reading": "japanese_add_reading",
     "onyomi": "japanese_add_onyomi",
     "kunyomi": "japanese_add_kunyomi",
+    "pos": "japanese_add_pos",
 }
 
 
@@ -415,6 +423,7 @@ def render_add_cards(deck: dict) -> None:
                 "japanese_add_meaning",
                 "japanese_add_onyomi",
                 "japanese_add_kunyomi",
+                "japanese_add_pos",
             ):
                 st.session_state[key] = ""
             st.session_state.pop("_japanese_filled_from", None)
@@ -444,6 +453,8 @@ def render_add_cards(deck: dict) -> None:
                     if candidate["reading"]:
                         label += f"【{candidate['reading']}】"
                     label += f" — {candidate['meaning']}"
+                    if candidate.get("pos"):
+                        label += f" · {candidate['pos']}"
                     if candidate["common"]:
                         label += " · common"
                 else:
@@ -468,6 +479,7 @@ def render_add_cards(deck: dict) -> None:
                 st.session_state["japanese_add_meaning"] = chosen["meaning"]
                 st.session_state["japanese_add_onyomi"] = chosen.get("on", "")
                 st.session_state["japanese_add_kunyomi"] = chosen.get("kun", "")
+                st.session_state["japanese_add_pos"] = chosen.get("pos", "")
                 st.session_state["_japanese_filled_from"] = filled_from
 
         front = st.text_input("Word" if is_vocab else "Kanji", key="japanese_add_front")
@@ -481,6 +493,17 @@ def render_add_cards(deck: dict) -> None:
             else ""
         )
         meaning = st.text_input("Meaning", key="japanese_add_meaning")
+        pos = (
+            st.text_input(
+                "Part of speech",
+                key="japanese_add_pos",
+                placeholder="e.g. Noun, Godan verb, I-adjective",
+                help="Filled in from Jisho. Optional. It shows on the back of the card, and searching your cards "
+                "for it (\"verb\") finds every card with it.",
+            )
+            if is_vocab
+            else ""
+        )
         onyomi = kunyomi = ""
         if not is_vocab:
             # Filled in from the lookup with every reading KANJIDIC lists --
@@ -503,6 +526,7 @@ def render_add_cards(deck: dict) -> None:
             "meaning": meaning.strip(),
             "onyomi": onyomi.strip(),
             "kunyomi": kunyomi.strip(),
+            "pos": pos.strip(),
         }
         pending = st.session_state.get("_japanese_add_issues")
         if pending and pending["values"] != current_values:
@@ -544,7 +568,7 @@ def render_add_cards(deck: dict) -> None:
                 if issues:
                     st.session_state["_japanese_add_issues"] = {"values": current_values, "issues": issues}
                     st.rerun()
-                card = add_card(deck, add_kind, front, reading, meaning, onyomi, kunyomi)
+                card = add_card(deck, add_kind, front, reading, meaning, onyomi, kunyomi, pos)
                 save_deck(deck)
                 st.session_state.pop("_japanese_add_issues", None)
                 st.session_state["_reset_japanese_add"] = True
@@ -594,6 +618,7 @@ def render_your_cards(deck: dict) -> None:
                         "onyomi": card["onyomi"],
                         "kunyomi": card["kunyomi"],
                         "meaning": card["meaning"],
+                        "pos": card["pos"],
                         "due": card["due"],
                     }
                     for card in matches
@@ -620,11 +645,31 @@ def render_your_cards(deck: dict) -> None:
                     "onyomi": st.column_config.TextColumn("On'yomi", help="Kanji only"),
                     "kunyomi": st.column_config.TextColumn("Kun'yomi", help="Kanji only"),
                     "meaning": "Meaning",
+                    "pos": st.column_config.TextColumn("Part of speech", help="Vocab only"),
                     "due": "Next review",
                 },
             )
             st.caption(f"{len(matches)} card(s)")
             st.caption("Changes save as you make them. Select rows and press Delete to remove cards.")
+            # Vocab cards made before parts of speech were added: looked up
+            # on Jisho in one go. Ones Jisho can't match stay blank.
+            missing = [card for card in deck["cards"] if card["kind"] == "vocab" and not card["pos"]]
+            if missing and st.button(
+                f"Fill in parts of speech ({len(missing)} vocab card{'s' if len(missing) != 1 else ''})",
+                key="japanese_fill_pos",
+                help="Looks each one up on Jisho. Cards it can't match stay blank, to fill in by hand.",
+            ):
+                filled = 0
+                try:
+                    with st.spinner("Looking them up on Jisho..."):
+                        for card in missing:
+                            card["pos"] = part_of_speech_for(card["front"], card["reading"])
+                            filled += bool(card["pos"])
+                except (urllib.error.URLError, TimeoutError, ValueError):
+                    st.toast("Couldn't reach Jisho right now. Try again later.", icon="⚠️")
+                save_deck(deck)
+                st.toast(f"Filled in {filled} of {len(missing)}.")
+                st.rerun()
             # Same as Meal Receipts' Entries: saved as soon as anything in
             # the table changes, no Save button.
             editor_changes = st.session_state.get(editor_key, {})
@@ -646,6 +691,7 @@ def render_your_cards(deck: dict) -> None:
                         meaning=row["meaning"],
                         onyomi=row["onyomi"] if kind == "kanji" else "",
                         kunyomi=row["kunyomi"] if kind == "kanji" else "",
+                        pos=row["pos"] if kind == "vocab" else "",
                     )
                 save_deck(deck)
                 del st.session_state[editor_key]
