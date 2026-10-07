@@ -310,8 +310,8 @@ def render_learn(deck: dict) -> None:
     st.subheader("Learn")
     position = st.session_state.get("japanese_learn_position", 0) % len(cards)
     card = cards[position]
-    st.caption(f"Card {position + 1} of {len(cards)} to learn · take your time. "
-               "Got it moves a card into your reviews, first one tomorrow.")
+    st.caption(f"Card {position + 1} of {len(cards)} to learn・take your time. "
+               "“Got it” moves a card into your reviews.")
     render_flashcard(card, show_back=True)
     # Readings stick through words already known, so a kanji shows the
     # deck's words written with it, and which reading each one uses; a
@@ -791,7 +791,10 @@ def render_add_cards(deck: dict) -> None:
 
 def render_your_cards(deck: dict) -> None:
     # Lookup of everything already in the deck, editable in place.
-    with st.expander("Your cards"):
+    # Keyed and tracked, so it stays open through the reruns its own edits
+    # cause -- ticking Learn adds the Learn section above it, which would
+    # otherwise rebuild it closed.
+    with st.expander("Your cards", key="japanese_your_cards", on_change="rerun"):
         search_columns = st.columns([3, 2], vertical_alignment="bottom")
         with search_columns[0]:
             query = st.text_input("Search", placeholder="Word, reading, or meaning", key="japanese_search")
@@ -932,7 +935,10 @@ def render_your_cards(deck: dict) -> None:
                 deleted = set(table.index) - set(edited.index)
                 delete_cards(deck, deleted)
                 # Picks for the cards on show follow their ticks; others stay.
+                # Sending a card to Learn picks it too.
                 ticked = set(edited.index[edited["picked"].fillna(False).astype(bool)])
+                learning = edited["learning"].fillna(False).astype(bool)
+                ticked |= set(edited.index[learning & ~table.loc[edited.index, "learning"]])
                 deck["settings"]["picked"] = sorted((picked - set(table.index)) | ticked)
                 clashes = []
                 for card_id, row in edited.iterrows():
