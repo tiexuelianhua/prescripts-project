@@ -1110,6 +1110,7 @@ def test_parts_of_speech_on_cards(app_copy):
         lookups.jisho_results = spelling.jisho_results = lambda query: jisho.get(query, [])
         deck = load_deck()
         add_card(deck, "vocab", "静か", "しずか", "quiet")  # made before parts of speech
+        add_card(deck, "vocab", "鉄血", "てっけつ", "iron and blood")  # not in the fake Jisho
         save_deck(deck)
 
         at = AppTest.from_file(str(SCRIPTS_DIR / "prescripts/pages/japanese.py"), default_timeout=60)
@@ -1126,7 +1127,62 @@ def test_parts_of_speech_on_cards(app_copy):
         assert not at.exception, at.exception
         [quiet] = [card for card in load_deck()["cards"] if card["front"] == "静か"]
         assert quiet["pos"] == "Na-adjective", quiet
-        assert not [button for button in at.button if button.key == "japanese_fill_pos"]  # nothing left to fill
+        # The one Jisho couldn't match is marked, and isn't tried again.
+        assert not [button for button in at.button if button.key == "japanese_fill_pos"]
+        assert any("no part of speech for 1 card." in caption.value for caption in at.caption)
+        table = at.dataframe[0].value
+        assert list(table.loc[table["front"] == "鉄血", "missing"]) == ["⚠"], table
+    """)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_practising_picked_cards(app_copy):
+    # Cards ticked under Your cards (or all the ones shown, at once) make up
+    # the "Picked cards" practice set, and practising them doesn't change
+    # when they're due. Other sets go by part of speech or when added.
+    result = run_in(app_copy, """
+        from datetime import timedelta
+        from streamlit.testing.v1 import AppTest
+        from prescripts.common import SCRIPTS_DIR
+        from prescripts.data.japanese.deck import add_card, in_practice_set, load_deck, save_deck, today_jst
+
+        deck = load_deck()
+        eat = add_card(deck, "vocab", "食べる", "たべる", "to eat", pos="Ichidan verb, Transitive")
+        quiet = add_card(deck, "vocab", "静か", "しずか", "quiet", pos="Na-adjective")
+        add_card(deck, "vocab", "学校", "がっこう", "school", pos="Noun")
+        add_card(deck, "kanji", "雨", "", "rain", onyomi="ウ", kunyomi="あめ")
+        deck["cards"][-1]["added"] = (today_jst() - timedelta(days=30)).isoformat()
+        save_deck(deck)
+
+        today = today_jst()
+        def members(set_name, picked=()):
+            return [card["front"] for card in deck["cards"] if in_practice_set(card, set_name, set(picked), today)]
+        assert members("Verbs") == ["食べる"]
+        assert members("Adjectives") == ["静か"]
+        assert members("Nouns") == ["学校"]
+        assert members("Added in the last 7 days") == ["食べる", "静か", "学校"]
+        assert members("Picked cards", [quiet["id"]]) == ["静か"]
+        assert in_practice_set({"id": "x", "pos": "Pre-noun adjectival"}, "Nouns", set(), today) is False
+
+        at = AppTest.from_file(str(SCRIPTS_DIR / "prescripts/pages/japanese.py"), default_timeout=60)
+        at.run()
+        at.text_input(key="japanese_search").input("verb").run()
+        at.button(key="japanese_pick_shown").click().run()
+        assert load_deck()["settings"]["picked"] == [eat["id"]]
+
+        at.toggle(key="japanese_practice_toggle").set_value(True).run()
+        at.selectbox(key="japanese_practice_set").set_value("Picked cards").run()
+        assert not at.exception, at.exception
+        assert any("card 1 of 1" in caption.value for caption in at.caption), [c.value for c in at.caption]
+        assert any("食べる" in block.value for block in at.markdown if "flashcard" in block.value)
+        due_before = [card["due"] for card in load_deck()["cards"]]
+        at.button(key="japanese_show_answer").click().run()
+        at.button(key="japanese_practice_next").click().run()
+        assert [card["due"] for card in load_deck()["cards"]] == due_before
+
+        at.button(key="japanese_clear_picks").click().run()
+        assert load_deck()["settings"]["picked"] == []
+        assert any("No cards picked yet" in block.value for block in at.markdown)
     """)
     assert result.returncode == 0, result.stdout + result.stderr
 

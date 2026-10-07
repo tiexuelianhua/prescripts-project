@@ -230,6 +230,27 @@ def search_cards(deck: dict, query: str, kinds: list[str] | None = None) -> list
     ]
 
 
+# Practice can go round a chosen set of cards rather than every one. Picked
+# cards are ticked in Your cards and saved with the deck ("picked" in its
+# settings), so a set of new ones can be practised over several days.
+PRACTICE_SETS = ["Every card", "Picked cards", "Added in the last 7 days", "Verbs", "Adjectives", "Nouns"]
+
+
+def in_practice_set(card: dict, set_name: str, picked: set[str], today: date) -> bool:
+    labels = [label.strip().lower() for label in card.get("pos", "").split(",")]
+    if set_name == "Picked cards":
+        return card["id"] in picked
+    if set_name == "Added in the last 7 days":
+        return card.get("added", "") >= (today - timedelta(days=6)).isoformat()
+    if set_name == "Verbs":
+        return any(label.endswith("verb") for label in labels)
+    if set_name == "Adjectives":
+        return any(label.endswith("adjective") for label in labels)
+    if set_name == "Nouns":
+        return any(label in ("noun", "pronoun") for label in labels)
+    return True
+
+
 def card_by_id(card_id: str | None) -> dict | None:
     return next((card for card in load_deck()["cards"] if card["id"] == card_id), None)
 

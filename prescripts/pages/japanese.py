@@ -25,11 +25,13 @@ from prescripts.data.japanese.deck import (
     GRADES,
     KIND_LABELS,
     KINDS,
+    PRACTICE_SETS,
     add_card,
     delete_cards,
     due_cards,
     find_duplicate,
     format_interval,
+    in_practice_set,
     load_deck,
     next_schedule,
     regrade,
@@ -175,12 +177,17 @@ def apply_add_fix(index: int) -> None:
         st.session_state.pop("_japanese_add_issues", None)
 
 
-def practice_card(deck: dict, kinds: list[str], filter_name: str) -> tuple[dict | None, int, int]:
-    # Practice goes through the chosen deck in a shuffled order, then
-    # reshuffles and goes round again, forever. Returns (card, its 1-based
-    # place in this round, cards in the round). The order is rebuilt when
-    # the deck filter changes or a card in it has been deleted.
-    cards = {card["id"]: card for card in deck["cards"] if card["kind"] in kinds}
+def practice_card(deck: dict, kinds: list[str], filter_name: str, set_name: str) -> tuple[dict | None, int, int]:
+    # Practice goes through the chosen deck (and set, e.g. picked cards) in a
+    # shuffled order, then reshuffles and goes round again, forever. Returns
+    # (card, its 1-based place in this round, cards in the round). The order
+    # is rebuilt when the filter or set changes or a card in it has gone.
+    picked = set(deck["settings"].get("picked", []))
+    cards = {
+        card["id"]: card for card in deck["cards"]
+        if card["kind"] in kinds and in_practice_set(card, set_name, picked, today_jst())
+    }
+    filter_name = f"{filter_name} / {set_name}"
     if not cards:
         return None, 0, 0
     state = st.session_state.get("japanese_practice")
@@ -257,7 +264,14 @@ def render_review(deck: dict) -> None:
     reviewed_today = deck["reviews"].get(today_jst().isoformat(), 0)
     card = None
     if practice_mode:
-        card, position, total = practice_card(deck, kinds, review_filter)
+        # Which cards to go round. Picked ones are ticked under Your cards.
+        picked_count = len(deck["settings"].get("picked", []))
+        practice_set = st.selectbox(
+            "Practise", PRACTICE_SETS, key="japanese_practice_set",
+            format_func=lambda name: f"{name} ({picked_count})" if name == "Picked cards" else name,
+            help="Picked cards are the ones ticked under Your cards. Verbs, adjectives and nouns go by part of speech.",
+        )
+        card, position, total = practice_card(deck, kinds, review_filter, practice_set)
         if card:
             st.caption(f"Practice · card {position} of {total} · doesn't change when cards are due")
     else:
@@ -309,7 +323,12 @@ def render_review(deck: dict) -> None:
     if not deck["cards"]:
         st.write("No cards yet -- add some below.")
     elif card is None and practice_mode:
-        st.write(f"No {review_filter.lower()} cards yet.")
+        if practice_set == "Picked cards":
+            st.write("No cards picked yet. Tick some in the Pick column under Your cards.")
+        elif practice_set != "Every card":
+            st.write(f"No cards in \"{practice_set}\" yet.")
+        else:
+            st.write(f"No {review_filter.lower()} cards yet.")
     elif card is None:
         upcoming = sorted(other["due"] for other in deck["cards"] if other["kind"] in kinds)
         if upcoming:
@@ -608,10 +627,16 @@ def render_your_cards(deck: dict) -> None:
         elif not matches:
             st.write("No cards match.")
         else:
+            picked = set(deck["settings"].get("picked", []))
+            # Cards Jisho had no part of speech for when filling them in:
+            # marked until one's typed in by hand.
+            not_found = set(deck["settings"].get("pos_not_found", []))
             table = pd.DataFrame(
                 [
                     {
                         "id": card["id"],
+                        "picked": card["id"] in picked,
+                        "missing": "⚠" if card["id"] in not_found and not card["pos"] else "",
                         "kind": KIND_LABELS[card["kind"]],
                         "front": card["front"],
                         "reading": card["reading"],
@@ -631,14 +656,26 @@ def render_your_cards(deck: dict) -> None:
             # Room for the table's hover toolbar, which sits just above its
             # top-right corner -- otherwise right over the Deck buttons.
             st.space(32)
+            flagged = int((table["missing"] != "").sum())
+            column_order = [name for name in table.columns if name != "missing" or flagged]
+            # Streamlit only colours cells that can't be edited, so the mark
+            # sits in a narrow column of its own, near the left where it's
+            # seen without scrolling the table sideways.
+            shown_table = table.style.map(
+                lambda value: f"background-color: {ACCENT_COLOR}40" if value else "", subset=["missing"]
+            )
             edited = st.data_editor(
-                table,
+                shown_table,
                 num_rows="delete",
                 hide_index=True,
                 width="stretch",
                 key=editor_key,
-                disabled=["kind", "due"],
+                column_order=column_order,
+                disabled=["kind", "due", "missing"],
                 column_config={
+                    "picked": st.column_config.CheckboxColumn(
+                        "Pick", help="Practise it with Practice → Picked cards. Doesn't change when it's due."
+                    ),
                     "kind": "Type",
                     "front": "Word / kanji",
                     "reading": st.column_config.TextColumn("Reading", help="Vocab only"),
@@ -646,18 +683,38 @@ def render_your_cards(deck: dict) -> None:
                     "kunyomi": st.column_config.TextColumn("Kun'yomi", help="Kanji only"),
                     "meaning": "Meaning",
                     "pos": st.column_config.TextColumn("Part of speech", help="Vocab only"),
+                    "missing": st.column_config.TextColumn(" ", width=36, help="No part of speech on Jisho -- type one in"),
                     "due": "Next review",
                 },
             )
-            st.caption(f"{len(matches)} card(s)")
+            st.caption(f"{len(matches)} card(s) · {len(picked)} picked")
             st.caption("Changes save as you make them. Select rows and press Delete to remove cards.")
+            if flagged:
+                st.caption(f"⚠ Jisho had no part of speech for {flagged} card{'s' if flagged != 1 else ''}. "
+                           "Type them into the Part of speech column by hand.")
+            pick_column, clear_column, fill_column = st.columns([2, 2, 3])
+            # Pick every card the search and Deck filter show (e.g. search
+            # "verb"), or start the picks over.
+            if pick_column.button(f"Pick all {len(matches)} shown", key="japanese_pick_shown", width="stretch"):
+                deck["settings"]["picked"] = sorted(picked | {card["id"] for card in matches})
+                save_deck(deck)
+                st.session_state.pop(editor_key, None)
+                st.rerun()
+            if clear_column.button("Clear picks", key="japanese_clear_picks", disabled=not picked, width="stretch"):
+                deck["settings"]["picked"] = []
+                save_deck(deck)
+                st.session_state.pop(editor_key, None)
+                st.rerun()
             # Vocab cards made before parts of speech were added: looked up
-            # on Jisho in one go. Ones Jisho can't match stay blank.
-            missing = [card for card in deck["cards"] if card["kind"] == "vocab" and not card["pos"]]
-            if missing and st.button(
-                f"Fill in parts of speech ({len(missing)} vocab card{'s' if len(missing) != 1 else ''})",
+            # on Jisho in one go. Ones Jisho can't match stay blank, marked,
+            # and aren't tried again.
+            missing = [card for card in deck["cards"]
+                       if card["kind"] == "vocab" and not card["pos"] and card["id"] not in not_found]
+            if missing and fill_column.button(
+                f"Fill in parts of speech ({len(missing)})",
                 key="japanese_fill_pos",
-                help="Looks each one up on Jisho. Cards it can't match stay blank, to fill in by hand.",
+                width="stretch",
+                help="Looks up each vocab card without one on Jisho. Cards it can't match are marked, to fill in by hand.",
             ):
                 filled = 0
                 try:
@@ -665,8 +722,11 @@ def render_your_cards(deck: dict) -> None:
                         for card in missing:
                             card["pos"] = part_of_speech_for(card["front"], card["reading"])
                             filled += bool(card["pos"])
+                            if not card["pos"]:
+                                not_found.add(card["id"])
                 except (urllib.error.URLError, TimeoutError, ValueError):
                     st.toast("Couldn't reach Jisho right now. Try again later.", icon="⚠️")
+                deck["settings"]["pos_not_found"] = sorted(not_found)
                 save_deck(deck)
                 st.toast(f"Filled in {filled} of {len(missing)}.")
                 st.rerun()
@@ -676,6 +736,9 @@ def render_your_cards(deck: dict) -> None:
             if any(editor_changes.get(part) for part in ("edited_rows", "deleted_rows")):
                 deleted = set(table.index) - set(edited.index)
                 delete_cards(deck, deleted)
+                # Picks for the cards on show follow their ticks; others stay.
+                ticked = set(edited.index[edited["picked"].fillna(False).astype(bool)])
+                deck["settings"]["picked"] = sorted((picked - set(table.index)) | ticked)
                 clashes = []
                 for card_id, row in edited.iterrows():
                     kind = KINDS[list(KIND_LABELS.values()).index(row["kind"])]
