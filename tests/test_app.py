@@ -377,6 +377,9 @@ def test_logging_a_whole_day_at_once(app_copy):
         at.run()
         assert (at.selectbox(key="add_entry_from").value, at.selectbox(key="add_entry_to").value) == ("Shinjuku", "Shibuya")
         add()
+        # Not refilled for the same stations: it'd be logged a second time.
+        assert at.number_input(key="add_entry_cost").value == 0
+        assert any("**Total: ¥328** <small>(2 items" in block.value for block in at.markdown)
         at.button(key="add_entry_swap").click()
         at.run()
         assert (at.selectbox(key="add_entry_from").value, at.selectbox(key="add_entry_to").value) == ("Shibuya", "Shinjuku")

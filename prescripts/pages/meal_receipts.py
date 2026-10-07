@@ -368,6 +368,8 @@ with st.container(key="main_body"):
         st.session_state["_bag_set_by_hand"] = False
         st.session_state["_bag_ticked_for_store"] = None
         st.session_state["_meal_basket"] = []
+        # The same stations fill in their fare again for the next meal.
+        st.session_state["_last_fare_route"] = None
         st.session_state["_reset_add_item"] = True
         st.session_state["_reset_add_entry_form"] = False
     # Just the item and its cost, after "+ Add item" puts them in the meal.
@@ -376,8 +378,9 @@ with st.container(key="main_body"):
         st.session_state["_last_autofilled_item"] = None
         st.session_state["add_entry_cost"] = 0
         st.session_state["add_entry_item_note"] = ""
-        # The same stations fill in their fare again for the next one.
-        st.session_state["_last_fare_route"] = None
+        # _last_fare_route is kept: refilling the fare just added would make
+        # it a second, pending fare, logged twice. Swapping the stations (the
+        # trip back) or picking new ones still fills theirs.
         st.session_state["_reset_add_item"] = False
     # A meal is logged whole: its items gather here until "Log meal" saves
     # them together. Each line keeps the category and store (or stations) it

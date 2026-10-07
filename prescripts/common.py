@@ -528,10 +528,24 @@ def keep_typed_selectbox_text(*keys: str) -> None:
                 pressEnter(input);
             }}, true);
             document.addEventListener("keydown", event => {{
-                if (event.key !== "Tab") return;
-                const input = pending();
-                if (input) pressEnter(input);
+                if (event.key === "Tab") {{
+                    const input = pending();
+                    if (input) pressEnter(input);
+                    return;
+                }}
+                // Enter in an empty box would pick the list's first option
+                // (whatever item sorts first) -- unless the arrow keys were
+                // used to go to one, which Enter should still pick.
+                const box = event.target;
+                if (!box.matches || ![...window._keepTypedSelectors].some(s => box.matches(s))) return;
+                if (event.key === "ArrowDown" || event.key === "ArrowUp") box._keepTypedArrowed = true;
+                else if (event.key !== "Enter") box._keepTypedArrowed = false;
+                else if (!box.value.trim() && !box._keepTypedArrowed && event.isTrusted) {{
+                    event.preventDefault();
+                    event.stopPropagation();
+                }}
             }}, true);
+            document.addEventListener("focusin", event => {{ event.target._keepTypedArrowed = false; }}, true);
             // Runs before the box's own blur handling, which drops the text.
             document.addEventListener("focusout", event => {{
                 const input = pending(event.target);
