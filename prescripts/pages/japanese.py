@@ -122,7 +122,21 @@ st.markdown(
 )
 
 
-def render_flashcard(card: dict, show_back: bool) -> None:
+def kanji_breakdown(deck: dict, card: dict) -> str:
+    # A word's kanji (the ones in the deck) and the reading each uses in it:
+    # "学 probably on ガク · 校 on コウ". Empty for kanji cards, kana words
+    # and words whose kanji aren't in the deck.
+    if card["kind"] != "vocab":
+        return ""
+    return " · ".join(
+        f"{kanji['front']} {reading_label(reading_in_word(kanji, card['front'], card['reading'] or card['front']))}"
+        for kanji in kanji_in(deck, card)
+    )
+
+
+def render_flashcard(card: dict, show_back: bool, deck: dict | None = None) -> None:
+    # With the deck, a word's back also shows which reading each of its
+    # kanji uses -- seen on every review, not just while in Learn.
     back = ""
     if show_back:
         if has_distinct_reading(card):
@@ -130,6 +144,9 @@ def render_flashcard(card: dict, show_back: bool) -> None:
         back += f'<div class="flashcard-meaning">{html.escape(card["meaning"])}</div>'
         if card.get("pos"):
             back += f'<div class="flashcard-pos">{html.escape(card["pos"])}</div>'
+        breakdown = kanji_breakdown(deck, card) if deck else ""
+        if breakdown:
+            back += f'<div class="flashcard-pos" lang="ja">{html.escape(breakdown)}</div>'
         # Kanji: meaning first, then each kind of reading -- the order typed
         # mode asks for them in.
         for field, label in (("onyomi", "On"), ("kunyomi", "Kun")):
@@ -382,6 +399,9 @@ def render_review(deck: dict) -> None:
             if len(parts) == 1 and not last_result["correct"] and parts[0]["typed"]:
                 summary += f" (you typed *{html.escape(parts[0]['typed'])}*)"
             st.markdown(summary)
+            breakdown = kanji_breakdown(deck, answered)
+            if breakdown:
+                st.caption(breakdown)
             if len(parts) > 1 and not last_result["correct"]:
                 st.caption(
                     " · ".join(
@@ -481,7 +501,7 @@ def render_review(deck: dict) -> None:
         # the queue changing under it) hides the answer for whatever's next.
         reveal_key = (card["id"], practice_mode)
         revealed = st.session_state.get("japanese_revealed") == reveal_key
-        render_flashcard(card, show_back=revealed)
+        render_flashcard(card, show_back=revealed, deck=deck)
 
         if not revealed:
             if st.button("Show answer", key="japanese_show_answer", width="stretch"):

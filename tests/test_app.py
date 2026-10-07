@@ -1232,6 +1232,11 @@ def test_learning_new_cards(app_copy):
         kanji = load_deck()["cards"][-1]
         assert not kanji["learning"] and kanji["due"] == (today_jst() + timedelta(days=1)).isoformat(), kanji
         assert not [button for button in at.button if button.key == "japanese_learn_got_it"]  # Learn is empty again
+
+        # Out of Learn, a word's back still shows which reading its kanji uses.
+        at.button(key="japanese_show_answer").click().run()
+        assert any("flashcard" in block.value and "食べる" in block.value and "食 kun た(べる)" in block.value
+                   for block in at.markdown), [block.value for block in at.markdown]
     """)
     assert result.returncode == 0, result.stdout + result.stderr
 
