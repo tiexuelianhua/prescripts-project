@@ -24,6 +24,8 @@ from prescripts.common import JST, SCRIPTS_DIR
 
 JAPANESE_DIR = SCRIPTS_DIR.parent / "Japanese"
 CARDS_PATH = JAPANESE_DIR / "cards.json"
+# Picture mnemonics drawn over a card, one PNG per card named by its id.
+DRAWINGS_DIR = JAPANESE_DIR / "drawings"
 
 KINDS = ["vocab", "kanji"]
 KIND_LABELS = {"vocab": "Vocab", "kanji": "Kanji"}
@@ -152,6 +154,23 @@ def learning_cards(deck: dict, kinds: list[str] | None = None) -> list[dict]:
 
 def delete_cards(deck: dict, card_ids: set[str]) -> None:
     deck["cards"] = [card for card in deck["cards"] if card["id"] not in card_ids]
+    for card_id in card_ids:
+        save_drawing(card_id, b"")
+
+
+def load_drawing(card_id: str) -> bytes | None:
+    path = DRAWINGS_DIR / f"{card_id}.png"
+    return path.read_bytes() if path.exists() else None
+
+
+def save_drawing(card_id: str, png: bytes) -> None:
+    # Empty (nothing drawn) removes the card's drawing.
+    path = DRAWINGS_DIR / f"{card_id}.png"
+    if png:
+        DRAWINGS_DIR.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(png)
+    else:
+        path.unlink(missing_ok=True)
 
 
 def next_schedule(card: dict, grade: str) -> tuple[int, float]:

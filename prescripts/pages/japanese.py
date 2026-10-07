@@ -4,6 +4,7 @@
 # the user start in Learn, studied at their own pace before reviews. New cards can be filled in from Jisho / kanjiapi.dev. Grammar
 # is planned for later. All data/scheduling lives in data/japanese/ (no UI
 # there), so the Overview tile can read it too.
+import base64
 import html
 import random
 import urllib.error
@@ -34,10 +35,12 @@ from prescripts.data.japanese.deck import (
     in_practice_set,
     learning_cards,
     load_deck,
+    load_drawing,
     next_schedule,
     regrade,
     review_card,
     save_deck,
+    save_drawing,
     search_cards,
     set_learning,
     today_jst,
@@ -46,6 +49,7 @@ from prescripts.data.japanese.deck import (
 from prescripts.data.japanese.learning import RULES_OF_THUMB, kanji_in, reading_in_word, words_using
 from prescripts.data.japanese.lookups import jisho_lookup, kanji_lookup, part_of_speech_for
 from prescripts.data.japanese.spelling import check_new_card
+from prescripts.drawing_widget import drawing_box
 
 TEXT_COLOR, ACCENT_COLOR = theme_colors()
 PAGE_TITLE = "Japanese"
@@ -108,6 +112,29 @@ st.markdown(
         opacity: 0.8;
         margin-top: 0.8rem;
     }}
+    .flashcard-drawing {{
+        position: relative;
+        width: 160px;
+        height: 160px;
+        margin: 0.8rem auto 0;
+        border: 1px solid {ACCENT_COLOR}55;
+    }}
+    .flashcard-drawing span {{
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: "Yu Gothic UI", "Yu Gothic", "Meiryo", sans-serif;
+        opacity: 0.18;
+        line-height: 1;
+    }}
+    .flashcard-drawing img {{
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+    }}
     .flashcard-kanji-reading {{
         margin-top: 0.4rem;
     }}
@@ -153,9 +180,20 @@ def render_flashcard(card: dict, show_back: bool, deck: dict | None = None) -> N
             if card.get(field):
                 readings = html.escape(display_readings(card[field]))
                 back += f'<div class="flashcard-kanji-reading" lang="ja"><span>{label}</span>{readings}</div>'
-        # The user's own note (a mnemonic, say), last.
+        # The user's own note (a mnemonic, say), and their drawing over the
+        # front (the same faint front it was drawn over), last.
         if card.get("note"):
             back += f'<div class="flashcard-note">{html.escape(card["note"])}</div>'
+        drawing = load_drawing(card["id"])
+        if drawing:
+            # Sized like the faint front in the drawing box: 80% of the
+            # square, less for a longer word.
+            front_size = min(128, 144 // max(1, len(card["front"])))
+            back += (
+                f'<div class="flashcard-drawing"><span lang="ja" style="font-size: {front_size}px">'
+                f'{html.escape(card["front"])}</span>'
+                f'<img alt="Your drawing" src="data:image/png;base64,{base64.b64encode(drawing).decode()}"></div>'
+            )
     st.markdown(
         f'<div class="flashcard">'
         f'<div class="flashcard-kind">{KIND_LABELS[card["kind"]]}</div>'
@@ -247,6 +285,20 @@ def reading_label(uses: dict | None) -> str:
     return label if uses["sure"] else f"probably {label}"
 
 
+def render_drawing(card: dict, expanded: bool = False) -> None:
+    # Draw a picture mnemonic over the card's front. Saved for the card and
+    # shown on its back from then on; saving it blank removes it.
+    has_drawing = load_drawing(card["id"]) is not None
+    with st.expander("✏️ Edit your drawing" if has_drawing else "✏️ Draw a mnemonic", expanded=expanded):
+        saved = drawing_box(f"japanese_drawing_{card['id']}", card["front"], load_drawing(card["id"]),
+                            TEXT_COLOR, ACCENT_COLOR)
+        st.caption("Draw over it with a mouse, pen or finger, then Save drawing. It shows on the back of the card.")
+    if saved is not None:
+        save_drawing(card["id"], saved)
+        st.toast("Drawing saved." if saved else "Drawing removed.")
+        st.rerun()
+
+
 def render_learn(deck: dict) -> None:
     # Cards new to the user, one at a time with everything showing and
     # nothing graded, for as long as they like. "Got it" moves one into the
@@ -292,6 +344,7 @@ def render_learn(deck: dict) -> None:
     if note != card["note"]:
         update_card(deck, card["id"], note=note)
         save_deck(deck)
+    render_drawing(card)
     back_column, next_column, got_column = st.columns(3)
     if back_column.button("← Back", key="japanese_learn_back", width="stretch", disabled=len(cards) < 2):
         st.session_state["japanese_learn_position"] = position - 1
@@ -528,6 +581,9 @@ def render_review(deck: dict) -> None:
                         save_deck(deck)
                         st.session_state.pop("japanese_revealed", None)
                         st.rerun()
+        # A mnemonic can come to mind while reviewing, too.
+        if revealed:
+            render_drawing(card)
 
 
 def render_add_cards(deck: dict) -> None:

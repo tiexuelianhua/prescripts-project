@@ -1241,6 +1241,40 @@ def test_learning_new_cards(app_copy):
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+def test_drawing_on_a_card(app_copy):
+    # A card's drawing is saved beside the deck, shows on the card's back,
+    # and goes when it's saved empty or the card's deleted. The drawing box
+    # itself runs in the browser, so here it only has to load.
+    result = run_in(app_copy, """
+        from streamlit.testing.v1 import AppTest
+        from prescripts.common import SCRIPTS_DIR
+        from prescripts.data.japanese.deck import (
+            DRAWINGS_DIR, add_card, delete_cards, load_deck, load_drawing, save_deck, save_drawing,
+        )
+
+        png = bytes.fromhex("89504e470d0a1a0a")  # just the PNG signature: the bytes aren't looked at
+        deck = load_deck()
+        study = add_card(deck, "kanji", "学", "", "study", onyomi="ガク", learning=True)
+        save_deck(deck)
+        save_drawing(study["id"], png)
+        assert load_drawing(study["id"]) == png
+
+        at = AppTest.from_file(str(SCRIPTS_DIR / "prescripts/pages/japanese.py"), default_timeout=60)
+        at.run()
+        assert not at.exception, at.exception
+        assert any("flashcard-drawing" in block.value and "data:image/png;base64,iVBORw0KGgo=" in block.value
+                   for block in at.markdown)
+        assert any(expander.label == "✏️ Edit your drawing" for expander in at.expander)
+
+        save_drawing(study["id"], b"")
+        assert load_drawing(study["id"]) is None
+        save_drawing(study["id"], png)
+        delete_cards(deck, {study["id"]})
+        assert not (DRAWINGS_DIR / f"{study['id']}.png").exists()
+    """)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 def test_page_addresses_stay_the_same(app_copy):
     # A page's address mustn't change when its file moves or is renamed:
     # bookmarks would break, and Spotify only accepts the exact redirect
