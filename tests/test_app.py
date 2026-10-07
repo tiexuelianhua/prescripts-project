@@ -1012,6 +1012,84 @@ def test_home_commands(app_copy):
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+def test_home_opens_budget_on_a_category(app_copy):
+    # Naming a category on Home opens Budget with the form and the sidebar's
+    # budget on it; a category added by the user finds the page too, and
+    # Suica words mean Transport.
+    result = run_in(app_copy, """
+        from streamlit.testing.v1 import AppTest
+        from prescripts.common import SCRIPTS_DIR
+        from prescripts.data.home import budget_category_asked
+        from prescripts.data.meal_receipts import MEAL_RECEIPTS_DIR, save_settings
+
+        names = ["Food", "Transport", "Shopping", "Merch"]
+        assert budget_category_asked("shopping budget", names, "Food", "Transport") == "Shopping"
+        assert budget_category_asked("log a suica top-up", names, "Food", "Transport") == "Transport"
+        assert budget_category_asked("meal receipts", names, "Food", "Transport") == "Food"
+        assert budget_category_asked("budget", names, "Food", "Transport") is None
+        # Words for food or transport follow a rename.
+        assert budget_category_asked("lunch", ["Meals", "Trains"], "Meals", "Trains") == "Meals"
+
+        MEAL_RECEIPTS_DIR.mkdir(parents=True, exist_ok=True)
+        save_settings({"categories": names})
+        for query, expected in [("merch", "Merch"), ("suica top-up", "Transport"), ("budget", "Food")]:
+            at = AppTest.from_file(str(SCRIPTS_DIR / "app.py"), default_timeout=120)
+            at.run()
+            at.text_input(key="home_query").input(query)
+            at.run()
+            assert not at.exception, (query, at.exception)
+            assert at.selectbox(key="add_entry_category").value == expected, query
+            assert at.selectbox(key="budget_editing").value == expected, query
+            assert not at.warning, (query, at.warning)
+    """)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_month_by_month_by_category(app_copy):
+    # Month by month stacks every category, and shows all of them side by
+    # side or one against its own budget's allowance.
+    result = run_in(app_copy, """
+        from datetime import date, timedelta
+        from streamlit.testing.v1 import AppTest
+        from prescripts.common import JST, SCRIPTS_DIR
+        from prescripts.data.meal_receipts import (
+            MEAL_RECEIPTS_DIR, append_entry, day_folder_for, monthly_history, save_settings,
+        )
+        from datetime import datetime
+
+        today = datetime.now(JST).date()
+        last_month = today.replace(day=1) - timedelta(days=1)
+        for day in (last_month, today):
+            folder = day_folder_for(day)
+            folder.mkdir(parents=True, exist_ok=True)
+            append_entry(folder / "receipts.csv", f"{day} 08:00:00", "Lawson", "Onigiri", 150)
+        append_entry(day_folder_for(last_month) / "receipts.csv", f"{last_month} 09:00:00", "Shinjuku",
+                     "Suica top-up", 3000, category="Transport")
+        MEAL_RECEIPTS_DIR.mkdir(parents=True, exist_ok=True)
+        save_settings({"budgets": {"Transport": {"amount": 6000, "period": "monthly"}}})
+
+        history = monthly_history(today)
+        assert list(history["by_category"]) == [{"Transport": 3000, "Food": 150}, {"Food": 150}], history
+
+        at = AppTest.from_file(str(SCRIPTS_DIR / "prescripts/pages/meal_receipts.py"), default_timeout=60)
+        at.run()
+        assert not at.exception, at.exception
+        shown = at.selectbox(key="month_by_month_shown")
+        assert shown.options == ["All spending", "Food", "Transport"], shown.options
+        table = at.dataframe[-1].value
+        assert list(table.columns) == ["Month", "Total", "Per day", "Food", "Transport"], table
+        assert list(table["Transport"]) == ["¥3,000", "¥0"], table
+
+        shown.set_value("Transport").run()
+        table = at.dataframe[-1].value
+        assert list(table.columns) == ["Month", "Transport", "Per day", "Allowance", "Difference"], table
+        assert table["Allowance"].iloc[0] == "¥6,000" and table["Difference"].iloc[0] == "-¥3,000", table
+        at.selectbox(key="month_by_month_shown").set_value("Food").run()
+        assert any("No food budget set" in caption.value for caption in at.caption)
+    """)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 def test_page_addresses_stay_the_same(app_copy):
     # A page's address mustn't change when its file moves or is renamed:
     # bookmarks would break, and Spotify only accepts the exact redirect

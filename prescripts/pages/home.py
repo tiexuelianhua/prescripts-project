@@ -21,7 +21,15 @@ from prescripts.common import (
     theme_colors,
     typewriter,
 )
-from prescripts.data.home import add_quote, load_quotes, quote_credit, remove_quote, route_command
+from prescripts.data.home import (
+    add_quote,
+    budget_category_asked,
+    load_quotes,
+    quote_credit,
+    remove_quote,
+    route_command,
+)
+from prescripts.data.meal_receipts import budget_category, categories, load_settings, transport_category
 
 # Rotates like a search-portal prompt (Gemini-style) rather than always
 # asking the same thing. Picked once per session (below), not re-rolled on
@@ -188,8 +196,22 @@ query = st.text_input(
 # weather like") go to their page; anything else is offered as a search.
 # The search links open in the user's own browser, not this window.
 if query.strip():
-    route = route_command(query, shown_pages())
+    # Budget's own categories count as its keywords too ("merch" finds it),
+    # and a request naming one opens the page on it.
+    budget_settings = load_settings()
+    category_names = categories(budget_settings)
+    pages = [
+        {**page, "keywords": [*page["keywords"], *(name.lower() for name in category_names)]}
+        if page["url_path"] == "meal_receipts" else page
+        for page in shown_pages()
+    ]
+    route = route_command(query, pages)
     if route["action"] == "page":
+        if route["page"]["url_path"] == "meal_receipts":
+            asked = budget_category_asked(query, category_names, budget_category(budget_settings),
+                                          transport_category(budget_settings))
+            if asked:
+                st.session_state["_budget_open_category"] = asked
         st.switch_page(route["page"]["path"])
     elif route["action"] == "choose":
         st.caption("That could mean more than one page:")

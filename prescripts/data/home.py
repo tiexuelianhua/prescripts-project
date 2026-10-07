@@ -92,6 +92,31 @@ def route_command(query: str, pages: list[dict]) -> dict:
     return {"action": "search", "links": links}
 
 
+# Other words for the Budget page's food and transport categories, so "log a
+# suica top-up" opens it on Transport whatever that category is called.
+_FOOD_WORDS = ["meal", "meals", "breakfast", "lunch", "dinner", "snack", "snacks", "konbini"]
+_TRANSPORT_WORDS = ["suica", "pasmo", "train", "trains", "fare", "fares", "bus", "taxi", "top-up", "top up"]
+
+
+def budget_category_asked(query: str, category_names: list[str], food: str, transport: str) -> str | None:
+    # The Budget category a Home request names ("shopping budget", "log
+    # lunch"), or None. A category's own name comes before the other words
+    # for food and transport, and the first one found wins.
+    text = query.strip().lower()
+
+    def says(word):
+        return re.search(r"\b" + re.escape(word.lower()) + r"\b", text) is not None
+
+    for name in category_names:
+        if says(name):
+            return name
+    if transport in category_names and any(says(word) for word in _TRANSPORT_WORDS):
+        return transport
+    if food in category_names and any(says(word) for word in _FOOD_WORDS):
+        return food
+    return None
+
+
 def quote_credit(quote: dict, escape: bool = True) -> str:
     # One line naming where the quote comes from, e.g.
     #   This line is from "Hero" by Mili.

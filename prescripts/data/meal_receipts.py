@@ -444,6 +444,19 @@ def daily_totals_for_month(year: int, month: int, category: str | None = None) -
     return totals
 
 
+def month_totals_by_category(year: int, month: int) -> dict[str, int]:
+    # Counted total per category over one whole month, largest first.
+    month_dir = day_folder_for(date(year, month, 1)).parent
+    totals = {}
+    if month_dir.exists():
+        for day_dir in month_dir.iterdir():
+            csv_path = day_dir / "receipts.csv"
+            if csv_path.exists():
+                for name, yen in totals_by_category(load_entries(csv_path)).items():
+                    totals[name] = totals.get(name, 0) + yen
+    return dict(sorted(totals.items(), key=lambda pair: -pair[1]))
+
+
 def _previous_month(year: int, month: int) -> tuple[int, int]:
     return (year - 1, 12) if month == 1 else (year, month - 1)
 
@@ -487,6 +500,8 @@ def monthly_history(
     # counts only the days so far, for its per-day average and allowance.
     # "budgeted_yen" is what the budget's category spent (everything, with no
     # category given): that, not the total, is what the allowance is for.
+    # "by_category" is each category's total, and "days" / "month_days" what
+    # an allowance for any category is worked out over.
     rows = []
     year, month = today.year, today.month
     for _ in range(months):
@@ -504,13 +519,17 @@ def monthly_history(
             "per_day_yen": round(total / days),
             "budgeted_yen": sum(budgeted.values()),
             "allowance_yen": allowance_for_days(budget_amount, budget_period, days, month_days) if budget_amount > 0 else None,
+            "by_category": month_totals_by_category(year, month),
+            "days": days,
+            "month_days": month_days,
             "has_entries": bool(totals),
         })
         year, month = _previous_month(year, month)
     rows.reverse()
     while rows and not rows[0]["has_entries"]:
         rows.pop(0)
-    columns = ["month", "total_yen", "per_day_yen", "budgeted_yen", "allowance_yen", "has_entries"]
+    columns = ["month", "total_yen", "per_day_yen", "budgeted_yen", "allowance_yen", "by_category", "days",
+               "month_days", "has_entries"]
     return pd.DataFrame(rows, columns=columns).drop(columns="has_entries")
 
 

@@ -30,6 +30,7 @@ from prescripts.data.meal_receipts import (
     PERIODS,
     TAX_ITEM,
     TRANSIT_FEE_ITEM,
+    allowance_for_days,
     append_entry,
     bag_price,
     budget_category,
@@ -105,6 +106,12 @@ today_jst = datetime.now(JST).date()
 # English only (Settings): the bag is "Bag", not "Bag (袋)", and months
 # are "Sep 2026".
 english = english_only()
+# Opened from Home on a category ("shopping budget", "suica top-up"): the
+# form and the sidebar's budget start on it. Set before either is drawn.
+opened_on = st.session_state.pop("_budget_open_category", None)
+if opened_on in category_names:
+    st.session_state["add_entry_category"] = opened_on
+    st.session_state["budget_editing"] = opened_on
 
 
 def shown_item(name):
@@ -882,42 +889,62 @@ with st.container(key="main_body"):
     # Secondary, so collapsed (the page's convention): the last six months
     # side by side. Only months from the first one with receipts are shown.
     with st.expander("Month by month"):
-        # Food's budget for now; each category's comes with the month view
-        # by category (step 3 of #25).
-        food_budget = budget_for(settings, budgeted)
-        budget_amount, budget_period = food_budget["amount"], food_budget["period"]
-        history = monthly_history(today_date, budget_amount, budget_period, budget_category=budgeted,
-                                  english=english)
+        history = monthly_history(today_date, english=english)
         if len(history) < 2:
             st.write("Month-by-month comparisons appear once there's more than one month of receipts.")
         else:
+            yen = "¥{:,.0f}".format
+            # Every category spent on in these months, in the saved order.
+            spent_on = {name for month in history["by_category"] for name in month}
+            history_categories = [name for name in category_names if name in spent_on]
+            history_categories += sorted(spent_on - set(history_categories))
+            by_category = pd.DataFrame(
+                [{name: month.get(name, 0) for name in history_categories} for month in history["by_category"]],
+                columns=history_categories,
+            )
             # Labels without "(so far)" -- the chart's slanted labels cut it off.
-            chart = history.assign(month=history["month"].str.replace(" (so far)", "", regex=False))
-            # In the order given (oldest first): sorted, "2026年10月" came
-            # before "2026年9月".
-            st.bar_chart(chart.set_index("month")["total_yen"], x_label="", y_label="Total (¥)", color=ACCENT_COLOR,
-                         sort=False)
-            table = pd.DataFrame({
-                "Month": history["month"],
-                "Total": history["total_yen"].map("¥{:,.0f}".format),
-                "Per day": history["per_day_yen"].map("¥{:,.0f}".format),
-            })
-            if budget_amount > 0:
-                # The allowance is for the budgeted category, so that's what
-                # it's set against -- shown as its own column once anything
-                # else has been spent.
-                if (history["budgeted_yen"] != history["total_yen"]).any():
-                    table[budgeted] = history["budgeted_yen"].map("¥{:,.0f}".format)
-                table["Allowance"] = history["allowance_yen"].map("¥{:,.0f}".format)
-                table["Difference"] = (history["budgeted_yen"] - history["allowance_yen"]).map(signed_yen)
-            st.dataframe(table, hide_index=True, width="stretch")
-            if budget_amount > 0:
-                st.caption(
-                    f"Allowance is your {budgeted.lower()} budget spread over each month's days"
-                    + {"weekly": " (a weekly allowance counts as a seventh per day).",
-                       "monthly": " (a monthly one is spread evenly over the month)."}.get(budget_period, ".")
-                    + " Under budget shows as a minus."
-                )
+            by_category.index = history["month"].str.replace(" (so far)", "", regex=False)
+            # Stacked by category like This month's chart, Food first. In the
+            # order given (oldest first): sorted, "2026年10月" came before
+            # "2026年9月".
+            order = sorted(history_categories, key=lambda name: name != budgeted)
+            st.bar_chart(by_category[order], x_label="", y_label="Total (¥)", sort=False,
+                         color=[colors.get(name, ACCENT_COLOR) for name in order])
+            # All spending side by side, or one category against its budget.
+            shown = st.selectbox("Show", options=["All spending", *history_categories], key="month_by_month_shown")
+            if shown == "All spending":
+                table = pd.DataFrame({
+                    "Month": history["month"],
+                    "Total": history["total_yen"].map(yen),
+                    "Per day": history["per_day_yen"].map(yen),
+                })
+                if len(history_categories) > 1:
+                    for name in history_categories:
+                        table[name] = by_category[name].map(yen).to_numpy()
+                st.dataframe(table, hide_index=True, width="stretch")
+            else:
+                spent = by_category[shown].to_numpy()
+                table = pd.DataFrame({
+                    "Month": history["month"],
+                    shown: [yen(amount) for amount in spent],
+                    "Per day": [yen(amount / days) for amount, days in zip(spent, history["days"])],
+                })
+                shown_budget = budget_for(settings, shown)
+                if shown_budget["amount"] > 0:
+                    allowance = [allowance_for_days(shown_budget["amount"], shown_budget["period"], days, month_days)
+                                 for days, month_days in zip(history["days"], history["month_days"])]
+                    table["Allowance"] = [yen(amount) for amount in allowance]
+                    table["Difference"] = [signed_yen(amount - allowed) for amount, allowed in zip(spent, allowance)]
+                st.dataframe(table, hide_index=True, width="stretch")
+                if shown_budget["amount"] > 0:
+                    st.caption(
+                        f"Allowance is your {shown.lower()} budget spread over each month's days"
+                        + {"weekly": " (a weekly allowance counts as a seventh per day).",
+                           "monthly": " (a monthly one is spread evenly over the month)."}.get(shown_budget["period"], ".")
+                        + " Under budget shows as a minus."
+                    )
+                else:
+                    st.caption(f"No {shown.lower()} budget set, so there's no allowance to compare with.")
 
 # Streamlit reruns this whole script on every widget interaction (picking an
 # item, typing a store, nudging the cost), and typewriter() blocks for
