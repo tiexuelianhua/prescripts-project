@@ -49,6 +49,7 @@ from prescripts.data.japanese.deck import (
 from prescripts.data.japanese.learning import RULES_OF_THUMB, kanji_in, reading_in_word, words_using
 from prescripts.data.japanese.lookups import jisho_lookup, kanji_lookup, part_of_speech_for
 from prescripts.data.japanese.spelling import check_new_card
+from prescripts.data.japanese.stations import add_station_cards, new_stations
 from prescripts.drawing_widget import drawing_box
 
 TEXT_COLOR, ACCENT_COLOR = theme_colors()
@@ -875,6 +876,17 @@ def render_your_cards(deck: dict) -> None:
             if flagged:
                 st.caption(f"⚠ Jisho had no part of speech for {flagged} card{'s' if flagged != 1 else ''}. "
                            "Type them into the Part of speech column by hand.")
+            # Stations from Budget that OpenStreetMap had no Japanese name
+            # for: listed until dismissed, to add by hand if wanted.
+            missed_stations = deck["settings"].get("stations_not_found", [])
+            if missed_stations:
+                missed_column, dismiss_column = st.columns([5, 1], vertical_alignment="center")
+                missed_column.caption("Couldn't find these stations from your fares on OpenStreetMap: "
+                                      + ", ".join(missed_stations) + ". Add them by hand if you like.")
+                if dismiss_column.button("OK", key="japanese_dismiss_stations", width="stretch"):
+                    deck["settings"]["stations_not_found"] = []
+                    save_deck(deck)
+                    st.rerun()
             pick_column, clear_column, fill_column = st.columns([2, 2, 3])
             # Pick every card the search and Deck filter show (e.g. search
             # "verb"), or start the picks over.
@@ -953,6 +965,15 @@ def render_your_cards(deck: dict) -> None:
 
 
 deck = load_deck()
+# Stations logged on Budget's fares become vocab cards in Learn, a few
+# lookups at a time.
+pending_stations = new_stations(deck)
+if pending_stations:
+    with st.spinner("Adding stations from your fares..."):
+        added_stations = add_station_cards(deck, pending_stations)
+    save_deck(deck)
+    if added_stations:
+        st.toast(f"Added {added_stations} station{'s' if added_stations != 1 else ''} from your fares to Learn.")
 
 with st.container(key="main_body"):
     render_learn(deck)

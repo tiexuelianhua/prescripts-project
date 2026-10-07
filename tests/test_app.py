@@ -1275,6 +1275,47 @@ def test_drawing_on_a_card(app_copy):
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+def test_stations_from_fares_become_cards(app_copy):
+    # Stations logged on Budget's fares turn up as vocab cards in Learn when
+    # the Japanese page opens, each looked up once; one OpenStreetMap
+    # doesn't know is listed instead. The lookup is faked, to stay offline.
+    result = run_in(app_copy, """
+        from datetime import date
+        from streamlit.testing.v1 import AppTest
+        import prescripts.data.japanese.stations as stations
+        from prescripts.common import SCRIPTS_DIR
+        from prescripts.data.japanese.deck import in_practice_set, load_deck, today_jst
+        from prescripts.data.meal_receipts import append_entry, day_folder_for
+
+        folder = day_folder_for(date(2026, 8, 1))
+        folder.mkdir(parents=True)
+        append_entry(folder / "receipts.csv", "2026-08-01 09:00:00", "Kita-Senju → 押上駅", "Transit fee", 300,
+                     category="Transport")
+        append_entry(folder / "receipts.csv", "2026-08-01 18:00:00", "Nowhere", "Suica top-up", 3000,
+                     category="Transport")
+        known = {"Kita-Senju": {"front": "北千住", "reading": "きたせんじゅ", "name_en": "Kita-Senju"},
+                 "押上駅": {"front": "押上", "reading": "おしあげ", "name_en": "Oshiage"}}
+        looked_up = []
+        stations.station_lookup = lambda name: looked_up.append(name) or known.get(name)
+
+        at = AppTest.from_file(str(SCRIPTS_DIR / "prescripts/pages/japanese.py"), default_timeout=60)
+        at.run()
+        assert not at.exception, at.exception
+        deck = load_deck()
+        cards = {card["front"]: card for card in deck["cards"]}
+        assert set(cards) == {"北千住", "押上"}, cards
+        assert cards["北千住"]["reading"] == "きたせんじゅ" and cards["北千住"]["meaning"] == "Kita-Senju (station)"
+        assert all(card["learning"] and card["pos"] == "Station" for card in cards.values())
+        assert all(in_practice_set(card, "Stations", set(), today_jst()) for card in cards.values())
+        assert deck["settings"]["stations_not_found"] == ["Nowhere"]
+
+        at.run()  # each station is only looked up once
+        assert sorted(looked_up) == ["Kita-Senju", "Nowhere", "押上駅"], looked_up
+        assert any("Couldn't find these stations" in caption.value and "Nowhere" in caption.value for caption in at.caption)
+    """)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 def test_page_addresses_stay_the_same(app_copy):
     # A page's address mustn't change when its file moves or is renamed:
     # bookmarks would break, and Spotify only accepts the exact redirect
