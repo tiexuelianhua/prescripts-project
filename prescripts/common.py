@@ -485,6 +485,11 @@ def inject_input_style() -> None:
         [data-testid="InputInstructions"] {
             bottom: -20px !important;
         }
+        /* In a form the submit button comes straight after the input, so
+           the hint, moved below it, landed on the button. Room for it. */
+        [data-testid="stForm"] [data-testid="stTextInput"] {
+            margin-bottom: 0.9rem;
+        }
         </style>
         """,
         unsafe_allow_html=True,
