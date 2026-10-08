@@ -255,8 +255,7 @@ def render_flashcard(card: dict, show_back: bool, deck: dict | None = None, seed
         breakdown = kanji_breakdown(deck, card) if deck else ""
         if breakdown:
             back += f'<div class="flashcard-pos" lang="ja">{html.escape(breakdown)}</div>'
-        # Kanji: meaning first, then each kind of reading -- the order typed
-        # mode asks for them in.
+        # Kanji: meaning first, then each kind of reading, for reference.
         for field, label in (("onyomi", "On"), ("kunyomi", "Kun")):
             if card.get(field):
                 readings = html.escape(display_readings(card[field]))
@@ -481,7 +480,7 @@ def render_review(deck: dict) -> None:
             "Type answers",
             value=deck["settings"].get("typed_answers", False),
             key="japanese_typed_toggle",
-            help="Type the reading and meaning (plus on'yomi/kun'yomi for kanji) and they're checked for you. "
+            help="Type the reading and meaning and they're checked for you. "
             "Romaji turns into kana. Grammar: put the word and the ending together.",
         )
         # Daily reviews in a random order rather than oldest-due first. On by
@@ -530,8 +529,8 @@ def render_review(deck: dict) -> None:
 
     # Typed mode moves straight on to the next card after an answer, so the
     # verdict on the one just answered shows here, above it.
-    # A card is typed in parts (vocab: reading, meaning; kanji: meaning,
-    # on'yomi, kun'yomi); this is how far into the current card that's got.
+    # A card is typed in parts (vocab: reading, then meaning); this is how
+    # far into the current card that's got.
     # The last card's verdict is hidden while one is part-way through, so the
     # marks shown are all for the card on screen.
     progress = st.session_state.get("japanese_step")

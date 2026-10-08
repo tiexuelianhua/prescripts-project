@@ -162,14 +162,9 @@ def test_typed_answers(app_copy):
 
         kanji = {"kind": "kanji", "front": "学", "reading": "", "meaning": "study, learning",
                  "onyomi": "ガク", "kunyomi": "まな.ぶ"}
-        assert answer_steps(kanji) == ["meaning", "onyomi", "kunyomi"]
-        assert check_step(kanji, "onyomi", "gaku")
-        assert check_step(kanji, "kunyomi", "manabu")  # whole word
-        assert check_step(kanji, "kunyomi", "まな")     # or just the stem
-        assert not check_step(kanji, "kunyomi", "gaku")
-
-        no_kunyomi = dict(kanji, kunyomi="")
-        assert answer_steps(no_kunyomi) == ["meaning", "onyomi"]
+        # Kanji readings are shown after answering, not asked for.
+        assert answer_steps(kanji) == ["meaning"]
+        assert check_step(kanji, "meaning", "learning")
     """)
 
 

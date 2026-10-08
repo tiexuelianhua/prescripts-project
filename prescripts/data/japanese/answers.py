@@ -180,24 +180,23 @@ def display_readings(text: str) -> str:
 
 
 # The parts a typed answer is asked for, in order. Vocab: its reading (or
-# its meaning, for kana-only words). Kanji: meaning, then on'yomi, then
-# kun'yomi -- skipping a reading the card doesn't have.
+# its meaning, for kana-only words). Kanji: just the meaning -- on'yomi and
+# kun'yomi come from seeing the kanji in words, so they're shown as a
+# reference after answering rather than asked for.
 STEP_LABELS = {
     "reading": "Reading (kana or romaji)",
     "meaning": "Meaning",
-    "onyomi": "On'yomi (kana or romaji)",
-    "kunyomi": "Kun'yomi (kana or romaji)",
     "form": "Put them together (kana or romaji)",
 }
 
 
 def answer_steps(card: dict) -> list[str]:
-    # Every card asks for its meaning; readings come first where there are any.
+    # Every card but grammar asks for its meaning; a word's reading comes first.
     if card["kind"] == "vocab":
         return ["reading", "meaning"] if has_distinct_reading(card) else ["meaning"]
     if card["kind"] == "grammar":  # a point paired with a word: grammar.typed_prompt
         return ["form"]
-    return ["meaning"] + [field for field in ("onyomi", "kunyomi") if split_readings(card.get(field, ""))]
+    return ["meaning"]
 
 
 def typed_as_kana(typed: str) -> str:
@@ -221,15 +220,4 @@ def check_step(card: dict, step: str, typed: str) -> bool:
     typed_kana = typed_as_kana(typed)
     if step == "form":
         return typed_kana == normalize_kana(card["form_reading"])
-    if step == "reading":
-        return typed_kana == normalize_kana(card["reading"])
-    # A reading: any one listed of that kind counts. Kun'yomi can be typed
-    # whole (まなぶ) or as just the stem (まな); KANJIDIC's "-" marks
-    # (prefix/suffix readings like -め) are ignored.
-    accepted = set()
-    for reading in split_readings(card[step]):
-        reading = reading.replace("-", "")
-        stem, _, okurigana = reading.partition(".")
-        accepted.add(normalize_kana(stem + okurigana))
-        accepted.add(normalize_kana(stem))
-    return typed_kana in accepted
+    return step == "reading" and typed_kana == normalize_kana(card["reading"])
