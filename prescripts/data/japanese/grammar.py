@@ -83,3 +83,10 @@ def conjugate(point: dict, word: dict) -> dict:
     # in kana has no separate reading.
     reading = word["reading"] or word["front"]
     return {"front": word["front"] + point["front"], "reading": reading + point["front"]}
+
+
+def typed_prompt(point: dict, word: dict) -> dict:
+    # For typed answers: the point with the word it's paired with and the
+    # form they make, which is what gets typed (see answers.check_step).
+    form = conjugate(point, word)
+    return dict(point, word=word, form_front=form["front"], form_reading=form["reading"])

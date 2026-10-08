@@ -222,6 +222,14 @@ def test_grammar_points(app_copy):
         assert not in_practice_set(point, "Nouns", set(), today_jst())
         assert in_practice_set(point, "Every card", set(), today_jst())
 
+        # Typed: the form put together, in kana, romaji or as written.
+        from prescripts.data.japanese.answers import answer_steps, check_step
+        from prescripts.data.japanese.grammar import typed_prompt
+        asked = typed_prompt(point, {"kind": "vocab", "front": "静か", "reading": "しずか", "meaning": "quiet"})
+        assert answer_steps(asked) == ["form"]
+        assert all(check_step(asked, "form", typed) for typed in ("しずかじゃなかった", "shizukajanakatta", "静かじゃなかった"))
+        assert not any(check_step(asked, "form", typed) for typed in ("しずかじゃない", "", "静かだった"))
+
         assert add_starter_points(deck) == len(STARTER_POINTS) - 1  # じゃなかった is already there
         assert add_starter_points(deck) == 0
         fronts = [card["front"] for card in deck["cards"] if card["kind"] == "grammar"]

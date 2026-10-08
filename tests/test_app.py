@@ -1244,7 +1244,8 @@ def test_learning_new_cards(app_copy):
 def test_grammar_on_the_japanese_page(app_copy):
     # Grammar points are added from Add cards (one by one, or the starter
     # set) and reviewed with a word from the deck: the conjugated form
-    # first, then the breakdown, graded by hand even with typed answers on.
+    # first, then the breakdown, graded by hand. With typed answers on, the
+    # form is typed instead, from the word and the point's meaning.
     result = run_in(app_copy, """
         from streamlit.testing.v1 import AppTest
         from prescripts.common import SCRIPTS_DIR
@@ -1254,7 +1255,7 @@ def test_grammar_on_the_japanese_page(app_copy):
         deck = load_deck()
         quiet = add_card(deck, "vocab", "静か", "しずか", "quiet", pos="Na-adjective")
         quiet.update(due="2999-01-01")  # only the grammar point is due
-        deck["settings"]["typed_answers"] = True
+        deck["settings"]["shuffle_reviews"] = False  # due in the order added
         save_deck(deck)
 
         at = AppTest.from_file(str(SCRIPTS_DIR / "prescripts/pages/japanese.py"), default_timeout=60)
@@ -1271,7 +1272,6 @@ def test_grammar_on_the_japanese_page(app_copy):
         at.segmented_control(key="japanese_review_filter").set_value("Grammar").run()
         flashcards = [block.value for block in at.markdown if 'class="flashcard"' in block.value]
         assert flashcards and "静かじゃなかった" in flashcards[0] and "wasn" not in flashcards[0], flashcards
-        assert not [box for box in at.text_input if box.key == "japanese_typed_answer"]  # recognition, not typed
         at.button(key="japanese_show_answer").click().run()
         flashcards = [block.value for block in at.markdown if 'class="flashcard"' in block.value]
         assert all(part in flashcards[0] for part in ("しずかじゃなかった", "静か", "quiet", "wasn&#x27;t (casual)")), flashcards
@@ -1285,6 +1285,16 @@ def test_grammar_on_the_japanese_page(app_copy):
         grammar = [card for card in load_deck()["cards"] if card["kind"] == "grammar"]
         assert len(grammar) == len(STARTER_POINTS), [card["front"] for card in grammar]
         assert not [button for button in at.button if button.key == "japanese_add_starter_grammar"]
+
+        at.toggle(key="japanese_typed_toggle").set_value(True).run()  # だ is due first
+        flashcards = [block.value for block in at.markdown if 'class="flashcard"' in block.value]
+        assert "静か" in flashcards[0] and "is (casual)" in flashcards[0] and "静かだ" not in flashcards[0], flashcards
+        at.text_input(key="japanese_typed_answer").input("shizukada")
+        at.button(key="FormSubmitter:japanese_typed_form-Check").click().run()
+        assert not at.exception, at.exception
+        [da] = [card for card in load_deck()["cards"] if card["front"] == "だ"]
+        assert da["reps"] == 1, da
+        assert any("✅" in block.value and "静かだ" in block.value for block in at.markdown), [b.value for b in at.markdown]
     """)
     assert result.returncode == 0, result.stdout + result.stderr
 

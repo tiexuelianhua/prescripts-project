@@ -187,6 +187,7 @@ STEP_LABELS = {
     "meaning": "Meaning",
     "onyomi": "On'yomi (kana or romaji)",
     "kunyomi": "Kun'yomi (kana or romaji)",
+    "form": "Put them together (kana or romaji)",
 }
 
 
@@ -194,6 +195,8 @@ def answer_steps(card: dict) -> list[str]:
     # Every card asks for its meaning; readings come first where there are any.
     if card["kind"] == "vocab":
         return ["reading", "meaning"] if has_distinct_reading(card) else ["meaning"]
+    if card["kind"] == "grammar":  # a point paired with a word: grammar.typed_prompt
+        return ["form"]
     return ["meaning"] + [field for field in ("onyomi", "kunyomi") if split_readings(card.get(field, ""))]
 
 
@@ -213,7 +216,11 @@ def check_step(card: dict, step: str, typed: str) -> bool:
         typed_parts = typed_meaning_parts(typed)
         accepted = meaning_parts(card["meaning"])
         return bool(typed_parts) and all(meaning_close_enough(part, accepted) for part in typed_parts)
+    if step == "form" and typed.strip() == card["form_front"]:  # typed with an IME, kanji and all
+        return True
     typed_kana = typed_as_kana(typed)
+    if step == "form":
+        return typed_kana == normalize_kana(card["form_reading"])
     if step == "reading":
         return typed_kana == normalize_kana(card["reading"])
     # A reading: any one listed of that kind counts. Kun'yomi can be typed

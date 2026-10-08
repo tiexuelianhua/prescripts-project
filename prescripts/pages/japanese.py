@@ -56,6 +56,7 @@ from prescripts.data.japanese.grammar import (
     conjugate,
     fitting_words,
     pick_word,
+    typed_prompt,
 )
 from prescripts.data.japanese.learning import RULES_OF_THUMB, kanji_in, reading_in_word, words_using
 from prescripts.data.japanese.lookups import jisho_lookup, kanji_lookup, part_of_speech_for
@@ -199,6 +200,20 @@ def render_grammar_card(point: dict, word: dict | None, show_back: bool) -> None
         st.caption(f"None of your words fit it yet. It goes on {attaches_label(point).lower()}.")
 
 
+def render_grammar_prompt(asked: dict) -> None:
+    # Typed answers: the word and what the point means, to put together
+    # (静か quiet + "wasn't (casual)" -> 静かじゃなかった).
+    word = asked["word"]
+    word_reading = f"{word['reading']} · " if has_distinct_reading(word) else ""
+    st.markdown(
+        f'<div class="flashcard"><div class="flashcard-kind">Grammar</div>'
+        f'<div class="flashcard-front" lang="ja">{html.escape(word["front"])}</div>'
+        f'<div class="flashcard-pos"><span lang="ja">{html.escape(word_reading)}</span>{html.escape(word["meaning"])}</div>'
+        f'<div class="flashcard-meaning">+ {html.escape(asked["meaning"])}</div></div>',
+        unsafe_allow_html=True,
+    )
+
+
 def attaches_label(point: dict) -> str:
     # ["noun", "na-adjective"] -> "Nouns, Na-adjectives"
     return ", ".join(WORD_TYPES[word_type] for word_type in point.get("attaches", []))
@@ -259,6 +274,8 @@ def render_flashcard(card: dict, show_back: bool, deck: dict | None = None, seed
 
 def answer_summary(card: dict) -> str:
     # The whole back of a card on one line, for the typed-mode verdict.
+    if card.get("form_reading"):  # a grammar point, as typed_prompt asked it
+        return f"{card['form_reading']} · ～{card['front']} {card['meaning']}"
     parts = [card["reading"] if has_distinct_reading(card) else "", card["meaning"]]
     if card.get("onyomi"):
         parts.append(f"on {display_readings(card['onyomi'])}")
@@ -269,10 +286,12 @@ def answer_summary(card: dict) -> str:
 
 def step_answer(card: dict, step: str) -> str:
     # The right answer for one typed part, shown when it's missed.
+    if step == "form":
+        return card["form_reading"]
     return display_readings(card[step]) if step in ("onyomi", "kunyomi") else card[step]
 
 
-STEP_NAMES = {"reading": "Reading", "meaning": "Meaning", "onyomi": "On'yomi", "kunyomi": "Kun'yomi"}
+STEP_NAMES = {"reading": "Reading", "meaning": "Meaning", "onyomi": "On'yomi", "kunyomi": "Kun'yomi", "form": "Form"}
 
 
 ADD_FIELD_KEYS = {
@@ -451,7 +470,7 @@ def render_review(deck: dict) -> None:
             value=deck["settings"].get("typed_answers", False),
             key="japanese_typed_toggle",
             help="Type the reading and meaning (plus on'yomi/kun'yomi for kanji) and they're checked for you. "
-            "Romaji turns into kana. Grammar is always shown and graded by hand.",
+            "Romaji turns into kana. Grammar: put the word and the ending together.",
         )
         # Daily reviews in a random order rather than oldest-due first. On by
         # default and saved with the deck; Practice always shuffles anyway.
@@ -507,14 +526,23 @@ def render_review(deck: dict) -> None:
     if card is None or not progress or progress["key"] != (card["id"], practice_mode):
         progress = {"key": (card["id"], practice_mode) if card else None, "parts": []}
     last_result = st.session_state.get("japanese_last_result")
+    # A grammar point is typed on its word; one with no word to go on is
+    # shown and graded by hand instead.
+    asked = card
+    if card is not None and card["kind"] == "grammar":
+        word = pick_word(deck, card, f"{card['id']}:{word_seed}")
+        asked = typed_prompt(card, word) if word else None
     if typed_mode and last_result and not progress["parts"]:
         answered = last_result["card"]
+        # A grammar point shows as it was asked: on its word.
+        shown = last_result.get("shown", answered)
         # Results saved before multi-part answers existed have no "parts".
         parts = last_result.get("parts") or [{"step": None, "ok": last_result["correct"], "typed": last_result["typed"]}]
         verdict_column, override_column = st.columns([4, 1], vertical_alignment="center")
         with verdict_column:
             icon = "✅" if last_result["correct"] else "❌"
-            summary = f"{icon} **{html.escape(answered['front'])}** — {html.escape(answer_summary(answered))}"
+            summary = (f"{icon} **{html.escape(shown.get('form_front', shown['front']))}** — "
+                       f"{html.escape(answer_summary(shown))}")
             if len(parts) == 1 and not last_result["correct"] and parts[0]["typed"]:
                 summary += f" (you typed *{html.escape(parts[0]['typed'])}*)"
             st.markdown(summary)
@@ -559,9 +587,12 @@ def render_review(deck: dict) -> None:
             st.write("Nothing to review yet: your cards are all in Learn above.")
         else:
             st.write(f"No {review_filter.lower()} cards yet.")
-    elif typed_mode and card["kind"] != "grammar":
-        render_flashcard(card, show_back=False)
-        steps = answer_steps(card)
+    elif typed_mode and asked is not None:
+        if card["kind"] == "grammar":
+            render_grammar_prompt(asked)
+        else:
+            render_flashcard(card, show_back=False)
+        steps = answer_steps(asked)
         if len(progress["parts"]) >= len(steps):  # card edited to fewer parts mid-way
             progress["parts"] = []
         step = steps[len(progress["parts"])]
@@ -570,7 +601,7 @@ def render_review(deck: dict) -> None:
             # (a miss shows the answer) -- a wrong part doesn't end the card,
             # every part still gets asked.
             done = [
-                f"{STEP_NAMES[part['step']]} {'✅' if part['ok'] else '❌ ' + step_answer(card, part['step'])}"
+                f"{STEP_NAMES[part['step']]} {'✅' if part['ok'] else '❌ ' + step_answer(asked, part['step'])}"
                 for part in progress["parts"]
             ]
             st.caption(" · ".join(done + [f"Part {len(progress['parts']) + 1} of {len(steps)}"]))
@@ -582,7 +613,7 @@ def render_review(deck: dict) -> None:
             )
             checked = st.form_submit_button("Check", width="stretch")
         if checked:
-            progress["parts"].append({"step": step, "ok": check_step(card, step, typed), "typed": typed.strip()})
+            progress["parts"].append({"step": step, "ok": check_step(asked, step, typed), "typed": typed.strip()})
             st.session_state["japanese_answer_count"] = st.session_state.get("japanese_answer_count", 0) + 1
             if len(progress["parts"]) < len(steps):
                 st.session_state["japanese_step"] = progress
@@ -601,6 +632,7 @@ def render_review(deck: dict) -> None:
                 "parts": progress["parts"],
                 "typed": progress["parts"][0]["typed"],
                 "practice": practice_mode,
+                "shown": asked,
             }
             st.session_state.pop("japanese_step", None)
             st.rerun()
