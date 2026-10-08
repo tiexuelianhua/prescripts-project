@@ -154,6 +154,14 @@ st.markdown(
     .flashcard-kanji-reading {{
         margin-top: 0.4rem;
     }}
+    /* The Deck buttons already scroll sideways when they don't fit (zoomed
+       in, say), but Streamlit hides the scrollbar, so nothing shows there's
+       more. A thin one appears then. */
+    .st-key-japanese_lookup_filter [data-testid="stButtonGroup"] > div,
+    .st-key-japanese_review_filter [data-testid="stButtonGroup"] > div {{
+        scrollbar-width: thin;
+        scrollbar-color: {ACCENT_COLOR} transparent;
+    }}
     /* Kana set names and the kana drill's last answer: the pixel font loses
        the small marks that tell ば, ぱ and は apart. */
     .st-key-japanese_kana_sets button *, .kana-plain {{
@@ -1012,7 +1020,9 @@ def render_your_cards(deck: dict) -> None:
     # cause -- ticking Learn adds the Learn section above it, which would
     # otherwise rebuild it closed.
     with st.expander("Your cards", key="japanese_your_cards", on_change="rerun"):
-        search_columns = st.columns([3, 2], vertical_alignment="bottom")
+        # Half the row each: the four Deck buttons need about 300px, more
+        # than two fifths of the expander gave them.
+        search_columns = st.columns(2, vertical_alignment="bottom")
         with search_columns[0]:
             query = st.text_input("Search", placeholder="Word, reading, or meaning", key="japanese_search")
         with search_columns[1]:
