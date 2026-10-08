@@ -1098,6 +1098,41 @@ def render_your_cards(deck: dict) -> None:
                     "due": "Next review",
                 },
             )
+            # Every tick or edit saves and redraws the table, which starts it
+            # back at the top. So where it was scrolled is noted on each click
+            # or key in it, and put back once it's redrawn (for a few
+            # seconds, unless it's scrolled by hand meanwhile).
+            st.html(
+                """<script>
+                if (!window._yourCardsScrollInstalled) {
+                    window._yourCardsScrollInstalled = true;
+                    const table = ".st-key-japanese_your_cards [data-testid=stDataFrame]";
+                    const scroller = () => document.querySelector(table + " .dvn-scroller");
+                    let saved = null;
+                    const remember = event => {
+                        const box = scroller();
+                        if (!box || !event.target.closest || !event.target.closest(table)) return;
+                        saved = { top: box.scrollTop, left: box.scrollLeft, until: Date.now() + 5000 };
+                        requestAnimationFrame(restore);
+                    };
+                    const restore = () => {
+                        if (!saved || Date.now() > saved.until) { saved = null; return; }
+                        const box = scroller();
+                        if (box && box.scrollTop === 0 && box.scrollLeft === 0 && (saved.top || saved.left)) {
+                            box.scrollTop = saved.top;
+                            box.scrollLeft = saved.left;
+                        }
+                        requestAnimationFrame(restore);
+                    };
+                    document.addEventListener("pointerdown", remember, true);
+                    document.addEventListener("keydown", remember, true);
+                    document.addEventListener("wheel", event => {
+                        if (event.target.closest && event.target.closest(table)) saved = null;
+                    }, true);
+                }
+                </script>""",
+                unsafe_allow_javascript=True,
+            )
             st.caption(f"{len(matches)} card(s) · {len(picked)} picked")
             st.caption("Changes save as you make them. Select rows and press Delete to remove cards.")
             if flagged:
