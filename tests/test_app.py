@@ -1136,9 +1136,9 @@ def test_parts_of_speech_on_cards(app_copy):
     assert result.returncode == 0, result.stdout + result.stderr
 
 
-def test_practising_picked_cards(app_copy):
+def test_practicing_picked_cards(app_copy):
     # Cards ticked under Your cards (or all the ones shown, at once) make up
-    # the "Picked cards" practice set, and practising them doesn't change
+    # the "Picked cards" practice set, and practicing them doesn't change
     # when they're due. Other sets go by part of speech or when added.
     result = run_in(app_copy, """
         from datetime import timedelta
@@ -1182,6 +1182,8 @@ def test_practising_picked_cards(app_copy):
 
         at.button(key="japanese_clear_picks").click().run()
         assert load_deck()["settings"]["picked"] == []
+        # How often each card's been missed shows in Your cards.
+        assert "misses" in at.dataframe[0].value.columns, at.dataframe[0].value.columns
         assert any("No cards picked yet" in block.value for block in at.markdown)
     """)
     assert result.returncode == 0, result.stdout + result.stderr

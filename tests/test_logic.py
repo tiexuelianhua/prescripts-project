@@ -168,6 +168,23 @@ def test_typed_answers(app_copy):
     """)
 
 
+def test_trouble_cards(app_copy):
+    # Cards missed twice or more are trouble cards, a practice set of their
+    # own, until they stick (three weeks or more between reviews).
+    _check(app_copy, """
+        from prescripts.data.japanese.deck import add_card, in_practice_set, is_trouble, load_deck, review_card, today_jst
+
+        deck = load_deck()
+        card = add_card(deck, "kanji", "達", "", "plural, attain", onyomi="タツ")
+        review_card(deck, card["id"], "again")
+        assert not is_trouble(card)
+        review_card(deck, card["id"], "again")
+        assert is_trouble(card) and in_practice_set(card, "Trouble cards", set(), today_jst())
+        card["interval"] = 21  # stuck at last
+        assert not is_trouble(card) and not in_practice_set(card, "Trouble cards", set(), today_jst())
+    """)
+
+
 def test_grammar_points(app_copy):
     # A grammar point is reviewed with a word from the deck that it fits,
     # picked by part of speech, and makes the conjugated form from it. The

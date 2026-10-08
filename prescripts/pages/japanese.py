@@ -511,9 +511,10 @@ def render_review(deck: dict) -> None:
         # Which cards to go round. Picked ones are ticked under Your cards.
         picked_count = len(deck["settings"].get("picked", []))
         practice_set = st.selectbox(
-            "Practise", PRACTICE_SETS, key="japanese_practice_set",
+            "Practice", PRACTICE_SETS, key="japanese_practice_set",
             format_func=lambda name: f"{name} ({picked_count})" if name == "Picked cards" else name,
-            help="Picked cards are the ones ticked under Your cards. Verbs, adjectives and nouns go by part of speech.",
+            help="Picked cards are the ones ticked under Your cards. Trouble cards are ones you've missed twice "
+            "or more. They stay here until they stick. Verbs, adjectives and nouns go by part of speech.",
         )
         card, position, total = practice_card(deck, kinds, review_filter, practice_set)
         # A new word for a grammar point each time round.
@@ -585,6 +586,8 @@ def render_review(deck: dict) -> None:
     elif card is None and practice_mode:
         if practice_set == "Picked cards":
             st.write("No cards picked yet. Tick some in the Pick column under Your cards.")
+        elif practice_set == "Trouble cards":
+            st.write("No trouble cards right now. Nothing's been missed twice without sticking since.")
         elif practice_set != "Every card":
             st.write(f"No cards in \"{practice_set}\" yet.")
         else:
@@ -702,7 +705,7 @@ def render_kana(deck: dict) -> None:
     # on/off switch are saved with the deck.
     settings = kana_settings(deck)
     with st.expander("Kana", expanded=settings["on"]):
-        on = st.toggle("Practise kana", value=settings["on"], key="japanese_kana_on",
+        on = st.toggle("Practice kana", value=settings["on"], key="japanese_kana_on",
                        help="Hiragana and Katakana, one set at a time.")
         scripts, sets = settings["scripts"], settings["sets"]
         if on:
@@ -876,7 +879,7 @@ def render_add_cards(deck: dict) -> None:
             st.multiselect(
                 "Goes on", list(WORD_TYPES), format_func=WORD_TYPES.get, key="japanese_add_attaches",
                 default=list(WORD_TYPES) if "japanese_add_attaches" not in st.session_state else None,
-                help="Which of your words it's practised on, by their part of speech.",
+                help="Which of your words it's practiced on, by their part of speech.",
             )
             if is_grammar
             else []
@@ -1042,6 +1045,7 @@ def render_your_cards(deck: dict) -> None:
                         # A grammar point's word types sit in the same column.
                         "pos": attaches_label(card) if card["kind"] == "grammar" else card["pos"],
                         "note": card["note"],
+                        "misses": card["lapses"],
                         "due": "In Learn" if card["learning"] else card["due"],
                     }
                     for card in matches
@@ -1069,10 +1073,10 @@ def render_your_cards(deck: dict) -> None:
                 width="stretch",
                 key=editor_key,
                 column_order=column_order,
-                disabled=["kind", "due", "missing"],
+                disabled=["kind", "due", "missing", "misses"],
                 column_config={
                     "picked": st.column_config.CheckboxColumn(
-                        "Pick", help="Practise it with Practice → Picked cards. Doesn't change when it's due."
+                        "Pick", help="Practice it with Practice → Picked cards. Doesn't change when it's due."
                     ),
                     "learning": st.column_config.CheckboxColumn(
                         "Learn", help="In Learn, not reviewed yet. Tick to send a forgotten card back there."
@@ -1088,6 +1092,9 @@ def render_your_cards(deck: dict) -> None:
                     ),
                     "note": st.column_config.TextColumn("Note", help="Your own note, e.g. a mnemonic"),
                     "missing": st.column_config.TextColumn(" ", width=36, help="No part of speech on Jisho -- type one in"),
+                    "misses": st.column_config.NumberColumn(
+                        "Misses", help="Times you've answered Again. Twice or more makes it a trouble card "
+                        "until it sticks", width="small"),
                     "due": "Next review",
                 },
             )

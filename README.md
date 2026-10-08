@@ -28,7 +28,7 @@ A personal dashboard app for everyday life in Japan, themed on the Prescripts of
 **Activities**: places to eat and things to do around a saved area, nearest first, then events coming up. Places come from OpenStreetMap, so many only have a Japanese name.
 ![Activities page](docs/screenshots/activities.png)
 
-**Japanese**: flashcard reviews, graded Again / Hard / Good / Easy. New cards can be filled in from Jisho, and vocab cards show their part of speech (noun, godan verb and so on). Practice can go round every card, ones you've picked (like kanji you've just added), or just verbs, adjectives or nouns. Cards that are new to you start in Learn, to study at your own pace with your own notes, or a mnemonic drawn over the card with a mouse, pen or finger, before they're reviewed. A kanji there shows the words in your deck that use it, and whether each one uses its on'yomi or kun'yomi. Stations from your train fares on the Budget page become cards in Learn by themselves, to practise reading station names. Grammar points (the state-of-being set comes built in, or add your own) are reviewed on words from your deck: 静か + じゃなかった shows as 静かじゃなかった. The public version also has a kana drill for beginners: pick the rows of hiragana or katakana you're learning and type each one's romaji. At the bottom, Further resources links to Tae Kim's grammar guide, Tofugu's grammar index and the JLPT N5 kanji on Jisho, for studying beyond your own cards.
+**Japanese**: flashcard reviews, graded Again / Hard / Good / Easy. New cards can be filled in from Jisho, and vocab cards show their part of speech (noun, godan verb and so on). Practice can go round every card, ones you've picked (like kanji you've just added), cards you keep missing, or just verbs, adjectives or nouns. Cards that are new to you start in Learn, to study at your own pace with your own notes, or a mnemonic drawn over the card with a mouse, pen or finger, before they're reviewed. A kanji there shows the words in your deck that use it, and whether each one uses its on'yomi or kun'yomi. Stations from your train fares on the Budget page become cards in Learn by themselves, to practice reading station names. Grammar points (the state-of-being set comes built in, or add your own) are reviewed on words from your deck: 静か + じゃなかった shows as 静かじゃなかった. The public version also has a kana drill for beginners: pick the rows of hiragana or katakana you're learning and type each one's romaji. At the bottom, Further resources links to Tae Kim's grammar guide, Tofugu's grammar index and the JLPT N5 kanji on Jisho, for studying beyond your own cards.
 ![Japanese page](docs/screenshots/japanese.png)
 
 **Weather**: today, warnings, and a 7-day outlook from the Japan Meteorological Agency.
@@ -193,7 +193,7 @@ The project has automated tests. They load every page and check the rules undern
 .venv\Scripts\python -m pytest
 ```
 
-It takes about four minutes and should finish with `73 passed`. Close the app first if it's running: installing packages while it's open can fail, because Windows locks files the app is using.
+It takes about four minutes and should finish with `74 passed`. Close the app first if it's running: installing packages while it's open can fail, because Windows locks files the app is using.
 
 To check the code for mistakes like unused or undefined names, and for import order, run `.venv\Scripts\ruff check .` (add `--fix` to sort the imports for you). The settings are in `pyproject.toml`.
 
@@ -235,7 +235,7 @@ On Mac and Linux, the app runs in your web browser. The app window (`desktop_app
 
    As on Windows, press **Enter** if Streamlit asks for an email, and **Ctrl+C** to stop it.
 
-Everywhere else in this README, use `.venv/bin/python` in place of `.venv\Scripts\python`. The tests usually finish with `69 passed, 4 skipped`: three of the skipped tests check PowerShell scripts, and only run if PowerShell is installed, and one checks the Windows-only app window.
+Everywhere else in this README, use `.venv/bin/python` in place of `.venv\Scripts\python`. The tests usually finish with `70 passed, 4 skipped`: three of the skipped tests check PowerShell scripts, and only run if PowerShell is installed, and one checks the Windows-only app window.
 
 ## How it's built
 
