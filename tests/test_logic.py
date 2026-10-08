@@ -238,6 +238,36 @@ def test_grammar_points(app_copy):
     """)
 
 
+def test_kana_drill(app_copy):
+    # Kana come from the sets switched on, in hiragana and/or katakana, and
+    # any usual romaji counts: shi or si for し, wo or o for を.
+    _check(app_copy, """
+        from prescripts.data.japanese.kana import KANA_SETS, check_kana, kana_pool, next_kana
+
+        assert [item["kana"] for item in kana_pool(["hiragana"], ["あ"])] == list("あいうえお")
+        assert [item["kana"] for item in kana_pool(["katakana"], ["Exceptions"])] == list("シチツフ")
+        assert len(kana_pool(["hiragana", "katakana"], ["や"])) == 6
+        assert kana_pool(["hiragana"], []) == []
+        everything = kana_pool(["hiragana"], KANA_SETS)
+        assert len({item["kana"] for item in everything}) == len(everything) == 104
+
+        def item(kana):
+            return next(entry for entry in kana_pool(["hiragana", "katakana"], KANA_SETS) if entry["kana"] == kana)
+        assert all(check_kana(item("し"), typed) for typed in ("shi", "si", " SHI ", "し"))
+        assert all(check_kana(item("を"), typed) for typed in ("wo", "o"))
+        assert all(check_kana(item("ぢ"), typed) for typed in ("ji", "di"))
+        assert all(check_kana(item("シャ"), typed) for typed in ("sha", "sya"))
+        assert all(check_kana(item("じゃ"), typed) for typed in ("ja", "jya", "zya"))
+        assert not any(check_kana(item("し"), typed) for typed in ("", "su", "chi"))
+        assert item("ちゅ")["romaji"] == "chu" and item("ン")["romaji"] == "n"
+
+        pool = kana_pool(["hiragana"], ["や"])
+        assert all(next_kana(pool, "や")["kana"] != "や" for _ in range(30))
+        assert next_kana(kana_pool(["hiragana"], ["あ"])[:1], "あ")["kana"] == "あ"  # only one to pick
+        assert next_kana([], None) is None
+    """)
+
+
 def test_typo_check_when_adding_a_card(app_copy):
     # Jisho and kanjiapi are faked, so this runs offline and doesn't depend on
     # what either site returns today.

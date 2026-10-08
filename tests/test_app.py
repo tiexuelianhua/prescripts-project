@@ -1299,6 +1299,52 @@ def test_grammar_on_the_japanese_page(app_copy):
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+def test_kana_drill_on_the_japanese_page(app_copy):
+    # The public version has a kana drill: type the romaji, see if it was
+    # right, next kana. Sets are picked on the page and remembered; the
+    # drill can be switched off. The author's own copy doesn't show it.
+    result = run_in(app_copy, """
+        from streamlit.testing.v1 import AppTest
+        from prescripts.common import SCRIPTS_DIR
+        from prescripts.data.japanese.deck import load_deck
+
+        at = AppTest.from_file(str(SCRIPTS_DIR / "prescripts/pages/japanese.py"), default_timeout=60)
+        at.run()
+        assert not at.exception, at.exception
+        at.pills(key="japanese_kana_sets").set_value(["あ"]).run()
+        assert load_deck()["settings"]["kana"]["sets"] == ["あ"]
+        kana = at.session_state["japanese_kana_current"]["kana"]
+        assert kana in "あいうえお", kana
+        assert any(f">{kana}<" in block.value for block in at.markdown), [b.value for b in at.markdown]
+        romaji = at.session_state["japanese_kana_current"]["romaji"]
+        at.text_input(key="japanese_kana_answer").input(romaji)
+        at.button(key="FormSubmitter:japanese_kana_form-Check").click().run()
+        assert not at.exception, at.exception
+        assert any("✅" in block.value and kana in block.value for block in at.markdown), [b.value for b in at.markdown]
+        assert at.session_state["japanese_kana_current"]["kana"] != kana  # on to the next one
+
+        at.toggle(key="japanese_kana_on").set_value(False).run()
+        assert load_deck()["settings"]["kana"]["on"] is False
+        assert not [box for box in at.text_input if box.key == "japanese_kana_answer"]
+    """)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+    images = app_copy.parent / "Images"
+    images.mkdir()
+    shutil.copy(app_copy / "static" / "forget_me_not.png", images / "The_Index_Logo.webp")
+    result = run_in(app_copy, """
+        from streamlit.testing.v1 import AppTest
+        from prescripts.common import PRIVATE_LOOK, SCRIPTS_DIR
+
+        assert PRIVATE_LOOK
+        at = AppTest.from_file(str(SCRIPTS_DIR / "prescripts/pages/japanese.py"), default_timeout=60)
+        at.run()
+        assert not at.exception, at.exception
+        assert not [toggle for toggle in at.toggle if toggle.key == "japanese_kana_on"]
+    """)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 def test_drawing_on_a_card(app_copy):
     # A card's drawing is saved beside the deck, shows on the card's back,
     # and goes when it's saved empty or the card's deleted. The drawing box

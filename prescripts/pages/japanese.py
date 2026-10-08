@@ -3,7 +3,8 @@
 # checked (realkana-style) -- plus a lookup of the whole deck. Cards new to
 # the user start in Learn, studied at their own pace before reviews. New
 # cards can be filled in from Jisho / kanjiapi.dev. Grammar points are
-# reviewed on the deck's own words (data/japanese/grammar.py). All data/
+# reviewed on the deck's own words (data/japanese/grammar.py). The public
+# version also has a kana drill for beginners (data/japanese/kana.py). All data/
 # scheduling lives in data/japanese/ (no UI there), so the Overview tile
 # can read it too.
 import base64
@@ -15,7 +16,7 @@ import uuid
 import pandas as pd
 import streamlit as st
 
-from prescripts.common import inject_body_fade_in, render_page_title, show_logo, theme_colors, typewriter
+from prescripts.common import PRIVATE_LOOK, inject_body_fade_in, render_page_title, show_logo, theme_colors, typewriter
 from prescripts.data.japanese.answers import (
     STEP_LABELS,
     answer_steps,
@@ -58,6 +59,7 @@ from prescripts.data.japanese.grammar import (
     pick_word,
     typed_prompt,
 )
+from prescripts.data.japanese.kana import KANA_SETS, SCRIPTS, check_kana, kana_pool, kana_settings, next_kana
 from prescripts.data.japanese.learning import RULES_OF_THUMB, kanji_in, reading_in_word, words_using
 from prescripts.data.japanese.lookups import jisho_lookup, kanji_lookup, part_of_speech_for
 from prescripts.data.japanese.spelling import check_new_card
@@ -150,6 +152,11 @@ st.markdown(
     }}
     .flashcard-kanji-reading {{
         margin-top: 0.4rem;
+    }}
+    /* Kana set names and the kana drill's last answer: the pixel font loses
+       the small marks that tell ば, ぱ and は apart. */
+    .st-key-japanese_kana_sets button *, .kana-plain {{
+        font-family: "Yu Gothic UI", "Yu Gothic", "Meiryo", sans-serif;
     }}
     .flashcard-kanji-reading span {{
         opacity: 0.6;
@@ -684,6 +691,73 @@ def render_review(deck: dict) -> None:
             render_drawing(card)
 
 
+def render_kana(deck: dict) -> None:
+    # A drill for total beginners: a kana from the sets switched on, type
+    # its romaji, see if it was right, next. Not scheduled -- kana are
+    # learned by going round until they're automatic. The sets and the
+    # on/off switch are saved with the deck.
+    settings = kana_settings(deck)
+    with st.expander("Kana", expanded=settings["on"]):
+        on = st.toggle("Practise kana", value=settings["on"], key="japanese_kana_on",
+                       help="Hiragana and Katakana, one set at a time.")
+        scripts, sets = settings["scripts"], settings["sets"]
+        if on:
+            scripts = st.pills("Script", list(SCRIPTS), format_func=SCRIPTS.get, selection_mode="multi",
+                               default=settings["scripts"], key="japanese_kana_scripts")
+            sets = st.pills("Sets", KANA_SETS, selection_mode="multi", default=settings["sets"],
+                            key="japanese_kana_sets",
+                            help="Each row of the kana chart. Exceptions are し, ち, つ and ふ; "
+                            "combinations are kana with a small ゃ, ゅ or ょ, like きゃ.")
+        if (on, scripts, sets) != (settings["on"], settings["scripts"], settings["sets"]):
+            deck["settings"]["kana"] = {"on": on, "scripts": scripts, "sets": sets}
+            save_deck(deck)
+        if not on:
+            return
+        pool = kana_pool(scripts, sets)
+        if not pool:
+            st.write("Pick a script and at least one set.")
+            return
+        # The kana on screen, until it's answered or its set is switched off.
+        current = st.session_state.get("japanese_kana_current")
+        if current not in pool:
+            current = st.session_state["japanese_kana_current"] = next_kana(pool)
+        # The last answer, and a running count for this visit.
+        last = st.session_state.get("japanese_kana_last")
+        if last:
+            line = f"{'✅' if last['ok'] else '❌'} <span class='kana-plain' lang='ja'>{last['kana']}</span> {last['romaji']}"
+            if not last["ok"] and last["typed"]:
+                line += f" (you typed *{html.escape(last['typed'])}*)"
+            score = st.session_state.get("japanese_kana_score", [0, 0])
+            st.markdown(f"{line} · {score[0]} of {score[1]} right", unsafe_allow_html=True)
+        script_name = "Katakana" if "ァ" <= current["kana"][0] <= "ヶ" else "Hiragana"
+        st.markdown(
+            f'<div class="flashcard"><div class="flashcard-kind">{script_name}</div>'
+            f'<div class="flashcard-front" lang="ja">{current["kana"]}</div></div>',
+            unsafe_allow_html=True,
+        )
+        with st.form("japanese_kana_form", clear_on_submit=True, border=False):
+            typed = st.text_input("Romaji", key="japanese_kana_answer",
+                                  placeholder="Leave blank and press Enter if you don't know it")
+            checked = st.form_submit_button("Check", width="stretch")
+        if checked:
+            ok = check_kana(current, typed)
+            score = st.session_state.get("japanese_kana_score", [0, 0])
+            st.session_state["japanese_kana_score"] = [score[0] + ok, score[1] + 1]
+            st.session_state["japanese_kana_last"] = {**current, "ok": ok, "typed": typed.strip()}
+            st.session_state["japanese_kana_current"] = next_kana(pool, current["kana"])
+            st.rerun()
+        # Back in the box after each answer (only then, so it doesn't pull
+        # the cursor away from Review's typed answers on arriving).
+        answered = st.session_state.get("japanese_kana_score", [0, 0])[1]
+        if answered:
+            st.html(
+                f"<script>/* {answered} */"
+                "setTimeout(() => document.querySelector('.st-key-japanese_kana_answer input')?.focus(), 100);"
+                "</script>",
+                unsafe_allow_javascript=True,
+            )
+
+
 def render_add_cards(deck: dict) -> None:
     # Adding cards: open by default only while the deck is still empty.
     with st.expander("Add cards", expanded=not deck["cards"]):
@@ -1128,5 +1202,8 @@ if pending_stations:
 with st.container(key="main_body"):
     render_learn(deck)
     render_review(deck)
+    # Public version only: the author's own copy has no use for it.
+    if not PRIVATE_LOOK:
+        render_kana(deck)
     render_add_cards(deck)
     render_your_cards(deck)
