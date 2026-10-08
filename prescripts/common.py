@@ -501,7 +501,10 @@ def keep_typed_selectbox_text(*keys: str) -> None:
     # thing Enter itself would have done. Clicks on the list's own options,
     # or on the same box, are left alone. Switching to another window keeps
     # the text aside instead and types it back in on return, to carry on
-    # with.
+    # with -- if that's within a few minutes. Set aside any longer, it's
+    # dropped: the desktop window doesn't always say when it's back, and
+    # text kept overnight once turned up the next day in the middle of a
+    # Japanese item name ("Tデニッシュacos").
     #
     # Listeners go on the document once per browser tab (the flag), keyed by
     # these widgets' st-key-* classes, so reruns and page switches don't
@@ -538,6 +541,9 @@ def keep_typed_selectbox_text(*keys: str) -> None:
                 // used to go to one, which Enter should still pick.
                 const box = event.target;
                 if (!box.matches || ![...window._keepTypedSelectors].some(s => box.matches(s))) return;
+                // Keys mid Japanese conversion (Space to convert, Enter to
+                // confirm) belong to the keyboard, not the box.
+                if (event.isComposing || event.keyCode === 229) return;
                 if (event.key === "ArrowDown" || event.key === "ArrowUp") box._keepTypedArrowed = true;
                 else if (event.key !== "Enter") box._keepTypedArrowed = false;
                 else if (!box.value.trim() && !box._keepTypedArrowed && event.isTrusted) {{
@@ -582,7 +588,7 @@ def keep_typed_selectbox_text(*keys: str) -> None:
                 // has focus at this point, so that's checked a moment later;
                 // if it really did keep focus, the text is entered after all.
                 const selector = [...window._keepTypedSelectors].find(s => input.matches(s));
-                window._keepTypedResume = {{ selector, text: input.value }};
+                window._keepTypedResume = {{ selector, text: input.value, at: Date.now() }};
                 setTimeout(() => {{
                     if (!document.hasFocus() || window._keepTypedResume?.selector !== selector) return;
                     const resume = window._keepTypedResume;
@@ -609,11 +615,15 @@ def keep_typed_selectbox_text(*keys: str) -> None:
                 document.execCommand("insertText", false, text);
             }};
             // Back in the window, the browser puts focus back on the box.
+            // Only the text it had then is typed back in: not after five
+            // minutes, and not over something typed in it since.
             window.addEventListener("focus", () => {{
                 const resume = window._keepTypedResume;
                 window._keepTypedResume = null;
-                const box = resume && document.querySelector(resume.selector);
+                if (!resume || Date.now() - resume.at > 5 * 60 * 1000) return;
+                const box = document.querySelector(resume.selector);
                 if (!box) return;
+                if (box.value && box.value !== resume.text) return;
                 if (document.activeElement !== box && document.activeElement !== document.body) return;
                 retype(box, resume.text);
             }});
