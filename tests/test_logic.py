@@ -173,6 +173,63 @@ def test_typed_answers(app_copy):
     """)
 
 
+def test_grammar_points(app_copy):
+    # A grammar point is reviewed with a word from the deck that it fits,
+    # picked by part of speech, and makes the conjugated form from it. The
+    # starter set adds only what isn't there yet.
+    _check(app_copy, """
+        from prescripts.data.japanese.deck import add_card, in_practice_set, load_deck, today_jst
+        from prescripts.data.japanese.grammar import (
+            STARTER_POINTS,
+            add_grammar_point,
+            add_starter_points,
+            conjugate,
+            pick_word,
+            word_types,
+        )
+
+        assert word_types({"kind": "vocab", "pos": "Noun, No-adjective, Na-adjective"}) == {"noun", "na-adjective"}
+        assert word_types({"kind": "vocab", "pos": "Station"}) == {"noun"}
+        assert word_types({"kind": "vocab", "pos": "Pronoun"}) == {"noun"}
+        assert word_types({"kind": "vocab", "pos": "Ichidan verb, Transitive"}) == set()
+        assert word_types({"kind": "vocab", "pos": ""}) == set()
+        assert word_types({"kind": "kanji", "pos": ""}) == set()
+
+        deck = load_deck()
+        eat = add_card(deck, "vocab", "食べる", "たべる", "to eat", pos="Ichidan verb")
+        quiet = add_card(deck, "vocab", "静か", "しずか", "quiet", pos="Na-adjective")
+        there = add_card(deck, "vocab", "そこ", "", "there", pos="Pronoun")
+        new_word = add_card(deck, "vocab", "学校", "がっこう", "school", pos="Noun", learning=True)
+
+        point = add_grammar_point(deck, "じゃなかった", "wasn't (casual)", ["noun", "na-adjective"])
+        assert point["kind"] == "grammar" and point["front"] == "じゃなかった" and point["base"] == "word", point
+        assert conjugate(point, quiet) == {"front": "静かじゃなかった", "reading": "しずかじゃなかった"}
+        assert conjugate(point, there) == {"front": "そこじゃなかった", "reading": "そこじゃなかった"}
+
+        # Only words it fits, never verbs; the same seed gives the same word;
+        # words still in Learn only when nothing else fits.
+        picks = {pick_word(deck, point, f"seed {n}")["front"] for n in range(40)}
+        assert picks == {"静か", "そこ"}, picks
+        assert pick_word(deck, point, "a")["id"] == pick_word(deck, point, "a")["id"]
+        adjective_only = add_grammar_point(deck, "な", "(before a noun)", ["na-adjective"])
+        assert {pick_word(deck, adjective_only, f"seed {n}")["front"] for n in range(20)} == {"静か"}
+        deck["cards"] = [card for card in deck["cards"] if card["id"] not in (quiet["id"], there["id"])]
+        assert pick_word(deck, point, "b")["front"] == "学校"
+        assert pick_word(deck, adjective_only, "c") is None
+        assert eat in deck["cards"]
+
+        # Part-of-speech practice sets are for words, not grammar points.
+        assert not in_practice_set(point, "Nouns", set(), today_jst())
+        assert in_practice_set(point, "Every card", set(), today_jst())
+
+        assert add_starter_points(deck) == len(STARTER_POINTS) - 1  # じゃなかった is already there
+        assert add_starter_points(deck) == 0
+        fronts = [card["front"] for card in deck["cards"] if card["kind"] == "grammar"]
+        assert len(fronts) == len(set(fronts)), fronts
+        assert {"だ", "です", "じゃない", "だった", "でした"} <= set(fronts), fronts
+    """)
+
+
 def test_typo_check_when_adding_a_card(app_copy):
     # Jisho and kanjiapi are faked, so this runs offline and doesn't depend on
     # what either site returns today.

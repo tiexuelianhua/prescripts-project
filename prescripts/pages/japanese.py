@@ -1,9 +1,11 @@
 # Japanese page: flashcards for vocab and kanji, reviewed on a spaced-
 # repetition (SRS) schedule -- either revealed and self-graded, or typed and
 # checked (realkana-style) -- plus a lookup of the whole deck. Cards new to
-# the user start in Learn, studied at their own pace before reviews. New cards can be filled in from Jisho / kanjiapi.dev. Grammar
-# is planned for later. All data/scheduling lives in data/japanese/ (no UI
-# there), so the Overview tile can read it too.
+# the user start in Learn, studied at their own pace before reviews. New
+# cards can be filled in from Jisho / kanjiapi.dev. Grammar points are
+# reviewed on the deck's own words (data/japanese/grammar.py). All data/
+# scheduling lives in data/japanese/ (no UI there), so the Overview tile
+# can read it too.
 import base64
 import html
 import random
@@ -46,6 +48,15 @@ from prescripts.data.japanese.deck import (
     today_jst,
     update_card,
 )
+from prescripts.data.japanese.grammar import (
+    STARTER_POINTS,
+    WORD_TYPES,
+    add_grammar_point,
+    add_starter_points,
+    conjugate,
+    fitting_words,
+    pick_word,
+)
 from prescripts.data.japanese.learning import RULES_OF_THUMB, kanji_in, reading_in_word, words_using
 from prescripts.data.japanese.lookups import jisho_lookup, kanji_lookup, part_of_speech_for
 from prescripts.data.japanese.spelling import check_new_card
@@ -55,7 +66,7 @@ from prescripts.drawing_widget import drawing_box
 TEXT_COLOR, ACCENT_COLOR = theme_colors()
 PAGE_TITLE = "Japanese"
 # Choices for the deck filters (review and lookup): both kinds, or just one.
-DECK_FILTERS = {"All": KINDS, "Vocab": ["vocab"], "Kanji": ["kanji"]}
+DECK_FILTERS = {"All": KINDS, "Vocab": ["vocab"], "Kanji": ["kanji"], "Grammar": ["grammar"]}
 
 is_first_load = "_japanese_title_played" not in st.session_state
 inject_body_fade_in("main_body")
@@ -162,9 +173,51 @@ def kanji_breakdown(deck: dict, card: dict) -> str:
     )
 
 
-def render_flashcard(card: dict, show_back: bool, deck: dict | None = None) -> None:
+def render_grammar_card(point: dict, word: dict | None, show_back: bool) -> None:
+    # The front is the point on a word from the deck (静かじゃなかった), to
+    # read and understand; the back reads it out and splits it into the word
+    # and the point. With no word that fits, just the point itself.
+    front = conjugate(point, word)["front"] if word else f"～{point['front']}"
+    back = ""
+    if show_back:
+        if word:
+            back += f'<div class="flashcard-reading">{html.escape(conjugate(point, word)["reading"])}</div>'
+        back += (f'<div class="flashcard-meaning"><span lang="ja">～{html.escape(point["front"])}</span> '
+                 f'{html.escape(point["meaning"])}</div>')
+        if word:
+            word_reading = f" ({word['reading']})" if has_distinct_reading(word) else ""
+            back += (f'<div class="flashcard-pos"><span lang="ja">{html.escape(word["front"] + word_reading)}</span> '
+                     f'{html.escape(word["meaning"])}</div>')
+        if point.get("note"):
+            back += f'<div class="flashcard-note">{html.escape(point["note"])}</div>'
+    st.markdown(
+        f'<div class="flashcard"><div class="flashcard-kind">Grammar</div>'
+        f'<div class="flashcard-front" lang="ja">{html.escape(front)}</div>{back}</div>',
+        unsafe_allow_html=True,
+    )
+    if not word:
+        st.caption(f"None of your words fit it yet. It goes on {attaches_label(point).lower()}.")
+
+
+def attaches_label(point: dict) -> str:
+    # ["noun", "na-adjective"] -> "Nouns, Na-adjectives"
+    return ", ".join(WORD_TYPES[word_type] for word_type in point.get("attaches", []))
+
+
+def parse_attaches(text: str) -> list[str]:
+    # Back from the Your cards table, where it's typed as text.
+    text = text.lower()
+    return [word_type for word_type in WORD_TYPES if word_type in text]
+
+
+def render_flashcard(card: dict, show_back: bool, deck: dict | None = None, seed: str = "") -> None:
     # With the deck, a word's back also shows which reading each of its
-    # kanji uses -- seen on every review, not just while in Learn.
+    # kanji uses -- seen on every review, not just while in Learn. A
+    # grammar point needs the deck for a word to go with it, picked by
+    # `seed` so it stays the same word until the card's answered.
+    if card["kind"] == "grammar":
+        render_grammar_card(card, pick_word(deck, card, f"{card['id']}:{seed}") if deck else None, show_back)
+        return
     back = ""
     if show_back:
         if has_distinct_reading(card):
@@ -312,7 +365,7 @@ def render_learn(deck: dict) -> None:
     card = cards[position]
     st.caption(f"Card {position + 1} of {len(cards)} to learn・take your time. "
                "“Got it” moves a card into your reviews.")
-    render_flashcard(card, show_back=True)
+    render_flashcard(card, show_back=True, deck=deck)
     # Readings stick through words already known, so a kanji shows the
     # deck's words written with it, and which reading each one uses; a
     # word shows its kanji and their readings.
@@ -328,6 +381,12 @@ def render_learn(deck: dict) -> None:
         else:
             st.caption("None of your words use it yet. Adding a few is the best way to make its readings stick.")
         st.caption(RULES_OF_THUMB)
+    elif card["kind"] == "grammar":
+        words = fitting_words(deck, card)[:6]
+        if words:
+            st.markdown("**On your words:** " + " · ".join(
+                f"<span lang='ja'>{html.escape(conjugate(card, word)['front'])}</span>" for word in words
+            ), unsafe_allow_html=True)
     else:
         kanji_cards = kanji_in(deck, card)
         if kanji_cards:
@@ -345,7 +404,8 @@ def render_learn(deck: dict) -> None:
     if note != card["note"]:
         update_card(deck, card["id"], note=note)
         save_deck(deck)
-    render_drawing(card)
+    if card["kind"] != "grammar":
+        render_drawing(card)
     back_column, next_column, got_column = st.columns(3)
     if back_column.button("← Back", key="japanese_learn_back", width="stretch", disabled=len(cards) < 2):
         st.session_state["japanese_learn_position"] = position - 1
@@ -390,7 +450,8 @@ def render_review(deck: dict) -> None:
             "Type answers",
             value=deck["settings"].get("typed_answers", False),
             key="japanese_typed_toggle",
-            help="Type the reading and meaning (plus on'yomi/kun'yomi for kanji) and they're checked for you. Romaji turns into kana.",
+            help="Type the reading and meaning (plus on'yomi/kun'yomi for kanji) and they're checked for you. "
+            "Romaji turns into kana. Grammar is always shown and graded by hand.",
         )
         # Daily reviews in a random order rather than oldest-due first. On by
         # default and saved with the deck; Practice always shuffles anyway.
@@ -425,12 +486,16 @@ def render_review(deck: dict) -> None:
             help="Picked cards are the ones ticked under Your cards. Verbs, adjectives and nouns go by part of speech.",
         )
         card, position, total = practice_card(deck, kinds, review_filter, practice_set)
+        # A new word for a grammar point each time round.
+        word_seed = f"practice:{position}:{st.session_state['japanese_practice']['order'][0]}" if card else ""
         if card:
             st.caption(f"Practice · card {position} of {total} · doesn't change when cards are due")
     else:
         st.caption(f"{len(due)} due · {reviewed_today} reviewed today")
         if due:
             card = due[0]
+            # A new word for a grammar point after each answer.
+            word_seed = f"{card['reps']}:{card['lapses']}:{card['last_reviewed']}"
 
     # Typed mode moves straight on to the next card after an answer, so the
     # verdict on the one just answered shows here, above it.
@@ -494,7 +559,7 @@ def render_review(deck: dict) -> None:
             st.write("Nothing to review yet: your cards are all in Learn above.")
         else:
             st.write(f"No {review_filter.lower()} cards yet.")
-    elif typed_mode:
+    elif typed_mode and card["kind"] != "grammar":
         render_flashcard(card, show_back=False)
         steps = answer_steps(card)
         if len(progress["parts"]) >= len(steps):  # card edited to fewer parts mid-way
@@ -555,7 +620,7 @@ def render_review(deck: dict) -> None:
         # the queue changing under it) hides the answer for whatever's next.
         reveal_key = (card["id"], practice_mode)
         revealed = st.session_state.get("japanese_revealed") == reveal_key
-        render_flashcard(card, show_back=revealed, deck=deck)
+        render_flashcard(card, show_back=revealed, deck=deck, seed=word_seed)
 
         if not revealed:
             if st.button("Show answer", key="japanese_show_answer", width="stretch"):
@@ -583,7 +648,7 @@ def render_review(deck: dict) -> None:
                         st.session_state.pop("japanese_revealed", None)
                         st.rerun()
         # A mnemonic can come to mind while reviewing, too.
-        if revealed:
+        if revealed and card["kind"] != "grammar":
             render_drawing(card)
 
 
@@ -607,14 +672,32 @@ def render_add_cards(deck: dict) -> None:
                 "japanese_add_note",
             ):
                 st.session_state[key] = ""
+            st.session_state["japanese_add_attaches"] = list(WORD_TYPES)
             st.session_state.pop("_japanese_filled_from", None)
 
         is_vocab = add_kind == "vocab"
-        lookup = st.text_input(
-            "Look up on Jisho" if is_vocab else "Look up kanji",
-            key="japanese_add_lookup",
-            placeholder="Kanji, kana, romaji, or English" if is_vocab else "A kanji, or a word to pick its kanji from",
-        )
+        is_grammar = add_kind == "grammar"
+        if is_grammar:
+            # Grammar points aren't looked up anywhere: the starter set
+            # covers the basics, the rest are typed in.
+            missing_starters = [ending for ending, _ in STARTER_POINTS
+                                if not find_duplicate(deck, "grammar", ending)]
+            if missing_starters:
+                if st.button(f"Add the state-of-being set ({len(missing_starters)} point{'s' if len(missing_starters) != 1 else ''})",
+                             key="japanese_add_starter_grammar",
+                             help="だ, です, じゃない, じゃありません, だった, でした, じゃなかった, じゃありませんでした: "
+                             "the forms nouns and na-adjectives take. Edit or delete them under Your cards."):
+                    added = add_starter_points(deck)
+                    save_deck(deck)
+                    st.toast(f"Added {added} grammar points.")
+                    st.rerun()
+            lookup = ""
+        else:
+            lookup = st.text_input(
+                "Look up on Jisho" if is_vocab else "Look up kanji",
+                key="japanese_add_lookup",
+                placeholder="Kanji, kana, romaji, or English" if is_vocab else "A kanji, or a word to pick its kanji from",
+            )
         candidates = []
         if lookup.strip():
             try:
@@ -663,7 +746,11 @@ def render_add_cards(deck: dict) -> None:
                 st.session_state["japanese_add_pos"] = chosen.get("pos", "")
                 st.session_state["_japanese_filled_from"] = filled_from
 
-        front = st.text_input("Word" if is_vocab else "Kanji", key="japanese_add_front")
+        front = st.text_input(
+            "Ending" if is_grammar else "Word" if is_vocab else "Kanji",
+            key="japanese_add_front",
+            placeholder="e.g. じゃなかった" if is_grammar else None,
+        )
         reading = (
             st.text_input(
                 "Reading (hiragana)",
@@ -673,7 +760,17 @@ def render_add_cards(deck: dict) -> None:
             if is_vocab
             else ""
         )
-        meaning = st.text_input("Meaning", key="japanese_add_meaning")
+        meaning = st.text_input("Meaning", key="japanese_add_meaning",
+                                placeholder="e.g. wasn't (casual)" if is_grammar else None)
+        attaches = (
+            st.multiselect(
+                "Goes on", list(WORD_TYPES), format_func=WORD_TYPES.get, key="japanese_add_attaches",
+                default=list(WORD_TYPES) if "japanese_add_attaches" not in st.session_state else None,
+                help="Which of your words it's practised on, by their part of speech.",
+            )
+            if is_grammar
+            else []
+        )
         pos = (
             st.text_input(
                 "Part of speech",
@@ -690,7 +787,7 @@ def render_add_cards(deck: dict) -> None:
             help="Your own note. It shows in Learn and on the back of the card.",
         )
         onyomi = kunyomi = ""
-        if not is_vocab:
+        if add_kind == "kanji":
             # Filled in from the lookup with every reading KANJIDIC lists --
             # trim them to the ones you know; typed review accepts any one.
             reading_help = "Separate several with 、 or commas. Leave blank if the kanji has none."
@@ -712,6 +809,7 @@ def render_add_cards(deck: dict) -> None:
             "onyomi": onyomi.strip(),
             "kunyomi": kunyomi.strip(),
             "pos": pos.strip(),
+            "attaches": attaches,
         }
         pending = st.session_state.get("_japanese_add_issues")
         if pending and pending["values"] != current_values:
@@ -747,13 +845,16 @@ def render_add_cards(deck: dict) -> None:
             add_anyway = st.button("Add anyway", key="japanese_add_anyway", help="Add the card exactly as typed")
 
         if add_clicked or add_anyway:
+            front_name = "ending" if is_grammar else "word" if is_vocab else "kanji"
             if not front.strip() or not meaning.strip():
-                st.toast(f"A card needs both the {'word' if is_vocab else 'kanji'} and its meaning.", icon="⚠️")
+                st.toast(f"A card needs both the {front_name} and its meaning.", icon="⚠️")
+            elif is_grammar and not attaches:
+                st.toast("Pick what it goes on.", icon="⚠️")
             elif find_duplicate(deck, add_kind, front):
                 st.toast(f"{front.strip()} is already in your {KIND_LABELS[add_kind].lower()} cards.", icon="⚠️")
             else:
                 issues = []
-                if add_clicked:
+                if add_clicked and not is_grammar:
                     # Checked against Jisho / KANJIDIC for typos first; if
                     # neither can be reached, the card's just added as usual.
                     try:
@@ -763,8 +864,11 @@ def render_add_cards(deck: dict) -> None:
                 if issues:
                     st.session_state["_japanese_add_issues"] = {"values": current_values, "issues": issues}
                     st.rerun()
-                card = add_card(deck, add_kind, front, reading, meaning, onyomi, kunyomi, pos, note,
-                                learning=add_as == "New to me")
+                if is_grammar:
+                    card = add_grammar_point(deck, front, meaning, attaches, note, learning=add_as == "New to me")
+                else:
+                    card = add_card(deck, add_kind, front, reading, meaning, onyomi, kunyomi, pos, note,
+                                    learning=add_as == "New to me")
                 save_deck(deck)
                 st.session_state.pop("_japanese_add_issues", None)
                 st.session_state["_reset_japanese_add"] = True
@@ -778,7 +882,7 @@ def render_add_cards(deck: dict) -> None:
                     if card[field]
                 )
                 st.session_state["_japanese_add_confirmation"] = (
-                    f"[Added {card['front']}{reading_note}: {card['meaning']}{kanji_readings}"
+                    f"[Added {'～' if is_grammar else ''}{card['front']}{reading_note}: {card['meaning']}{kanji_readings}"
                     + (" · in Learn]" if card["learning"] else "]")
                 )
                 st.rerun()
@@ -825,7 +929,8 @@ def render_your_cards(deck: dict) -> None:
                         "onyomi": card["onyomi"],
                         "kunyomi": card["kunyomi"],
                         "meaning": card["meaning"],
-                        "pos": card["pos"],
+                        # A grammar point's word types sit in the same column.
+                        "pos": attaches_label(card) if card["kind"] == "grammar" else card["pos"],
                         "note": card["note"],
                         "due": "In Learn" if card["learning"] else card["due"],
                     }
@@ -863,12 +968,14 @@ def render_your_cards(deck: dict) -> None:
                         "Learn", help="In Learn, not reviewed yet. Tick to send a forgotten card back there."
                     ),
                     "kind": "Type",
-                    "front": "Word / kanji",
+                    "front": "Word / kanji / ending",
                     "reading": st.column_config.TextColumn("Reading", help="Vocab only"),
                     "onyomi": st.column_config.TextColumn("On'yomi", help="Kanji only"),
                     "kunyomi": st.column_config.TextColumn("Kun'yomi", help="Kanji only"),
                     "meaning": "Meaning",
-                    "pos": st.column_config.TextColumn("Part of speech", help="Vocab only"),
+                    "pos": st.column_config.TextColumn(
+                        "Part of speech", help="Vocab: its part of speech. Grammar: what it goes on (Nouns, Na-adjectives)"
+                    ),
                     "note": st.column_config.TextColumn("Note", help="Your own note, e.g. a mnemonic"),
                     "missing": st.column_config.TextColumn(" ", width=36, help="No part of speech on Jisho -- type one in"),
                     "due": "Next review",
@@ -958,6 +1065,11 @@ def render_your_cards(deck: dict) -> None:
                         pos=row["pos"] if kind == "vocab" else "",
                         note=row["note"],
                     )
+                    if kind == "grammar":
+                        new_attaches = parse_attaches(str(row["pos"]) if pd.notna(row["pos"]) else "")
+                        for card in deck["cards"]:
+                            if card["id"] == card_id:
+                                card["attaches"] = new_attaches
                     set_learning(deck, card_id, bool(row["learning"]))
                 save_deck(deck)
                 del st.session_state[editor_key]

@@ -9,6 +9,8 @@
 # one can start in Learn ("learning": True): studied at its own pace, kept
 # out of reviews until "Got it".
 # - kanji: front = the kanji,                   back = meaning
+# - grammar: front = an ending (じゃなかった), back = meaning, reviewed on
+#            a word from the deck it fits -- see grammar.py
 #
 # Everything lives in one JSON file outside the repo (like Meal Receipts'
 # CSVs and Spotify's settings) -- it's personal data, not code.
@@ -27,8 +29,8 @@ CARDS_PATH = JAPANESE_DIR / "cards.json"
 # Picture mnemonics drawn over a card, one PNG per card named by its id.
 DRAWINGS_DIR = JAPANESE_DIR / "drawings"
 
-KINDS = ["vocab", "kanji"]
-KIND_LABELS = {"vocab": "Vocab", "kanji": "Kanji"}
+KINDS = ["vocab", "kanji", "grammar"]
+KIND_LABELS = {"vocab": "Vocab", "kanji": "Kanji", "grammar": "Grammar"}
 
 # SRS grades, SM-2 style (the algorithm Anki grew out of), simplified to what
 # a personal deck needs. Each card keeps an interval (days until it's due
@@ -307,18 +309,21 @@ def card_by_id(card_id: str | None) -> dict | None:
 
 
 def random_card() -> dict | None:
-    # For the Overview tile's word display.
-    cards = load_deck()["cards"]
+    # For the Overview tile's word display. A grammar point's ending isn't
+    # much to look at on its own.
+    cards = [card for card in load_deck()["cards"] if card["kind"] != "grammar"]
     return random.choice(cards) if cards else None
 
 
 def practice_summary() -> dict:
     # For the Overview tile.
+    # Grammar only once there's some, so a deck without it reads as before.
     deck = load_deck()
     today = today_jst().isoformat()
+    kinds = [kind for kind in KINDS if kind != "grammar" or any(card["kind"] == kind for card in deck["cards"])]
     return {
-        "total": {kind: sum(card["kind"] == kind for card in deck["cards"]) for kind in KINDS},
-        "due": {kind: len(due_cards(deck, [kind])) for kind in KINDS},
+        "total": {kind: sum(card["kind"] == kind for card in deck["cards"]) for kind in kinds},
+        "due": {kind: len(due_cards(deck, [kind])) for kind in kinds},
         "reviewed_today": deck["reviews"].get(today, 0),
         "learning": len(learning_cards(deck)),
     }

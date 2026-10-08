@@ -1241,6 +1241,54 @@ def test_learning_new_cards(app_copy):
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+def test_grammar_on_the_japanese_page(app_copy):
+    # Grammar points are added from Add cards (one by one, or the starter
+    # set) and reviewed with a word from the deck: the conjugated form
+    # first, then the breakdown, graded by hand even with typed answers on.
+    result = run_in(app_copy, """
+        from streamlit.testing.v1 import AppTest
+        from prescripts.common import SCRIPTS_DIR
+        from prescripts.data.japanese.deck import add_card, load_deck, save_deck, today_jst
+        from prescripts.data.japanese.grammar import STARTER_POINTS
+
+        deck = load_deck()
+        quiet = add_card(deck, "vocab", "静か", "しずか", "quiet", pos="Na-adjective")
+        quiet.update(due="2999-01-01")  # only the grammar point is due
+        deck["settings"]["typed_answers"] = True
+        save_deck(deck)
+
+        at = AppTest.from_file(str(SCRIPTS_DIR / "prescripts/pages/japanese.py"), default_timeout=60)
+        at.run()
+        at.segmented_control(key="japanese_add_kind").set_value("grammar").run()
+        at.text_input(key="japanese_add_front").input("じゃなかった")
+        at.text_input(key="japanese_add_meaning").input("wasn't (casual)")
+        at.multiselect(key="japanese_add_attaches").set_value(["noun", "na-adjective"])
+        at.button(key="japanese_add_button").click().run()
+        assert not at.exception, at.exception
+        [point] = [card for card in load_deck()["cards"] if card["kind"] == "grammar"]
+        assert point["attaches"] == ["noun", "na-adjective"] and point["meaning"] == "wasn't (casual)", point
+
+        at.segmented_control(key="japanese_review_filter").set_value("Grammar").run()
+        flashcards = [block.value for block in at.markdown if 'class="flashcard"' in block.value]
+        assert flashcards and "静かじゃなかった" in flashcards[0] and "wasn" not in flashcards[0], flashcards
+        assert not [box for box in at.text_input if box.key == "japanese_typed_answer"]  # recognition, not typed
+        at.button(key="japanese_show_answer").click().run()
+        flashcards = [block.value for block in at.markdown if 'class="flashcard"' in block.value]
+        assert all(part in flashcards[0] for part in ("しずかじゃなかった", "静か", "quiet", "wasn&#x27;t (casual)")), flashcards
+        at.button(key=f"japanese_grade_good_{point['id']}").click().run()
+        assert not at.exception, at.exception
+        [point] = [card for card in load_deck()["cards"] if card["kind"] == "grammar"]
+        assert point["reps"] == 1 and point["due"] > today_jst().isoformat(), point
+
+        at.button(key="japanese_add_starter_grammar").click().run()
+        assert not at.exception, at.exception
+        grammar = [card for card in load_deck()["cards"] if card["kind"] == "grammar"]
+        assert len(grammar) == len(STARTER_POINTS), [card["front"] for card in grammar]
+        assert not [button for button in at.button if button.key == "japanese_add_starter_grammar"]
+    """)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 def test_drawing_on_a_card(app_copy):
     # A card's drawing is saved beside the deck, shows on the card's back,
     # and goes when it's saved empty or the card's deleted. The drawing box

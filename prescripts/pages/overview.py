@@ -291,7 +291,9 @@ def render_japanese_tile() -> None:
         card = None if just_arrived else japanese_card_by_id(st.session_state.get("overview_japanese_card"))
         if card is None:  # just arrived, or the shown card was deleted
             card = japanese_random_card()
-            st.session_state["overview_japanese_card"] = card["id"]
+            st.session_state["overview_japanese_card"] = card and card["id"]
+        if card is None:  # grammar points only
+            card = {"front": "", "reading": "", "meaning": ""}
         reading = ""
         if japanese_has_distinct_reading(card):
             reading = f'<div class="overview-word-reading">{html.escape(card["reading"])}</div>'
