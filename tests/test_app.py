@@ -1275,6 +1275,7 @@ def test_grammar_on_the_japanese_page(app_copy):
         at.button(key="japanese_show_answer").click().run()
         flashcards = [block.value for block in at.markdown if 'class="flashcard"' in block.value]
         assert all(part in flashcards[0] for part in ("しずかじゃなかった", "静か", "quiet", "wasn&#x27;t (casual)")), flashcards
+        assert "guidetojapanese.org/learn/grammar/stateofbeing" in flashcards[0], flashcards  # a starter point
         at.button(key=f"japanese_grade_good_{point['id']}").click().run()
         assert not at.exception, at.exception
         [point] = [card for card in load_deck()["cards"] if card["kind"] == "grammar"]
@@ -1341,6 +1342,24 @@ def test_kana_drill_on_the_japanese_page(app_copy):
         at.run()
         assert not at.exception, at.exception
         assert not [toggle for toggle in at.toggle if toggle.key == "japanese_kana_on"]
+    """)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_further_resources_on_the_japanese_page(app_copy):
+    # A short list of places to study further, at the bottom of the page.
+    result = run_in(app_copy, """
+        from streamlit.testing.v1 import AppTest
+        from prescripts.common import SCRIPTS_DIR
+
+        at = AppTest.from_file(str(SCRIPTS_DIR / "prescripts/pages/japanese.py"), default_timeout=60)
+        at.run()
+        assert not at.exception, at.exception
+        [section] = [expander for expander in at.expander if expander.label == "Further resources"]
+        text = " ".join(block.value for block in section.markdown)
+        for link in ("https://guidetojapanese.org/learn/grammar", "https://www.tofugu.com/japanese-grammar/",
+                     "https://jisho.org/search/%23jlpt-n5%20%23kanji"):
+            assert link in text, text
     """)
     assert result.returncode == 0, result.stdout + result.stderr
 

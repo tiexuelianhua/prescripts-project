@@ -232,6 +232,8 @@ def test_grammar_points(app_copy):
 
         assert add_starter_points(deck) == len(STARTER_POINTS) - 1  # じゃなかった is already there
         assert add_starter_points(deck) == 0
+        from prescripts.data.japanese.grammar import read_more
+        assert read_more(point)[1].endswith("/stateofbeing") and read_more(adjective_only) is None
         fronts = [card["front"] for card in deck["cards"] if card["kind"] == "grammar"]
         assert len(fronts) == len(set(fronts)), fronts
         assert {"だ", "です", "じゃない", "だった", "でした"} <= set(fronts), fronts

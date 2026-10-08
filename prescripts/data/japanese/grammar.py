@@ -36,6 +36,15 @@ STARTER_POINTS = [
 ]
 
 
+# Where to read more about a point: Tae Kim's chapter on the starter set.
+# Points added by hand have none. (link text, url)
+_STATE_OF_BEING = ("Tae Kim, State of being", "https://guidetojapanese.org/learn/grammar/stateofbeing")
+
+
+def read_more(point: dict) -> tuple[str, str] | None:
+    return _STATE_OF_BEING if point["front"] in {ending for ending, _ in STARTER_POINTS} else None
+
+
 def word_types(card: dict) -> set[str]:
     # "Noun, No-adjective, Na-adjective" -> {"noun", "na-adjective"}.
     if card["kind"] != "vocab":

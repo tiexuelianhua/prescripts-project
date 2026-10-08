@@ -57,6 +57,7 @@ from prescripts.data.japanese.grammar import (
     conjugate,
     fitting_words,
     pick_word,
+    read_more,
     typed_prompt,
 )
 from prescripts.data.japanese.kana import KANA_SETS, SCRIPTS, check_kana, kana_pool, kana_settings, next_kana
@@ -198,6 +199,10 @@ def render_grammar_card(point: dict, word: dict | None, show_back: bool) -> None
                      f'{html.escape(word["meaning"])}</div>')
         if point.get("note"):
             back += f'<div class="flashcard-note">{html.escape(point["note"])}</div>'
+        link = read_more(point)
+        if link:
+            back += (f'<div class="flashcard-pos">Read more: <a href="{link[1]}" target="_blank">'
+                     f'{html.escape(link[0])}</a></div>')
     st.markdown(
         f'<div class="flashcard"><div class="flashcard-kind">Grammar</div>'
         f'<div class="flashcard-front" lang="ja">{html.escape(front)}</div>{back}</div>',
@@ -1188,6 +1193,22 @@ def render_your_cards(deck: dict) -> None:
                 st.rerun()
 
 
+# Places to study further, kept short. Links checked 2026-10-08.
+RESOURCES = [
+    ("Tae Kim's Guide to Japanese Grammar", "https://guidetojapanese.org/learn/grammar",
+     "grammar from the basics up in appropriate order"),
+    ("Tofugu's Japanese Grammar Index", "https://www.tofugu.com/japanese-grammar/",
+     "one grammar point at a time with numerous examples"),
+    ("JLPT N5 kanji on Jisho", "https://jisho.org/search/%23jlpt-n5%20%23kanji",
+     "the first kanji to learn, including readings and example words"),
+]
+
+
+def render_resources() -> None:
+    with st.expander("Further resources"):
+        st.markdown("\n".join(f"- [{name}]({url}): {note}" for name, url, note in RESOURCES))
+
+
 deck = load_deck()
 # Stations logged on Budget's fares become vocab cards in Learn, a few
 # lookups at a time.
@@ -1207,3 +1228,4 @@ with st.container(key="main_body"):
         render_kana(deck)
     render_add_cards(deck)
     render_your_cards(deck)
+    render_resources()
