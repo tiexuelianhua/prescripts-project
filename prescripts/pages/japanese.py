@@ -397,7 +397,17 @@ def render_learn(deck: dict) -> None:
     # reviews. Only shown while there's something to learn.
     cards = learning_cards(deck)
     if not cards:
+        # The last one just went into the reviews: Learn holds its place
+        # until the next visit, so the page doesn't slide Review up under
+        # where it was.
+        if st.session_state.get("_previous_page") != st.session_state.get("_current_page"):
+            st.session_state.pop("japanese_learn_emptied", None)
+        if st.session_state.get("japanese_learn_emptied"):
+            st.subheader("Learn")
+            st.caption("All learned. They're in your reviews now.")
+            st.divider()
         return
+    st.session_state.pop("japanese_learn_emptied", None)
     st.subheader("Learn")
     position = st.session_state.get("japanese_learn_position", 0) % len(cards)
     card = cards[position]
@@ -455,6 +465,7 @@ def render_learn(deck: dict) -> None:
                          help="Moves it into your reviews. Its first review is tomorrow."):
         set_learning(deck, card["id"], False)
         save_deck(deck)
+        st.session_state["japanese_learn_emptied"] = len(cards) == 1
         # The next card slides into this place.
         st.session_state["japanese_learn_position"] = position
         st.toast(f"{card['front']} is in your reviews now.")
@@ -522,7 +533,8 @@ def render_review(deck: dict) -> None:
             "Practice", PRACTICE_SETS, key="japanese_practice_set",
             format_func=lambda name: f"{name} ({picked_count})" if name == "Picked cards" else name,
             help="Picked cards are the ones ticked under Your cards. Trouble cards are ones you've missed twice "
-            "or more. They stay here until they stick. Verbs, adjectives and nouns go by part of speech.",
+            "or more. They stay here until they stick. Cards in Learn are the ones you haven't marked "
+            "“Got it” yet, tested before they go into your reviews. Verbs, adjectives and nouns go by part of speech.",
         )
         card, position, total = practice_card(deck, kinds, review_filter, practice_set)
         # A new word for a grammar point each time round.
@@ -808,8 +820,10 @@ def render_add_cards(deck: dict) -> None:
                              key="japanese_add_starter_grammar",
                              help="だ, です, じゃない, じゃありません, だった, でした, じゃなかった, じゃありませんでした: "
                              "the forms nouns and na-adjectives take. Edit or delete them under Your cards."):
+                    had = {card["id"] for card in deck["cards"]}
                     added = add_starter_points(deck)
                     save_deck(deck)
+                    new_card_ids().update(card["id"] for card in deck["cards"] if card["id"] not in had)
                     st.toast(f"Added {added} grammar points.")
                     st.rerun()
             lookup = ""
@@ -991,6 +1005,7 @@ def render_add_cards(deck: dict) -> None:
                     card = add_card(deck, add_kind, front, reading, meaning, onyomi, kunyomi, pos, note,
                                     learning=add_as == "New to me")
                 save_deck(deck)
+                new_card_ids().add(card["id"])
                 st.session_state.pop("_japanese_add_issues", None)
                 st.session_state["_reset_japanese_add"] = True
                 # Typed out under the button on the next run, like Meal
@@ -1014,12 +1029,25 @@ def render_add_cards(deck: dict) -> None:
                 typewriter(pending_confirmation)
 
 
+def new_card_ids() -> set[str]:
+    # Cards added on this visit, picked out in Your cards until the page is
+    # left or Your cards is closed.
+    if st.session_state.get("_previous_page") != st.session_state.get("_current_page"):
+        st.session_state["japanese_new_cards"] = set()
+    return st.session_state.setdefault("japanese_new_cards", set())
+
+
 def render_your_cards(deck: dict) -> None:
     # Lookup of everything already in the deck, editable in place.
     # Keyed and tracked, so it stays open through the reruns its own edits
     # cause -- ticking Learn adds the Learn section above it, which would
     # otherwise rebuild it closed.
-    with st.expander("Your cards", key="japanese_your_cards", on_change="rerun"):
+    your_cards = st.expander("Your cards", key="japanese_your_cards", on_change="rerun")
+    new_ids = new_card_ids()
+    if st.session_state.get("_japanese_your_cards_open") and not your_cards.open:
+        new_ids.clear()
+    st.session_state["_japanese_your_cards_open"] = your_cards.open
+    with your_cards:
         # Half the row each: the four Deck buttons need about 300px, more
         # than two fifths of the expander gave them.
         search_columns = st.columns(2, vertical_alignment="bottom")
@@ -1073,8 +1101,12 @@ def render_your_cards(deck: dict) -> None:
             # Streamlit only colours cells that can't be edited, so the mark
             # sits in a narrow column of its own, near the left where it's
             # seen without scrolling the table sideways.
+            # Cards just added have their Type and Next review cells lit up.
             shown_table = table.style.map(
                 lambda value: f"background-color: {ACCENT_COLOR}40" if value else "", subset=["missing"]
+            ).apply(
+                lambda row: [f"background-color: {ACCENT_COLOR}66" if row.name in new_ids else ""] * len(row),
+                axis=1, subset=["kind", "due"],
             )
             edited = st.data_editor(
                 shown_table,

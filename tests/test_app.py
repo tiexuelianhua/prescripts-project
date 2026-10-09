@@ -1204,8 +1204,10 @@ def test_practicing_picked_cards(app_copy):
 
 def test_learning_new_cards(app_copy):
     # A card added as new goes to Learn, not the reviews; it shows the
-    # deck's words that use it and takes a note; "Got it" puts it in the
-    # reviews from tomorrow.
+    # deck's words that use it and takes a note (it's marked new in Your
+    # cards), and Practice can go round
+    # just the cards in Learn; "Got it" puts it in the reviews from
+    # tomorrow, and Learn keeps its place for the visit once it's empty.
     result = run_in(app_copy, """
         from datetime import timedelta
         from streamlit.testing.v1 import AppTest
@@ -1233,6 +1235,7 @@ def test_learning_new_cards(app_copy):
         deck = load_deck()
         [kanji] = [card for card in deck["cards"] if card["kind"] == "kanji"]
         assert kanji["learning"] and kanji not in due_cards(deck)
+        assert at.session_state["japanese_new_cards"] == {kanji["id"]}  # lit up in Your cards
         assert load_deck()["settings"]["add_as_learning"]  # remembered for the next card
         assert practice_summary()["learning"] == 1
 
@@ -1242,11 +1245,18 @@ def test_learning_new_cards(app_copy):
         at.text_area(key=f"japanese_learn_note_{kanji['id']}").input("A person eating under a roof").run()
         assert load_deck()["cards"][-1]["note"] == "A person eating under a roof"
 
+        at.toggle(key="japanese_practice_toggle").set_value(True).run()
+        at.selectbox(key="japanese_practice_set").set_value("Cards in Learn").run()
+        assert any("card 1 of 1" in caption.value for caption in at.caption), [c.value for c in at.caption]
+        at.toggle(key="japanese_practice_toggle").set_value(False).run()
+
         at.button(key="japanese_learn_got_it").click().run()
         assert not at.exception, at.exception
         kanji = load_deck()["cards"][-1]
         assert not kanji["learning"] and kanji["due"] == (today_jst() + timedelta(days=1)).isoformat(), kanji
         assert not [button for button in at.button if button.key == "japanese_learn_got_it"]  # Learn is empty again
+        assert "Learn" in [header.value for header in at.subheader]  # but holds its place
+        assert any("All learned" in caption.value for caption in at.caption)
 
         # Out of Learn, a word's back still shows which reading its kanji uses.
         at.button(key="japanese_show_answer").click().run()
