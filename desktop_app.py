@@ -41,10 +41,11 @@ _STATUS_WIDTH = 42
 _IMAGES_DIR = SCRIPTS_DIR.parent / "Images"
 PRIVATE_LOOK = (_IMAGES_DIR / "The_Index_Logo.webp").exists()
 if PRIVATE_LOOK:
-    # Generated from Images/The_Index_Logo.webp (padded to square;
-    # webview.start's icon= wants a real .ico on Windows, not the webp app.py
+    # The logo with a soft glow on a black square, the same one the launcher
+    # is built with, so the running window and the pinned launcher match
+    # (webview.start's icon= wants a real .ico on Windows, not the webp app.py
     # uses for the browser-tab favicon).
-    ICON_PATH = _IMAGES_DIR / "The_Index_Logo.ico"
+    ICON_PATH = _IMAGES_DIR / "The_Index_Logo_glow.ico"
     # Title bar only (the window's small icon) -- the plain transparent logo
     # reads fine there against the title bar, and the user prefers it without
     # the black square. The black-backdrop ICON_PATH stays the big icon,

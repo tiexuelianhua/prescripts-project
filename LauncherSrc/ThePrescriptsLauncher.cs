@@ -35,8 +35,10 @@ class ThePrescriptsLauncher
 {
     // Must match REDIRECT_URI in prescripts/data/spotify.py.
     const int Port = 8501;
-    // The exe is built into the repo folder itself (see the csc command in
-    // the commit history), so everything is found relative to where it sits.
+    // The exe is built into the repo folder itself, so everything is found
+    // relative to where it sits. Built with (the icon is kept outside the repo):
+    //   csc /target:winexe /win32icon:..\Images\The_Index_Logo_glow.ico
+    //       /r:System.Management.dll /out:ThePrescriptsLauncher.exe LauncherSrc\ThePrescriptsLauncher.cs
     static readonly string ScriptsDir = AppDomain.CurrentDomain.BaseDirectory.TrimEnd('\\');
 
     const int SW_RESTORE = 9;
