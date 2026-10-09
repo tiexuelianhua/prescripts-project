@@ -38,6 +38,9 @@ A personal dashboard app for everyday life in Japan, themed on the Prescripts of
 
 *Screenshots show made-up sample data.*
 
+Recorded demo of the app:
+https://github.com/user-attachments/assets/cc02b47b-293e-48b5-9f43-b94769052479
+
 Personal portfolio project developed with the help of PeaceWorks K.K. and ORBWEVA.
 
 The author directed the project and how it was implemented. The code itself was written by [Claude Code](https://claude.com/claude-code), Anthropic's AI coding assistant.
