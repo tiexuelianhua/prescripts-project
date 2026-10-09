@@ -1309,7 +1309,10 @@ with st.container(key="main_body"):
     # running the answer box's focus again (scrolling down to it).
     with st.container(key="japanese_learn_box"):
         render_learn(deck)
-    render_review(deck)
+    # The same for Review, which changes size with every card: the kana
+    # drill below it would otherwise take the focus after each answer.
+    with st.container(key="japanese_review_box"):
+        render_review(deck)
     # Public version only: the author's own copy has no use for it.
     if not PRIVATE_LOOK:
         render_kana(deck)
