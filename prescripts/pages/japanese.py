@@ -1304,7 +1304,11 @@ if pending_stations:
         st.toast(f"Added {added_stations} station{'s' if added_stations != 1 else ''} from your fares to Learn.")
 
 with st.container(key="main_body"):
-    render_learn(deck)
+    # Learn in a box of its own: a kanji there shows more than a word does,
+    # and without it everything below would count as new on the next card,
+    # running the answer box's focus again (scrolling down to it).
+    with st.container(key="japanese_learn_box"):
+        render_learn(deck)
     render_review(deck)
     # Public version only: the author's own copy has no use for it.
     if not PRIVATE_LOOK:
