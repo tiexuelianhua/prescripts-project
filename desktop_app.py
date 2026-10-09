@@ -278,7 +278,16 @@ def _relaunch() -> None:
     )
 
 
+def _set_app_id() -> None:
+    # An app ID of its own, set before any window opens: without one, Windows
+    # groups the window under pythonw.exe and the taskbar shows Python's icon
+    # instead of the window's.
+    if sys.platform == "win32":
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("ThePrescripts.App")
+
+
 def main() -> None:
+    _set_app_id()
     _kill_previous_instance()
     PID_FILE.write_text(str(os.getpid()), encoding="utf-8")
     api = _Api()
