@@ -375,6 +375,7 @@ with st.container(key="main_body"):
         st.session_state["_bag_set_by_hand"] = False
         st.session_state["_bag_ticked_for_store"] = None
         st.session_state["_meal_basket"] = []
+        st.session_state.pop("_meal_edit_index", None)
         # The same stations fill in their fare again for the next meal.
         st.session_state["_last_fare_route"] = None
         st.session_state["_reset_add_item"] = True
@@ -514,16 +515,48 @@ with st.container(key="main_body"):
         item = TRANSIT_FEE_ITEM
     # Never greyed out: a click can land before an item just typed has
     # registered, and a greyed-out button would swallow it.
+    # An item taken back out with ✎ goes back in where it was.
+    def put_in_basket(line):
+        basket.insert(st.session_state.pop("_meal_edit_index", len(basket)), {"id": time.time_ns(), **line})
+
+    # An item picked but not added yet still goes in when the meal's logged:
+    # a single item needs no "+ Add item" first.
+    pending = [{"item": item, "cost": int(cost_yen), "category": category, "store": store,
+                "note": item_note}] if item else []
     if add_column.button("+ Add item", width="stretch"):
         if item:
-            basket.append({"id": time.time_ns(), "item": item, "cost": int(cost_yen),
-                           "category": category, "store": store, "note": item_note})
+            put_in_basket(pending[0])
             st.session_state["_reset_add_item"] = True
             st.rerun()
         st.caption("Type or pick an item first.")
 
+    # ✎ puts an item back in the boxes above to change anything about it,
+    # and "+ Add item" returns it to its place. One already in the boxes is
+    # added first, so it isn't lost. Run as a callback: the boxes can only
+    # be filled before they're drawn.
+    def edit_line(index):
+        if pending:
+            if st.session_state.get("_meal_edit_index", len(basket)) <= index:
+                index += 1
+            put_in_basket(pending[0])
+        line = basket.pop(index)
+        st.session_state["_meal_edit_index"] = index
+        st.session_state["add_entry_category"] = line["category"]
+        st.session_state["add_entry_item"] = line["item"]
+        # So the item's last price and store don't fill in over these.
+        st.session_state["_last_autofilled_item"] = line["item"]
+        st.session_state["add_entry_cost"] = line["cost"]
+        st.session_state["add_entry_item_note"] = line.get("note") or ""
+        if line["category"] == transport:
+            st.session_state["add_entry_from"], st.session_state["add_entry_to"] = split_route(line["store"])
+            st.session_state["_last_fare_route"] = line["store"]
+        else:
+            st.session_state["add_entry_store"] = line["store"]
+
     for index, line in enumerate(basket):
-        name_column, price_column, remove_column = st.columns([7, 2, 1], vertical_alignment="center")
+        name_column, price_column, edit_column, remove_column = st.columns(
+            [7, 2, 1, 1], vertical_alignment="center"
+        )
         # Its category in its colour, then where from, so a mixed day reads
         # at a glance.
         line_color = colors.get(line["category"], ACCENT_COLOR)
@@ -534,13 +567,11 @@ with st.container(key="main_body"):
             unsafe_allow_html=True,
         )
         price_column.write(f"¥{line['cost']:,}")
+        edit_column.button("✎", key=f"meal_edit_{line['id']}", help="Change this item",
+                           on_click=edit_line, args=(index,))
         remove_column.button("✕", key=f"meal_remove_{line['id']}", help="Take this item out of the meal",
                              on_click=basket.pop, args=(index,))
 
-    # An item picked but not added yet still goes in when the meal's logged:
-    # a single item needs no "+ Add item" first.
-    pending = [{"item": item, "cost": int(cost_yen), "category": category, "store": store,
-                "note": item_note}] if item else []
     items = basket + pending
     subtotal = sum(line["cost"] for line in items)
     line_categories = {line["category"] for line in items} | {category}

@@ -221,7 +221,8 @@ def test_setting_todays_budget(app_copy):
 
 def test_logging_a_meal(app_copy):
     # Items gather into one meal with a running total and can be taken out
-    # again; tax starts at 0, and "Use 8%" fills in 8% of the items; "Log meal"
+    # again or changed (✎ puts one back in the boxes, and "+ Add item" returns
+    # it to its place); tax starts at 0, and "Use 8%" fills in 8% of the items; "Log meal"
     # saves every row at one time and store, and Entries shows them as one
     # meal with its total, the store in Food's colour. An item's own note is
     # kept on its row.
@@ -255,13 +256,25 @@ def test_logging_a_meal(app_copy):
         assert at.number_input(key="add_entry_tax").value == 0  # prices usually include tax
         assert "¥500" in total() and "3 items" in total(), total()
 
+        edits = [button for button in at.button if (button.key or "").startswith("meal_edit_")]
+        edits[1].click()  # the karaage cost more than last time
+        at.run()
+        assert at.selectbox(key="add_entry_item").value == "Karaage"
+        assert at.text_input(key="add_entry_item_note").value == "extra crispy"
+        assert "¥500" in total() and "3 items" in total(), total()  # still counted while it's in the boxes
+        at.number_input(key="add_entry_cost").set_value(280)
+        at.run()
+        next(button for button in at.button if button.label == "+ Add item").click()
+        at.run()
+        assert "¥530" in total() and "3 items" in total(), total()
+
         removes = [button for button in at.button if (button.key or "").startswith("meal_remove_")]
         removes[-1].click()  # take the tea out
         at.run()
-        assert "¥400" in total() and "2 items" in total(), total()
+        assert "¥430" in total() and "2 items" in total(), total()
         next(button for button in at.button if button.label == "Use 8%").click()
         at.run()
-        assert at.number_input(key="add_entry_tax").value == 32 and "¥432" in total(), total()
+        assert at.number_input(key="add_entry_tax").value == 34 and "¥464" in total(), total()
         at.number_input(key="add_entry_tax").set_value(30)  # the receipt's own tax line
         at.run()
         add("Tea")
@@ -272,13 +285,13 @@ def test_logging_a_meal(app_copy):
 
         entries = load_entries(get_today_folder() / "receipts.csv")
         assert list(zip(entries["item"], entries["cost_yen"])) == [
-            ("Onigiri", 150), ("Karaage", 250), ("Tea", 100), (TAX_ITEM, 30)], entries
+            ("Onigiri", 150), ("Karaage", 280), ("Tea", 100), (TAX_ITEM, 30)], entries
         assert entries["excluded_reason"].isna().tolist() == [True, False, True, True], entries
         assert entries["excluded_reason"][1] == "extra crispy", entries
         assert entries["timestamp"].nunique() == 1 and set(entries["store"]) == {"Olympic"}
         from prescripts.common import ACCENT_COLOR
         assert [line for line in at.markdown if "<details>" in line.value
-                and f"<span style='color: {ACCENT_COLOR}'>Olympic</span> · ¥530 · 3 items" in line.value]
+                and f"<span style='color: {ACCENT_COLOR}'>Olympic</span> · ¥560 · 3 items" in line.value]
         assert at.number_input(key="add_entry_tax").value == 0 and not at.selectbox(key="add_entry_store").value
     """)
     assert result.returncode == 0, result.stdout + result.stderr
