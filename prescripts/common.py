@@ -520,14 +520,25 @@ def keep_typed_selectbox_text(*keys: str) -> None:
         window._keepTypedSelectors = new Set([...(window._keepTypedSelectors || []), ...{selectors}]);
         if (!window._keepTypedInstalled) {{
             window._keepTypedInstalled = true;
+            // Once Enter's been pressed for a box, it's done until the box is
+            // next clicked or tabbed into. The list can still read as open
+            // for a moment after Enter, and the box losing focus straight
+            // after (the same click) would otherwise handle the text a second
+            // time: typing it back in, opening the list again, and leaving
+            // the box -- which handled it a third time, and so on, with the
+            // list popping open after a click away and Enter sometimes
+            // picking an item that was never typed.
             const pending = (input = document.activeElement) => {{
                 if (!input || input.tagName !== "INPUT" || !input.value.trim()) return null;
-                if (input.getAttribute("aria-expanded") !== "true") return null;
+                if (input.getAttribute("aria-expanded") !== "true" || input._keepTypedEntered) return null;
                 return [...window._keepTypedSelectors].some(s => input.matches(s)) ? input : null;
             }};
-            const pressEnter = input => input.dispatchEvent(new KeyboardEvent("keydown", {{
-                key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true, cancelable: true,
-            }}));
+            const pressEnter = input => {{
+                input._keepTypedEntered = true;
+                input.dispatchEvent(new KeyboardEvent("keydown", {{
+                    key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true, cancelable: true,
+                }}));
+            }};
             document.addEventListener("pointerdown", event => {{
                 const input = pending();
                 if (!input) return;
@@ -556,7 +567,10 @@ def keep_typed_selectbox_text(*keys: str) -> None:
                     event.stopPropagation();
                 }}
             }}, true);
-            document.addEventListener("focusin", event => {{ event.target._keepTypedArrowed = false; }}, true);
+            document.addEventListener("focusin", event => {{
+                event.target._keepTypedArrowed = false;
+                event.target._keepTypedEntered = false;
+            }}, true);
             // Clicking into a box that already has something in it selects
             // all of it (as Tab already does), so what's typed replaces it
             // whole. Otherwise the box keeps the old text around the new
