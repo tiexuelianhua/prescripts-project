@@ -533,8 +533,13 @@ def keep_typed_selectbox_text(*keys: str) -> None:
                 if (input.getAttribute("aria-expanded") !== "true" || input._keepTypedEntered) return null;
                 return [...window._keepTypedSelectors].some(s => input.matches(s)) ? input : null;
             }};
+            // What was typed and entered in each box (here or by Enter), so
+            // that coming back to it carries on with it (below).
+            window._keepTypedOwn = new Map();
+            const selectorOf = box => [...window._keepTypedSelectors].find(s => box.matches?.(s));
             const pressEnter = input => {{
                 input._keepTypedEntered = true;
+                window._keepTypedOwn.set(selectorOf(input), input.value);
                 input.dispatchEvent(new KeyboardEvent("keydown", {{
                     key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true, cancelable: true,
                 }}));
@@ -562,25 +567,37 @@ def keep_typed_selectbox_text(*keys: str) -> None:
                 if (event.isComposing || event.keyCode === 229) return;
                 if (event.key === "ArrowDown" || event.key === "ArrowUp") box._keepTypedArrowed = true;
                 else if (event.key !== "Enter") box._keepTypedArrowed = false;
+                else if (box.value.trim() && !box._keepTypedArrowed) window._keepTypedOwn.set(selectorOf(box), box.value);
                 else if (!box.value.trim() && !box._keepTypedArrowed && event.isTrusted) {{
                     event.preventDefault();
                     event.stopPropagation();
                 }}
             }}, true);
+            const isKeepTyped = box => box.matches && [...window._keepTypedSelectors].some(s => box.matches(s));
             document.addEventListener("focusin", event => {{
-                event.target._keepTypedArrowed = false;
-                event.target._keepTypedEntered = false;
+                const box = event.target;
+                box._keepTypedArrowed = false;
+                box._keepTypedEntered = false;
+                box._keepTypedFresh = !!box.value && window._keepTypedOwn.get(selectorOf(box)) === box.value;
             }}, true);
-            // Clicking into a box that already has something in it selects
-            // all of it (as Tab already does), so what's typed replaces it
-            // whole. Otherwise the box keeps the old text around the new
-            // and swaps it for just the new part itself -- which, mid
-            // Japanese conversion, garbled the text ("ふファミマ") or brought
-            // the old store back.
+            // Coming back to text typed here before ("fri", clicked away from
+            // half done), what's typed next carries on with it. But on its
+            // own the box starts a new search with just the new part: "es"
+            // left "es". So that first bit is put in place by hand instead,
+            // the whole text typed in fresh ("fries"), which the box takes as
+            // carrying on. Japanese conversion can't be done that way, so
+            // there the old text is selected first and replaced whole --
+            // otherwise the box swapped it mid conversion and garbled it
+            // ("ふファミマ").
+            // Something picked from the list or filled in by the app (the
+            // Food category, a last store) is a whole choice, not half-typed:
+            // clicking into it selects all of it (as Tab already does), so
+            // what's typed replaces it.
             document.addEventListener("pointerdown", event => {{
                 const box = event.target;
-                if (!box.matches || ![...window._keepTypedSelectors].some(s => box.matches(s))) return;
-                box._keepTypedSelectAll = document.activeElement !== box && !!box.value;
+                if (!isKeepTyped(box)) return;
+                box._keepTypedSelectAll = document.activeElement !== box && !!box.value
+                    && window._keepTypedOwn.get(selectorOf(box)) !== box.value;
             }}, true);
             document.addEventListener("pointerup", event => {{
                 const box = event.target;
@@ -588,8 +605,63 @@ def keep_typed_selectbox_text(*keys: str) -> None:
                 box._keepTypedSelectAll = false;
                 if (box.selectionStart === box.selectionEnd) box.select();
             }}, true);
+            const isInsert = event => event.inputType === "insertText" || event.inputType === "insertFromPaste";
+            const insertedText = event => event.data ?? event.dataTransfer?.getData("text/plain") ?? "";
+            document.addEventListener("beforeinput", event => {{
+                const box = event.target;
+                // Keys typed before that's done join it, not the box.
+                const queued = box._keepTypedQueued;
+                if (queued) {{
+                    if (!isInsert(event)) return;
+                    event.preventDefault();
+                    const added = insertedText(event);
+                    queued.text = queued.text.slice(0, queued.caret) + added + queued.text.slice(queued.caret);
+                    queued.caret += added.length;
+                    return;
+                }}
+                if (!box._keepTypedFresh || !isKeepTyped(box)) return;
+                box._keepTypedFresh = false;
+                if (!isInsert(event)) return;
+                const added = insertedText(event);
+                const start = box.selectionStart, end = box.selectionEnd;
+                if (start === 0 && end === box.value.length) return;
+                event.preventDefault();
+                box._keepTypedQueued = {{
+                    text: box.value.slice(0, start) + added + box.value.slice(end), caret: start + added.length,
+                }};
+                // Typing can't be done from inside this event, so straight after.
+                setTimeout(() => {{
+                    const {{ text, caret }} = box._keepTypedQueued;
+                    box._keepTypedQueued = null;
+                    box.select();
+                    document.execCommand("delete");
+                    document.execCommand("insertText", false, text);
+                    box.setSelectionRange(caret, caret);
+                }});
+            }}, true);
+            document.addEventListener("keydown", event => {{
+                const box = event.target;
+                if (!box._keepTypedFresh || !isKeepTyped(box)) return;
+                if (event.isComposing || event.keyCode === 229) box.select();
+            }}, true);
+            document.addEventListener("input", event => {{
+                if (isKeepTyped(event.target)) event.target._keepTypedEmptied = !event.target.value.trim();
+            }}, true);
             // Runs before the box's own blur handling, which drops the text.
             document.addEventListener("focusout", event => {{
+                // Emptied by hand and left: the box would bring its old
+                // choice back (a station cleared out of To returned). Escape
+                // twice is the box's own way to clear it -- once to stop
+                // typing, once to clear -- for boxes that can be left blank.
+                const box = event.target;
+                if (box._keepTypedEmptied && isKeepTyped(box) && !box.value.trim()) {{
+                    box._keepTypedEmptied = false;
+                    window._keepTypedOwn.delete(selectorOf(box));
+                    for (let i = 0; i < 2; i++) box.dispatchEvent(new KeyboardEvent("keydown", {{
+                        key: "Escape", code: "Escape", keyCode: 27, which: 27, bubbles: true, cancelable: true,
+                    }}));
+                    return;
+                }}
                 const input = pending(event.target);
                 if (!input) return;
                 const next = event.relatedTarget;
