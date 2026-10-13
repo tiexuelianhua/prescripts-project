@@ -65,6 +65,7 @@ from prescripts.data.meal_receipts import (
     split_route,
     totals_by_category,
     transport_category,
+    with_default_columns,
 )
 
 TEXT_COLOR, ACCENT_COLOR = theme_colors()
@@ -116,6 +117,10 @@ if opened_on in category_names:
 
 def shown_item(name):
     return BAG_ITEM_EN if english and name == BAG_ITEM else name
+
+
+def file_text(path):
+    return path.read_text(encoding="utf-8") if path.exists() else ""
 
 with st.sidebar:
     st.header("Settings")
@@ -781,11 +786,25 @@ with st.container(key="main_body"):
                             f"<div style='margin: 0.3rem 0 0.5rem 1.2rem'>{lines}</div></details>",
                             unsafe_allow_html=True)
             st.caption("Change, add or delete rows here. Changes save straight away.")
+            # The table keeps editing the day as it was when it was opened,
+            # and every change saves that plus all its edits so far. It used
+            # to reload the saved day after each save instead, which threw
+            # away an edit made in the second or so that took (a cost typed
+            # into the next row came back as the old one). Only a change to
+            # the file from somewhere else -- a meal logged above, or a row
+            # moved here from another day -- opens the table afresh.
+            base_key = f"_entries_base_{selected_date}"
+            base = st.session_state.get(base_key)
+            day_text = file_text(selected_csv)
+            if base is None or day_text != base["text"]:
+                base = {"text": day_text, "entries": day_entries, "written": None,
+                        "version": base["version"] + 1 if base else 0}
+                st.session_state[base_key] = base
             edited_entries = st.data_editor(
-                day_entries.assign(item=day_entries["item"].map(shown_item)),
+                base["entries"].assign(item=base["entries"]["item"].map(shown_item)),
                 num_rows="dynamic",
                 width="stretch",
-                key=f"editor_{selected_date}",
+                key=f"editor_{selected_date}_{base['version']}",
                 # Editable like any other column, so entries logged before
                 # this option existed (or before realizing a friend covered
                 # it) can be excluded retroactively, then saved as usual.
@@ -824,7 +843,7 @@ with st.container(key="main_body"):
             # just added with "+" and still being filled in: saving it then
             # would file it under no day at all (relocate_edited_entries
             # sorts rows into day-folders by their time).
-            editor_changes = st.session_state.get(f"editor_{selected_date}", {})
+            editor_changes = st.session_state.get(f"editor_{selected_date}_{base['version']}", {})
             has_changes = any(editor_changes.get(part) for part in ("edited_rows", "added_rows", "deleted_rows"))
             # A time typed by hand can be in any everyday format ("2026-09-24
             # 13:00", no seconds) -- rewritten to the stored one so every row
@@ -842,25 +861,28 @@ with st.container(key="main_body"):
             elif has_changes:
                 same_day_entries = relocate_edited_entries(edited_entries, selected_date)
                 moved_count = len(edited_entries) - len(same_day_entries)
-                save_entries(selected_csv, same_day_entries)
-                # st.toast(), not st.success(): a message shown right before
-                # st.rerun() is otherwise discarded with the rest of this
-                # interrupted run before ever reaching the browser -- toast is
-                # the one message type Streamlit carries across that rerun.
-                if moved_count:
-                    entry_word = "entry" if moved_count == 1 else "entries"
-                    st.toast(f"Saved. Moved {moved_count} {entry_word} to the day matching its edited date.")
-                else:
-                    st.toast("Saved.")
-                # A data_editor's own widget state (its accumulated cell
-                # edits/added/deleted rows) persists across reruns under its
-                # key regardless of what's passed as its value -- so without
-                # clearing it here, the saved edits would be replayed on top
-                # of the saved file: added rows added twice, deletions
-                # removing whichever rows slid into those positions, and a
-                # row moved out to another day reappearing here.
-                del st.session_state[f"editor_{selected_date}"]
-                st.rerun()
+                # Every rerun carries all the table's edits, so only a
+                # change since the last save is written.
+                written = with_default_columns(same_day_entries).to_csv(index=False)
+                if moved_count or written != base["written"]:
+                    save_entries(selected_csv, same_day_entries)
+                    base["written"] = written
+                    base["text"] = file_text(selected_csv)
+                    # A row moved to another day leaves the table: opened
+                    # afresh on what's left (or it'd be moved twice).
+                    if moved_count:
+                        base["text"] = None
+                    # st.toast(), not st.success(): a message shown right
+                    # before st.rerun() is otherwise discarded with the rest
+                    # of this interrupted run -- toast is the one message type
+                    # Streamlit carries across that rerun.
+                    if moved_count:
+                        entry_word = "entry" if moved_count == 1 else "entries"
+                        st.toast(f"Saved. Moved {moved_count} {entry_word} to the day matching its edited date.")
+                    else:
+                        st.toast("Saved.")
+                    # So the meals above and the totals show the change.
+                    st.rerun()
 
 
         # Showing "¥0 of budget" for a past day with no logged entries at all
