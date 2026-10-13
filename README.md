@@ -97,6 +97,8 @@ py -3.12 -m venv .venv
 .venv\Scripts\python -m pip install -r requirements.txt
 ```
 
+If pip ends with a notice that a new release of pip is available, you can ignore it.
+
 That's the whole install.
 
 ## Run
@@ -162,7 +164,7 @@ Playback controls act on whichever device you're already playing Spotify on (pho
 
 Everything is saved as ordinary files in folders beside the code, never inside it. You can update the code, or delete and re-clone it, without losing anything.
 
-Each folder or file appears the first time you save something on that page or change a setting, so a fresh install has only `prescripts-project`. Once you've used everything, it looks like this:
+Folders appear as you use the app, some as soon as you open a page. Once you've used everything, it looks like this:
 
 ```
 Prescripts\
@@ -171,7 +173,7 @@ Prescripts\
 ├── Japanese\             ← your flashcards
 ├── Weather\              ← your chosen forecast area (default: Tokyo)
 ├── Activities\           ← your saved area and walking distance, events you've added, plus recent searches
-├── Spotify\              ← your Spotify keys + connection
+├── Spotify\              ← your Spotify keys + connection, plus a log of slow page loads
 ├── quotes.json           ← quotes you add on Home
 └── app_settings.json     ← app-wide preferences: zoom level, English only, which pages and tiles are on
 ```
