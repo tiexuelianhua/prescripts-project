@@ -203,7 +203,7 @@ with st.sidebar:
                                   on_click=no_period_change, args=(editing, "set"))
         st.button("Start fresh from today", key=f"budget_fresh_{editing}",
                   on_click=no_period_change, args=(editing, "fresh"),
-                  help="Counts again from now, from the full budget.")
+                  help="Counts again from the start of today, from the full budget.")
 
     if period == "daily" and amount > 0:
         # Some room above the switch, so it doesn't sit tight under the

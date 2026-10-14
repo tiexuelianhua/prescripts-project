@@ -671,22 +671,22 @@ def test_budget_per_category(app_copy):
         save_budget(both, ALL_SPENDING, {"amount": 20000, "period": "monthly", "carry_over": False})
         assert budget_status(both, today, today)[0]["spent"] == 6900
 
-        # No period: spending since it was set, less what that first day had
-        # already spent, plus anything added.
+        # No period: spending from the start of the day it was set (all of the
+        # 7th's ¥800 counts), plus anything added.
         save_budget(both, "Food", {"amount": 10000, "period": NO_PERIOD, "carry_over": False,
-                                   "since": "2026-09-07", "offset": 500, "added": 1000})
+                                   "since": "2026-09-07", "added": 1000})
         food = next(line for line in budget_status(both, today, today) if line["category"] == "Food")
-        assert (food["period"], food["spent"], food["budget"], food["carried"]) == (NO_PERIOD, 600, 11000, 0)
+        assert (food["period"], food["spent"], food["budget"], food["carried"]) == (NO_PERIOD, 1100, 11000, 0)
         assert next(line for line in budget_status(both, date(2026, 9, 6), today)
                     if line["category"] == "Food")["spent"] == 0  # before it was set
         # Setting what's left keeps the spending counted: the budget becomes
         # what's left plus what's been spent.
         set_no_period_left(both["budgets"]["Food"], "Food", today, 4000)
         food = next(line for line in budget_status(both, today, today) if line["category"] == "Food")
-        assert (food["spent"], food["budget"]) == (600, 4600) and both["budgets"]["Food"]["added"] == 0
-        fresh = {"amount": 10000, "period": NO_PERIOD, "added": 1000}
+        assert (food["spent"], food["budget"]) == (1100, 5100) and both["budgets"]["Food"]["added"] == 0
+        fresh = {"amount": 10000, "period": NO_PERIOD, "added": 1000, "offset": 300}
         start_no_period(fresh, "Food", today)
-        assert fresh == {"amount": 10000, "period": NO_PERIOD, "added": 0, "since": "2026-09-09", "offset": 300}
+        assert fresh == {"amount": 10000, "period": NO_PERIOD, "added": 0, "since": "2026-09-09"}
 
         # The bars show what's left, full at the start; over budget, the bar
         # is empty and the amount over is red.

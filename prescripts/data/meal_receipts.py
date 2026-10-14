@@ -560,9 +560,8 @@ def _counted_category(category: str) -> str | None:
 
 _OLD_BUDGET_KEYS = ("daily_budget", "budget_amount", "budget_period", "carry_over", "carry_over_since", "carry_over_set")
 # "none": no period, just the money there is to spend. It counts spending
-# from when it was set ("since" plus "offset", what had already been spent
-# that day), plus anything added since; see start_no_period. No carry-over
-# switch: what's left simply stays.
+# from the start of the day it was set ("since"), plus anything added since;
+# see start_no_period. No carry-over switch: what's left simply stays.
 NO_PERIOD = "none"
 PERIODS = ["daily", "weekly", "monthly", NO_PERIOD]
 PERIOD_NAMES = {"daily": "Daily", "weekly": "Weekly", "monthly": "Monthly", NO_PERIOD: "No period"}
@@ -604,15 +603,17 @@ def spent_since(start: date, day: date, category: str) -> int:
 
 
 def start_no_period(budget: dict, category: str, today: date) -> None:
-    # A no-period budget counts from now: today's spending so far is set
-    # aside as "offset", and anything added before goes.
-    budget.update(since=today.isoformat(), offset=spent_since(today, today, category), added=0)
+    # A no-period budget counts from the start of today, so spending already
+    # logged today counts too. Anything added before goes. ("offset" was how
+    # an earlier version left out spending from earlier that day.)
+    budget.update(since=today.isoformat(), added=0)
+    budget.pop("offset", None)
 
 
 def no_period_spent(budget: dict, category: str, day: date) -> int:
     # What a no-period budget has had spent from it, through `day`.
     since = date.fromisoformat(budget["since"])
-    return spent_since(since, day, category) - budget.get("offset", 0) if day >= since else 0
+    return spent_since(since, day, category) if day >= since else 0
 
 
 def set_no_period_left(budget: dict, category: str, today: date, left: int) -> None:

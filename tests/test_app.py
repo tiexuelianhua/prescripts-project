@@ -1113,8 +1113,9 @@ def test_month_by_month_by_category(app_copy):
         table = at.dataframe[-1].value
         assert list(table.columns)[-2:] == ["Allowance", "Difference"] and table["Allowance"].iloc[0] == "¥10,000"
 
-        # A no-period budget: counts from now (today's ¥150 already spent
-        # doesn't count), money can be added, and what's left set by hand.
+        # A no-period budget: counts from the start of today (the ¥150 already
+        # spent counts), money can be added, and what's left set by hand
+        # without losing what's been spent.
         def food_bar():
             [bars] = [block.value for block in at.markdown if "budget-line" in block.value]
             return bars[bars.index("Food · "):]
@@ -1122,15 +1123,15 @@ def test_month_by_month_by_category(app_copy):
         at.sidebar.selectbox(key="budget_period_Food").set_value("none").run()
         at.sidebar.number_input(key="budget_amount_Food").set_value(5000).run()
         assert not at.exception, at.exception
-        assert food_bar().startswith("Food · so far") and "¥5,000 left of ¥5,000" in food_bar(), food_bar()
+        assert food_bar().startswith("Food · so far") and "¥4,850 left of ¥5,000" in food_bar(), food_bar()
         assert not any("carried" in toggle.label.lower() for toggle in at.sidebar.toggle)
         at.sidebar.number_input(key="budget_add_Food").set_value(1000)
         at.sidebar.button(key="budget_add_button_Food").click().run()
-        assert "¥6,000 left of ¥6,000" in food_bar() and at.sidebar.number_input(key="budget_add_Food").value == 0
+        assert "¥5,850 left of ¥6,000" in food_bar() and at.sidebar.number_input(key="budget_add_Food").value == 0
         at.sidebar.number_input(key="budget_left_Food").set_value(2000)
         at.sidebar.button(key="budget_left_button_Food").click().run()
-        assert "¥2,000 left of ¥2,000" in food_bar(), food_bar()
-        assert at.sidebar.number_input(key="budget_amount_Food").value == 2000
+        assert "¥2,000 left of ¥2,150" in food_bar() and "¥150 spent" in food_bar(), food_bar()
+        assert at.sidebar.number_input(key="budget_amount_Food").value == 2150
         assert not at.warning, [warning.value for warning in at.warning]
         at.selectbox(key="month_by_month_shown").set_value("Food").run()
         assert "Allowance" not in at.dataframe[-1].value.columns
