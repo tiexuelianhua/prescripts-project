@@ -769,7 +769,7 @@ def test_update_from_settings(app_copy):
         at.run()
         assert not at.exception, at.exception
         assert applied == ["b" * 40]
-        assert any("run install step 4 again" in s.value for s in at.success), [s.value for s in at.success]
+        assert any("Run the pip install line" in s.value for s in at.success), [s.value for s in at.success]
         assert not updates.PIP_PENDING.exists()  # only the desktop window installs packages itself
     """)
     assert result.returncode == 0, result.stdout + result.stderr

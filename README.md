@@ -52,9 +52,9 @@ It started as one hand-written PowerShell script that makes a folder for each da
 
 ## What you need
 
-- **Windows 10 or 11.** This is the tested setup. On a Mac or Linux, skip to [Not on Windows?](#not-on-windows).
-- **Python 3.12** (not a newer version). Download the [Python 3.12.10 Windows installer](https://www.python.org/ftp/python/3.12.10/python-3.12.10-amd64.exe) and run it. The installer's defaults are fine. The python.org download page now leads with Python 3.14 and the "Python install manager". If you already have the install manager, run `py install 3.12` in PowerShell instead.
-- **Git**, from [git-scm.com](https://git-scm.com/downloads). Optional: you can download a ZIP instead (step 2).
+- **Windows 10 or 11.** On a Mac or Linux, use [Mac and Linux](#mac-and-linux) instead: it has every step you need, so you can skip everything until then.
+- **Python 3.12** (not a newer version). Download the [Python 3.12.10 Windows installer](https://www.python.org/ftp/python/3.12.10/python-3.12.10-amd64.exe) and run it. The installer's defaults are fine. It asks for administrator permission while installing; if you can't give it, untick **Use admin privileges when installing py.exe** on its first screen. The python.org download page now leads with Python 3.14 and the "Python install manager". If you already have the install manager, run `py install 3.12` in PowerShell instead.
+- **Git**, from [git-scm.com](https://git-scm.com/downloads). Optional: you can download a ZIP instead (step 2). The Git installer asks for administrator permission, so if you can't give it, use the ZIP.
 - **An internet connection.** Weather, Activities, lyrics, and Japanese word lookups fetch live data. Nothing needs an account or API key except Spotify.
 
 To check Python is installed, open **PowerShell** (Start menu → type "PowerShell") and run:
@@ -66,6 +66,8 @@ py -3.12 --version
 It should print `Python 3.12.x`. If it says the command isn't found, install Python first, then close and reopen PowerShell.
 
 ## Install
+
+These steps are for Windows. On a Mac or Linux, go to [Mac and Linux](#mac-and-linux).
 
 All commands below are typed into PowerShell.
 
@@ -221,27 +223,94 @@ It runs a throwaway copy of the app in `C:\Prescripts`, filled with made-up samp
 
 **Install fails with `The filename or extension is too long`.** The folder path is too long for Windows. Move the project somewhere shorter (like `$HOME\Prescripts`), delete the `.venv` folder, and redo steps 3–4.
 
-**The window doesn't open at all.** The desktop window uses Microsoft Edge WebView2, which is built into Windows 11 and most up-to-date Windows 10 PCs. If it's missing, install the "Evergreen Bootstrapper" from [Microsoft's WebView2 page](https://developer.microsoft.com/microsoft-edge/webview2/), or use the browser option under [Run](#run).
+**The window doesn't open at all.** The desktop window uses Microsoft Edge WebView2, which is built into Windows 11 and most up-to-date Windows 10 PCs. If it's missing, install the "Evergreen Bootstrapper" from [Microsoft's WebView2 page](https://developer.microsoft.com/microsoft-edge/webview2/) (it may ask for administrator permission), or use the browser option under [Run](#run).
 
 **Spotify says the redirect URI is invalid.** The Redirect URI in your Spotify app's settings must match `http://127.0.0.1:8501/spotify_page` exactly: `127.0.0.1`, not `localhost`, and no trailing slash.
 
-## Not on Windows?
+## Mac and Linux
 
-On Mac and Linux, the app runs in your web browser. The app window (`desktop_app.py`) and the desktop shortcut are Windows-only. This setup is covered by an automated test on Windows but hasn't been tried on a real Mac or Linux machine yet.
+Everything for a Mac or Linux install is in this section, so you don't need the Windows steps above. On a Mac or Linux the app runs in your web browser. The app window and the desktop shortcut are Windows-only.
 
-1. **Install Python 3.12.** Mac: the [Python 3.12.10 macOS installer](https://www.python.org/ftp/python/3.12.10/python-3.12.10-macos11.pkg). Linux: `python3.12` from your package manager. Check it with `python3.12 --version`.
-2. **Get the code**, the same as on Windows ([step 2](#install)). On a Mac, the first `git` command may offer to install Apple's developer tools; accept, or use the ZIP instead.
-3. **Install and run**, in Terminal from the `prescripts-project` folder:
+All commands go in **Terminal** (Mac: press Cmd+Space, type "Terminal", press Enter).
 
-   ```bash
-   python3.12 -m venv .venv
-   .venv/bin/python -m pip install -r requirements.txt
-   .venv/bin/python -m streamlit run app.py
-   ```
+**1. Check for Python 3.12 or newer.**
 
-   As on Windows, press **Enter** if Streamlit asks for an email, and **Ctrl+C** to stop it.
+```bash
+python3 --version
+```
 
-Everywhere else in this README, use `.venv/bin/python` in place of `.venv\Scripts\python`. The tests usually finish with `70 passed, 4 skipped`: three of the skipped tests check PowerShell scripts, and only run if PowerShell is installed, and one checks the Windows-only app window.
+If it prints `Python 3.12` or higher (3.13 and 3.14 are fine), go to step 2. If it prints something lower, or the command isn't found:
+
+- **Mac:** download the macOS installer from [python.org](https://www.python.org/downloads/macos/) and run it. It asks for your Mac password, because it installs for every user on the Mac. Then close Terminal and open it again. (A Mac without Python may offer to install Apple's "command line developer tools" when you run `python3`. That gives you an older Python, so use the python.org installer instead.)
+- **Linux:** install `python3` from your package manager. Ubuntu 24.04, Fedora 39 and newer come with 3.12 or higher. Ubuntu 22.04 and Debian 12 only offer older versions, so you'd need a newer release or a separately installed Python.
+
+**2. Make a folder for the app.** The app saves your data in folders *next to* the code, so give it a folder of its own:
+
+```bash
+mkdir ~/Prescripts
+cd ~/Prescripts
+```
+
+**3. Get the code.**
+
+```bash
+git clone https://github.com/tiexuelianhua/prescripts-project.git
+cd prescripts-project
+```
+
+On a Mac, the first `git` command may offer to install Apple's "command line developer tools". Accept, which asks for your Mac password, then run the command again. Or use the ZIP instead: on the [GitHub page](https://github.com/tiexuelianhua/prescripts-project), click **Code → Download ZIP**. Your browser usually unzips it in Downloads as `prescripts-project-main`. Move it into place and go into it:
+
+```bash
+mv ~/Downloads/prescripts-project-main ~/Prescripts/prescripts-project
+cd ~/Prescripts/prescripts-project
+```
+
+**4. Create a virtual environment and install the app's packages.** This takes a minute or two.
+
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+```
+
+If pip ends with a notice that a new release of pip is available, you can ignore it. On Ubuntu or Debian, if the first line says `ensurepip is not available`, run `sudo apt install python3-venv`, then try again.
+
+**5. Run it.**
+
+```bash
+.venv/bin/python -m streamlit run app.py
+```
+
+The first time, Streamlit asks for an email address. It's optional: press **Enter** to skip it. The app then opens in your web browser at <http://127.0.0.1:8501>. If it doesn't, open that address yourself.
+
+**To quit:** press **Ctrl+C** in Terminal. Closing the browser tab leaves the app running. **To start it again later:**
+
+```bash
+cd ~/Prescripts/prescripts-project
+.venv/bin/python -m streamlit run app.py
+```
+
+**Spotify** setup works the same way on every computer: see [Optional: connect Spotify](#optional-connect-spotify).
+
+**To update:** the **Settings** page shows when there's a new version. Click **Update**, then quit the app (Ctrl+C) and start it again. If it says the packages changed, run this before starting it again:
+
+```bash
+.venv/bin/python -m pip install -r requirements.txt
+```
+
+To update by hand instead, quit the app, then run `git pull` in the `prescripts-project` folder, followed by the pip line above. Installed from the ZIP? Download it again and copy what's inside `prescripts-project-main` over your `prescripts-project` folder, replacing the files, then run the pip line.
+
+**Your data** is in `~/Prescripts`, in the same folders as listed under [Where your data lives](#where-your-data-lives).
+
+**Running the tests:**
+
+```bash
+.venv/bin/python -m pip install -r requirements-dev.txt
+.venv/bin/python -m pytest
+```
+
+They usually finish with `70 passed, 4 skipped`: three of the skipped tests check PowerShell scripts and only run if PowerShell is installed, and one checks the Windows-only app window.
+
+These steps run automatically on GitHub's Mac and Linux machines with Python 3.12, 3.13 and 3.14 after every change.
 
 ## How it's built
 

@@ -118,9 +118,8 @@ def render_updates() -> None:
                 st.html("<script>window.pywebview.api.restart();</script>", unsafe_allow_javascript=True)
             else:
                 st.success(
-                    "Updated. Stop the app (Ctrl+C in PowerShell)"
-                    + (", run install step 4 again, as the packages changed," if needs_pip else "")
-                    + " and start it again to finish."
+                    "Updated. Stop the app (Ctrl+C where you started it) and start it again to finish."
+                    + (" Run the pip install line from the README first." if needs_pip else "")
                 )
             return
     if st.button("Check again", key="settings_check_updates"):
