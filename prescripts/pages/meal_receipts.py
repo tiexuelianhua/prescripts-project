@@ -7,7 +7,7 @@
 
 import html
 import time
-from datetime import datetime
+from datetime import date, datetime
 
 import pandas as pd
 import streamlit as st
@@ -28,6 +28,8 @@ from prescripts.data.meal_receipts import (
     ALL_SPENDING,
     BAG_ITEM,
     BAG_ITEM_EN,
+    NO_PERIOD,
+    PERIOD_NAMES,
     PERIODS,
     TAX_ITEM,
     TRANSIT_FEE_ITEM,
@@ -62,8 +64,10 @@ from prescripts.data.meal_receipts import (
     save_entries,
     save_settings,
     signed_yen,
+    spent_since,
     split_item_choice,
     split_route,
+    start_no_period,
     totals_by_category,
     transport_category,
     with_default_columns,
@@ -145,18 +149,60 @@ with st.sidebar:
     # Keyed per category, so switching categories shows that one's own
     # saved values rather than the last one's.
     period = st.selectbox(
-        "Period", options=PERIODS, format_func=str.capitalize, key=f"budget_period_{editing}",
+        "Period", options=PERIODS, format_func=PERIOD_NAMES.get, key=f"budget_period_{editing}",
         index=PERIODS.index(budget["period"]) if budget["period"] in PERIODS else 0,
     )
     amount = st.number_input(
-        f"{period.capitalize()} {editing.lower()} budget (¥)", min_value=0, step=100,
-        value=int(budget["amount"]), key=f"budget_amount_{editing}",
+        f"{editing} budget (¥)" if period == NO_PERIOD else f"{PERIOD_NAMES[period]} {editing.lower()} budget (¥)",
+        min_value=0, step=100, value=int(budget["amount"]), key=f"budget_amount_{editing}",
         help="0 for no budget. Its spending is still logged and counted in the totals.",
     )
     if amount != budget["amount"] or period != budget["period"]:
+        if period == NO_PERIOD and budget["period"] != NO_PERIOD:
+            start_no_period(budget, editing, today_jst)
         budget.update(amount=int(amount), period=period)
         save_budget(settings, editing, budget)
         save_settings(settings)
+
+    if period == NO_PERIOD and amount > 0:
+        # No carry-over switch: what's left simply stays. Money can be added,
+        # what's left set to match the real figure, or counting started
+        # again. Done in callbacks, which run before the boxes are drawn, so
+        # the boxes can be cleared, to be drawn again from the saved values.
+        def no_period_change(category, change):
+            changed = budget_for(settings, category)
+            if change == "add":
+                changed["added"] = changed.get("added", 0) + int(st.session_state[f"budget_add_{category}"])
+                st.session_state.pop(f"budget_add_{category}", None)
+            else:
+                start_no_period(changed, category, today_jst)
+                if change == "set":
+                    changed["amount"] = int(st.session_state[f"budget_left_{category}"])
+                    st.session_state.pop(f"budget_amount_{category}", None)
+            save_budget(settings, category, changed)
+            save_settings(settings)
+
+        since = date.fromisoformat(budget["since"])
+        left = amount + budget.get("added", 0) - (spent_since(since, today_jst, editing) - budget.get("offset", 0))
+        st.caption(f"Counting since {since:%d %b %Y}.")
+        add_column, add_button_column = st.columns([3, 2], vertical_alignment="bottom")
+        add_column.number_input("Add (¥)", min_value=0, step=100, value=0, key=f"budget_add_{editing}",
+                                help="Adds to what's left, without starting again.")
+        add_button_column.button("Add", width="stretch", key=f"budget_add_button_{editing}",
+                                 on_click=no_period_change, args=(editing, "add"))
+        # Starts at what's left now, and follows it as spending is logged.
+        left_key = f"budget_left_{editing}"
+        if st.session_state.get(f"_budget_left_from_{editing}") != left:
+            st.session_state[f"_budget_left_from_{editing}"] = left
+            st.session_state.pop(left_key, None)
+        left_column, left_button_column = st.columns([3, 2], vertical_alignment="bottom")
+        left_column.number_input("Set what's left (¥)", min_value=0, step=100, value=max(left, 0), key=left_key,
+                                 help="If it's drifted from the money you really have. Carries on from there.")
+        left_button_column.button("Set", width="stretch", key=f"budget_left_button_{editing}",
+                                  on_click=no_period_change, args=(editing, "set"))
+        st.button("Start fresh from today", key=f"budget_fresh_{editing}",
+                  on_click=no_period_change, args=(editing, "fresh"),
+                  help="Counts again from now, from the full budget.")
 
     if period == "daily" and amount > 0:
         # Some room above the switch, so it doesn't sit tight under the
@@ -987,20 +1033,22 @@ with st.container(key="main_body"):
                     "Per day": [yen(amount / days) for amount, days in zip(spent, history["days"])],
                 })
             shown_budget = budget_for(settings, shown)
-            if shown_budget["amount"] > 0:
+            # A no-period budget has no allowance per month: just the spending.
+            has_allowance = shown_budget["amount"] > 0 and shown_budget["period"] != NO_PERIOD
+            if has_allowance:
                 allowance = [allowance_for_days(shown_budget["amount"], shown_budget["period"], days, month_days)
                              for days, month_days in zip(history["days"], history["month_days"])]
                 table["Allowance"] = [yen(amount) for amount in allowance]
                 table["Difference"] = [signed_yen(amount - allowed) for amount, allowed in zip(spent, allowance)]
             st.dataframe(table, hide_index=True, width="stretch")
-            if shown_budget["amount"] > 0:
+            if has_allowance:
                 st.caption(
                     f"Allowance is your {shown.lower()} budget spread over each month's days"
                     + {"weekly": " (a weekly allowance counts as a seventh per day).",
                        "monthly": " (a monthly one is spread evenly over the month)."}.get(shown_budget["period"], ".")
                     + " Under budget shows as a minus."
                 )
-            elif shown != ALL_SPENDING:
+            elif shown != ALL_SPENDING and shown_budget["amount"] <= 0:
                 st.caption(f"No {shown.lower()} budget set, so there's no allowance to compare with.")
 
 # Streamlit reruns this whole script on every widget interaction (picking an

@@ -7,7 +7,7 @@ A personal dashboard app for everyday life in Japan, themed on the Prescripts of
 | Page | What it does |
 |---|---|
 | **Overview** | A summary tile from each of the other pages, all on one screen |
-| **Budget** | Log meals, train top-ups, shopping and other spending by category, each with its own daily, weekly or monthly budget |
+| **Budget** | Log meals, train top-ups, shopping and other spending by category, each with its own daily, weekly or monthly budget, or one with no period: just the money you have to spend |
 | **Weather** | Forecasts, warnings and live readings from the Japan Meteorological Agency |
 | **Activities** | Food and things to do within walking distance of a station, an area, or where you are, plus festivals, markets and other events coming up around Tokyo |
 | **Spotify** | See and control what's playing, with lyrics (needs a one-off setup, below) |

@@ -559,7 +559,13 @@ def _counted_category(category: str) -> str | None:
 
 
 _OLD_BUDGET_KEYS = ("daily_budget", "budget_amount", "budget_period", "carry_over", "carry_over_since", "carry_over_set")
-PERIODS = ["daily", "weekly", "monthly"]
+# "none": no period, just the money there is to spend. It counts spending
+# from when it was set ("since" plus "offset", what had already been spent
+# that day), plus anything added since; see start_no_period. No carry-over
+# switch: what's left simply stays.
+NO_PERIOD = "none"
+PERIODS = ["daily", "weekly", "monthly", NO_PERIOD]
+PERIOD_NAMES = {"daily": "Daily", "weekly": "Weekly", "monthly": "Monthly", NO_PERIOD: "No period"}
 
 
 def budget_for(settings: dict, category: str) -> dict:
@@ -586,6 +592,21 @@ def save_budget(settings: dict, category: str, budget: dict) -> None:
     if category == budget_category(settings):
         for key in _OLD_BUDGET_KEYS:
             settings.pop(key, None)
+
+
+def spent_since(start: date, day: date, category: str) -> int:
+    # Counted spending from `start` through `day`, both days included.
+    total, counted = 0, _counted_category(category)
+    while start <= day:
+        total += counted_total(load_entries(day_folder_for(start) / "receipts.csv"), counted)
+        start += timedelta(days=1)
+    return total
+
+
+def start_no_period(budget: dict, category: str, today: date) -> None:
+    # A no-period budget counts from now: today's spending so far is set
+    # aside as "offset", and anything added before goes.
+    budget.update(since=today.isoformat(), offset=spent_since(today, today, category), added=0)
 
 
 def carried_over(settings: dict, today: date, category: str | None = None) -> int:
@@ -625,6 +646,12 @@ def budget_status(settings: dict, day: date, today: date) -> list[dict]:
         if budget["amount"] <= 0:
             continue
         counted = _counted_category(category)
+        if budget["period"] == NO_PERIOD:
+            since = date.fromisoformat(budget.get("since", today.isoformat()))
+            spent = spent_since(since, day, category) - budget.get("offset", 0) if day >= since else 0
+            status.append({"category": category, "period": NO_PERIOD, "spent": spent,
+                           "budget": budget["amount"] + budget.get("added", 0), "carried": 0})
+            continue
         if budget["period"] == "weekly":
             spent = week_total_so_far(day, counted)
         elif budget["period"] == "monthly":
