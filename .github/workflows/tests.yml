@@ -25,6 +25,51 @@ jobs:
       - run: python -m pip install -r requirements-dev.txt
       - run: python -m pytest
 
+  # Follows the README's Mac and Linux install word for word, on every
+  # Python version the README allows there: make the folder, venv, install,
+  # start the app (pressing Enter at Streamlit's email question), open each
+  # page in Chrome, and fail on any page error in the app's log. Then the
+  # test suite, in that same .venv.
+  readme-install:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+        python: ["3.12", "3.13", "3.14"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install the way the README says
+        run: |
+          python3 --version
+          mkdir -p ~/Prescripts
+          cp -R "$GITHUB_WORKSPACE" ~/Prescripts/prescripts-project
+          cd ~/Prescripts/prescripts-project
+          python3 -m venv .venv
+          .venv/bin/python -m pip install -r requirements.txt
+      - name: Run it and open every page
+        run: |
+          cd ~/Prescripts/prescripts-project
+          printf '\n' | .venv/bin/python -m streamlit run app.py > ../streamlit.log 2>&1 &
+          for i in $(seq 60); do curl -sf http://127.0.0.1:8501/_stcore/health && break; sleep 1; done
+          if [ "$RUNNER_OS" = macOS ]; then chrome="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"; else chrome=google-chrome; fi
+          for page in "" overview meal_receipts weather activities settings; do
+            "$chrome" --headless=new --disable-gpu --virtual-time-budget=20000 --dump-dom "http://127.0.0.1:8501/$page" > /dev/null 2>&1 || true
+          done
+          sleep 5
+          cat ../streamlit.log
+          grep -q "You can now view your Streamlit app" ../streamlit.log
+          ! grep -E "Uncaught app execution|Traceback" ../streamlit.log
+          ls ~/Prescripts
+      - name: Run the tests in the README's .venv
+        run: |
+          cd ~/Prescripts/prescripts-project
+          .venv/bin/python -m pip install -r requirements-dev.txt
+          .venv/bin/python -m pytest
+
   lint:
     runs-on: ubuntu-latest
     steps:
