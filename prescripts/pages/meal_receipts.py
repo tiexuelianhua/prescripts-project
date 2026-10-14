@@ -153,57 +153,67 @@ with st.sidebar:
         "Period", options=PERIODS, format_func=PERIOD_NAMES.get, key=f"budget_period_{editing}",
         index=PERIODS.index(budget["period"]) if budget["period"] in PERIODS else 0,
     )
-    amount = st.number_input(
-        f"{editing} budget (¥)" if period == NO_PERIOD else f"{PERIOD_NAMES[period]} {editing.lower()} budget (¥)",
-        min_value=0, step=100, value=int(budget["amount"]), key=f"budget_amount_{editing}",
-        help="0 for no budget. Its spending is still logged and counted in the totals.",
-    )
-    if amount != budget["amount"] or period != budget["period"]:
-        if period == NO_PERIOD and budget["period"] != NO_PERIOD:
+    if period == NO_PERIOD:
+        # No period: one box, the money there is right now, rather than a
+        # budget to start from. Spending logged comes off it, and "spent"
+        # counts from the day it was first set. No carry-over switch: what's
+        # left simply stays. Changes go through callbacks, which run before
+        # the boxes are drawn, so boxes can be cleared or matched to the
+        # saved values.
+        if budget["period"] != NO_PERIOD:
             start_no_period(budget, editing, today_jst)
-        budget.update(amount=int(amount), period=period)
-        save_budget(settings, editing, budget)
-        save_settings(settings)
+            budget["period"] = NO_PERIOD
+            save_budget(settings, editing, budget)
+            save_settings(settings)
+        amount = budget["amount"]
+        left = amount + budget.get("added", 0) - no_period_spent(budget, editing, today_jst)
 
-    if period == NO_PERIOD and amount > 0:
-        # No carry-over switch: what's left simply stays. Money can be added,
-        # what's left set to match the real figure, or counting started
-        # again. Done in callbacks, which run before the boxes are drawn, so
-        # the boxes can be cleared, to be drawn again from the saved values.
         def no_period_change(category, change):
             changed = budget_for(settings, category)
-            if change == "add":
+            if change == "left":
+                money_left = int(st.session_state[f"budget_left_{category}"])
+                set_no_period_left(changed, category, today_jst, money_left)
+                st.session_state[f"_budget_left_from_{category}"] = money_left
+            elif change == "add":
                 changed["added"] = changed.get("added", 0) + int(st.session_state[f"budget_add_{category}"])
                 st.session_state.pop(f"budget_add_{category}", None)
-            elif change == "set":
-                set_no_period_left(changed, category, today_jst, int(st.session_state[f"budget_left_{category}"]))
-                st.session_state.pop(f"budget_amount_{category}", None)
-            else:
+            else:  # "fresh": spent starts again from today, money left unchanged
+                now_left = changed["amount"] + changed.get("added", 0) - no_period_spent(changed, category, today_jst)
                 start_no_period(changed, category, today_jst)
+                set_no_period_left(changed, category, today_jst, max(now_left, 0))
             save_budget(settings, category, changed)
             save_settings(settings)
 
-        since = date.fromisoformat(budget["since"])
-        left = amount + budget.get("added", 0) - no_period_spent(budget, editing, today_jst)
-        st.caption(f"Counting since {since:%d %b %Y}.")
-        add_column, add_button_column = st.columns([3, 2], vertical_alignment="bottom")
-        add_column.number_input("Add (¥)", min_value=0, step=100, value=0, key=f"budget_add_{editing}",
-                                help="Adds to what's left, without starting again.")
-        add_button_column.button("Add", width="stretch", key=f"budget_add_button_{editing}",
-                                 on_click=no_period_change, args=(editing, "add"))
-        # Starts at what's left now, and follows it as spending is logged.
+        # Follows what's left as spending is logged elsewhere.
         left_key = f"budget_left_{editing}"
-        if st.session_state.get(f"_budget_left_from_{editing}") != left:
-            st.session_state[f"_budget_left_from_{editing}"] = left
+        if st.session_state.get(f"_budget_left_from_{editing}") != max(left, 0):
+            st.session_state[f"_budget_left_from_{editing}"] = max(left, 0)
             st.session_state.pop(left_key, None)
-        left_column, left_button_column = st.columns([3, 2], vertical_alignment="bottom")
-        left_column.number_input("Set what's left (¥)", min_value=0, step=100, value=max(left, 0), key=left_key,
-                                 help="If it's drifted from the money you really have. Carries on from there.")
-        left_button_column.button("Set", width="stretch", key=f"budget_left_button_{editing}",
-                                  on_click=no_period_change, args=(editing, "set"))
-        st.button("Start fresh from today", key=f"budget_fresh_{editing}",
-                  on_click=no_period_change, args=(editing, "fresh"),
-                  help="Counts again from the start of today, from the full budget.")
+        st.number_input(
+            "Money left (¥)", min_value=0, step=100, value=max(left, 0), key=left_key,
+            on_change=no_period_change, args=(editing, "left"),
+            help="What you have to spend right now. Spending you log comes off it.",
+        )
+        if amount > 0:
+            st.caption(f"Counting spending since {date.fromisoformat(budget['since']):%d %b %Y}.")
+            add_column, add_button_column = st.columns([3, 2], vertical_alignment="bottom")
+            add_column.number_input("Add (¥)", min_value=0, step=100, value=0, key=f"budget_add_{editing}",
+                                    help="Adds to what's left, without starting again.")
+            add_button_column.button("Add", width="stretch", key=f"budget_add_button_{editing}",
+                                     on_click=no_period_change, args=(editing, "add"))
+            st.button("Start fresh from today", key=f"budget_fresh_{editing}",
+                      on_click=no_period_change, args=(editing, "fresh"),
+                      help="Spent starts again from today. Money left stays the same.")
+    else:
+        amount = st.number_input(
+            f"{PERIOD_NAMES[period]} {editing.lower()} budget (¥)",
+            min_value=0, step=100, value=int(budget["amount"]), key=f"budget_amount_{editing}",
+            help="0 for no budget. Its spending is still logged and counted in the totals.",
+        )
+        if amount != budget["amount"] or period != budget["period"]:
+            budget.update(amount=int(amount), period=period)
+            save_budget(settings, editing, budget)
+            save_settings(settings)
 
     if period == "daily" and amount > 0:
         # Some room above the switch, so it doesn't sit tight under the
