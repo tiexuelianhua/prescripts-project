@@ -620,7 +620,7 @@ def test_budget_per_category(app_copy):
         from datetime import date
         from prescripts.data.meal_receipts import (
             ALL_SPENDING, NO_PERIOD, append_entry, budget_for, budget_status, carried_over, day_folder_for, route,
-            save_budget, split_route, start_no_period,
+            save_budget, set_no_period_left, split_route, start_no_period,
         )
 
         old = {"budget_amount": 1000, "budget_period": "daily", "carry_over": True, "carry_over_since": "2026-09-07"}
@@ -679,6 +679,11 @@ def test_budget_per_category(app_copy):
         assert (food["period"], food["spent"], food["budget"], food["carried"]) == (NO_PERIOD, 600, 11000, 0)
         assert next(line for line in budget_status(both, date(2026, 9, 6), today)
                     if line["category"] == "Food")["spent"] == 0  # before it was set
+        # Setting what's left keeps the spending counted: the budget becomes
+        # what's left plus what's been spent.
+        set_no_period_left(both["budgets"]["Food"], "Food", today, 4000)
+        food = next(line for line in budget_status(both, today, today) if line["category"] == "Food")
+        assert (food["spent"], food["budget"]) == (600, 4600) and both["budgets"]["Food"]["added"] == 0
         fresh = {"amount": 10000, "period": NO_PERIOD, "added": 1000}
         start_no_period(fresh, "Food", today)
         assert fresh == {"amount": 10000, "period": NO_PERIOD, "added": 0, "since": "2026-09-09", "offset": 300}

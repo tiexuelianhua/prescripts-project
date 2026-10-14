@@ -57,14 +57,15 @@ from prescripts.data.meal_receipts import (
     month_excluded_by_reason,
     month_summary,
     monthly_history,
+    no_period_spent,
     relocate_edited_entries,
     rename_value,
     route,
     save_budget,
     save_entries,
     save_settings,
+    set_no_period_left,
     signed_yen,
-    spent_since,
     split_item_choice,
     split_route,
     start_no_period,
@@ -174,16 +175,16 @@ with st.sidebar:
             if change == "add":
                 changed["added"] = changed.get("added", 0) + int(st.session_state[f"budget_add_{category}"])
                 st.session_state.pop(f"budget_add_{category}", None)
+            elif change == "set":
+                set_no_period_left(changed, category, today_jst, int(st.session_state[f"budget_left_{category}"]))
+                st.session_state.pop(f"budget_amount_{category}", None)
             else:
                 start_no_period(changed, category, today_jst)
-                if change == "set":
-                    changed["amount"] = int(st.session_state[f"budget_left_{category}"])
-                    st.session_state.pop(f"budget_amount_{category}", None)
             save_budget(settings, category, changed)
             save_settings(settings)
 
         since = date.fromisoformat(budget["since"])
-        left = amount + budget.get("added", 0) - (spent_since(since, today_jst, editing) - budget.get("offset", 0))
+        left = amount + budget.get("added", 0) - no_period_spent(budget, editing, today_jst)
         st.caption(f"Counting since {since:%d %b %Y}.")
         add_column, add_button_column = st.columns([3, 2], vertical_alignment="bottom")
         add_column.number_input("Add (¥)", min_value=0, step=100, value=0, key=f"budget_add_{editing}",

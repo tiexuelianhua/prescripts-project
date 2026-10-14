@@ -609,6 +609,19 @@ def start_no_period(budget: dict, category: str, today: date) -> None:
     budget.update(since=today.isoformat(), offset=spent_since(today, today, category), added=0)
 
 
+def no_period_spent(budget: dict, category: str, day: date) -> int:
+    # What a no-period budget has had spent from it, through `day`.
+    since = date.fromisoformat(budget["since"])
+    return spent_since(since, day, category) - budget.get("offset", 0) if day >= since else 0
+
+
+def set_no_period_left(budget: dict, category: str, today: date, left: int) -> None:
+    # Fixes what's left without restarting the count: the budget becomes
+    # what's left plus what's been spent (anything added folds into it), so
+    # "spent" keeps counting from the start.
+    budget.update(amount=left + no_period_spent(budget, category, today), added=0)
+
+
 def carried_over(settings: dict, today: date, category: str | None = None) -> int:
     # With carry-over on (daily budgets only), every day from when it was
     # switched on (or last started fresh) up to yesterday adds what it was
@@ -647,8 +660,7 @@ def budget_status(settings: dict, day: date, today: date) -> list[dict]:
             continue
         counted = _counted_category(category)
         if budget["period"] == NO_PERIOD:
-            since = date.fromisoformat(budget.get("since", today.isoformat()))
-            spent = spent_since(since, day, category) - budget.get("offset", 0) if day >= since else 0
+            spent = no_period_spent({"since": today.isoformat(), **budget}, category, day)
             status.append({"category": category, "period": NO_PERIOD, "spent": spent,
                            "budget": budget["amount"] + budget.get("added", 0), "carried": 0})
             continue
