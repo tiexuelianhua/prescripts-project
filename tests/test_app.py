@@ -289,9 +289,9 @@ def test_logging_a_meal(app_copy):
         assert entries["excluded_reason"].isna().tolist() == [True, False, True, True], entries
         assert entries["excluded_reason"][1] == "extra crispy", entries
         assert entries["timestamp"].nunique() == 1 and set(entries["store"]) == {"Olympic"}
-        from prescripts.common import ACCENT_COLOR
+        from prescripts.common import OTHER_ACCENT_COLOR
         assert [line for line in at.markdown if "<details>" in line.value
-                and f"<span style='color: {ACCENT_COLOR}'>Olympic</span> · ¥560 · 3 items" in line.value]
+                and f"<span style='color: {OTHER_ACCENT_COLOR}'>Olympic</span> · ¥560 · 3 items" in line.value]
         assert at.number_input(key="add_entry_tax").value == 0 and not at.selectbox(key="add_entry_store").value
     """)
     assert result.returncode == 0, result.stdout + result.stderr
@@ -1060,7 +1060,8 @@ def test_home_opens_budget_on_a_category(app_copy):
 
 def test_month_by_month_by_category(app_copy):
     # Month by month stacks every category, and shows all of them side by
-    # side or one against its own budget's allowance.
+    # side or one against its own budget's allowance. An All spending budget,
+    # set in the sidebar, gets a bar of its own and an allowance there too.
     result = run_in(app_copy, """
         from datetime import date, timedelta
         from streamlit.testing.v1 import AppTest
@@ -1099,6 +1100,18 @@ def test_month_by_month_by_category(app_copy):
         assert table["Allowance"].iloc[0] == "¥6,000" and table["Difference"].iloc[0] == "-¥3,000", table
         at.selectbox(key="month_by_month_shown").set_value("Food").run()
         assert any("No food budget set" in caption.value for caption in at.caption)
+
+        assert at.sidebar.selectbox(key="budget_editing").options[0] == "All spending"
+        at.sidebar.selectbox(key="budget_editing").set_value("All spending").run()
+        at.sidebar.selectbox(key="budget_period_All spending").set_value("monthly").run()
+        at.sidebar.number_input(key="budget_amount_All spending").set_value(10000).run()
+        assert not at.exception, at.exception
+        [bars] = [block.value for block in at.markdown if "budget-line" in block.value]
+        assert bars.index("All spending · this month") < bars.index("Transport · this month"), bars
+        assert "¥9,850 left of ¥10,000" in bars, bars
+        at.selectbox(key="month_by_month_shown").set_value("All spending").run()
+        table = at.dataframe[-1].value
+        assert list(table.columns)[-2:] == ["Allowance", "Difference"] and table["Allowance"].iloc[0] == "¥10,000"
     """)
     assert result.returncode == 0, result.stdout + result.stderr
 

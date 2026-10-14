@@ -547,6 +547,17 @@ def budget_settings(settings: dict) -> tuple[int, str]:
 # Pre-2026-10-02 settings.json files keep Food's budget in these top-level
 # keys. Read as Food's budget until it's next saved, which moves it into
 # "budgets" (see budget_for / save_budget).
+# A budget over every category together, set and shown like a category's
+# (saved under this name in settings["budgets"]). Set only this one for a
+# single budget, or alongside per-category ones.
+ALL_SPENDING = "All spending"
+
+
+def _counted_category(category: str) -> str | None:
+    # What the total helpers take: no category means every category.
+    return None if category == ALL_SPENDING else category
+
+
 _OLD_BUDGET_KEYS = ("daily_budget", "budget_amount", "budget_period", "carry_over", "carry_over_since", "carry_over_set")
 PERIODS = ["daily", "weekly", "monthly"]
 
@@ -597,28 +608,30 @@ def carried_over(settings: dict, today: date, category: str | None = None) -> in
     balance = budget["carry_over_set"] - amount if "carry_over_set" in budget else 0
     day = date.fromisoformat(since)
     while day < today:
-        balance += amount - counted_total(load_entries(day_folder_for(day) / "receipts.csv"), category)
+        balance += amount - counted_total(load_entries(day_folder_for(day) / "receipts.csv"),
+                                          _counted_category(category))
         day += timedelta(days=1)
     return balance
 
 
 def budget_status(settings: dict, day: date, today: date) -> list[dict]:
-    # Every category with a budget, in the categories' order, as spent so far
-    # in its period around `day`: {"category", "period", "spent", "budget",
-    # "carried"}. Carry-over only moves today's budget; another day is
-    # judged against the plain amount.
+    # Every category with a budget, in the categories' order (All spending
+    # first), as spent so far in its period around `day`: {"category",
+    # "period", "spent", "budget", "carried"}. Carry-over only moves today's
+    # budget; another day is judged against the plain amount.
     status = []
-    for category in categories(settings):
+    for category in [ALL_SPENDING, *categories(settings)]:
         budget = budget_for(settings, category)
         if budget["amount"] <= 0:
             continue
+        counted = _counted_category(category)
         if budget["period"] == "weekly":
-            spent = week_total_so_far(day, category)
+            spent = week_total_so_far(day, counted)
         elif budget["period"] == "monthly":
-            spent = sum(yen for logged, yen in daily_totals_for_month(day.year, day.month, category).items()
+            spent = sum(yen for logged, yen in daily_totals_for_month(day.year, day.month, counted).items()
                         if logged <= day)
         else:
-            spent = counted_total(load_entries(day_folder_for(day) / "receipts.csv"), category)
+            spent = counted_total(load_entries(day_folder_for(day) / "receipts.csv"), counted)
         carried = carried_over(settings, today, category) if day == today and budget["period"] == "daily" else 0
         status.append({"category": category, "period": budget["period"], "spent": spent,
                        "budget": budget["amount"] + carried, "carried": carried})

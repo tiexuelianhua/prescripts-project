@@ -32,8 +32,15 @@ LOGO_PATH = PRIVATE_LOGO_PATH if PRIVATE_LOOK else SCRIPTS_DIR / "static" / "for
 # to read on white. The private sky blue was measured from
 # prescript.neocities.org's style.css; the private look is dark-only, so it
 # has no light-mode shade.
-ACCENT_COLOR = "#96c4ec" if PRIVATE_LOOK else "#7578b2"
+PUBLIC_ACCENT = "#7578b2"
+PRIVATE_ACCENT = "#96c4ec"
+ACCENT_COLOR = PRIVATE_ACCENT if PRIVATE_LOOK else PUBLIC_ACCENT
 ACCENT_COLOR_LIGHT = "#6b6ead"
+# The other look's accent, for the Budget page's food category (each look's
+# own accent goes to All spending). Its light-mode shade is a deeper sky
+# blue, for the same reason as above; the private look never needs one.
+OTHER_ACCENT_COLOR = PUBLIC_ACCENT if PRIVATE_LOOK else PRIVATE_ACCENT
+OTHER_ACCENT_COLOR_LIGHT = "#4a86b8"
 
 # Every non-home page in the app, in one place -- app.py's st.navigation()
 # and the Home page's tile grid / search both read this, so adding a page

@@ -22,7 +22,7 @@ A personal dashboard app for everyday life in Japan, themed on the Prescripts of
 **Home**: Initial page. Type what you're after or pick a page from the » menu.
 ![Home page](docs/screenshots/home.png)
 
-**Budget** (called Meal Receipts until October 2026): log a receipt item by item with a running total, and see the day's spending. Each receipt has a category (Food, Transport, Shopping, Other, or one you add), and each category can have its own budget, shown as a coloured bar. Transport receipts take From/To stations instead of a store, with a button to swap them for the trip back. One go can mix categories, so a whole day can be logged at once. Month by month shows the last six months, either all spending side by side or one category against its budget. Typing a category on Home, like "shopping budget", opens the page on it.
+**Budget** (called Meal Receipts until October 2026): log a receipt item by item with a running total, and see the day's spending. Each receipt has a category (Food, Transport, Shopping, Other, or one you add), and each category can have its own budget, shown as a coloured bar, or set one budget for all spending together. Transport receipts take From/To stations instead of a store, with a button to swap them for the trip back. One go can mix categories, so a whole day can be logged at once. Month by month shows the last six months, either all spending side by side or one category against its budget. Typing a category on Home, like "shopping budget", opens the page on it.
 ![Budget page](docs/screenshots/meal_receipts.png)
 
 **Activities**: places to eat and things to do around a saved area, nearest first, then events coming up. Places come from OpenStreetMap, so many only have a Japanese name.

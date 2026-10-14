@@ -619,7 +619,8 @@ def test_budget_per_category(app_copy):
     _check(app_copy, """
         from datetime import date
         from prescripts.data.meal_receipts import (
-            append_entry, budget_for, budget_status, carried_over, day_folder_for, route, save_budget, split_route,
+            ALL_SPENDING, append_entry, budget_for, budget_status, carried_over, day_folder_for, route, save_budget,
+            split_route,
         )
 
         old = {"budget_amount": 1000, "budget_period": "daily", "carry_over": True, "carry_over_since": "2026-09-07"}
@@ -659,6 +660,17 @@ def test_budget_per_category(app_copy):
         past = {line["category"]: line for line in budget_status(settings, date(2026, 9, 7), today)}
         assert (past["Food"]["spent"], past["Food"]["budget"], past["Food"]["carried"]) == (800, 1000, 0)
 
+        # All spending: one budget over every category, shown first. Its
+        # carry-over counts every category too (the 8th: ¥3,000 of Transport).
+        both = dict(settings)
+        save_budget(both, ALL_SPENDING, {"amount": 5000, "period": "daily", "carry_over": True,
+                                         "carry_over_since": "2026-09-08"})
+        first = budget_status(both, today, today)[0]
+        assert first["category"] == ALL_SPENDING and len(budget_status(both, today, today)) == 5
+        assert (first["spent"], first["budget"], first["carried"]) == (1100, 7000, 2000)
+        save_budget(both, ALL_SPENDING, {"amount": 20000, "period": "monthly", "carry_over": False})
+        assert budget_status(both, today, today)[0]["spent"] == 6900
+
         # The bars show what's left, full at the start; over budget, the bar
         # is empty and the amount over is red.
         import prescripts.budget_widgets as widgets
@@ -669,6 +681,10 @@ def test_budget_per_category(app_copy):
         assert "¥7,300 left of ¥10,000" in drawn[0] and "width: 73.0%" in drawn[0] and "¥2,700 spent" in drawn[0]
         assert f"color: {widgets.OVER_COLOR}'>¥300 over</span>" in drawn[0]
         assert "width: 0.0%" in drawn[0] and "¥2,500 spent of ¥2,200 · +¥1,200 carried over" in drawn[0]
+        # All spending takes the look's own accent, Food the other look's.
+        from prescripts.common import ACCENT_COLOR, OTHER_ACCENT_COLOR
+        colors = widgets.category_colors(["Food", "Transport"], "Food", ACCENT_COLOR)
+        assert colors[ALL_SPENDING] == ACCENT_COLOR and colors["Food"] == OTHER_ACCENT_COLOR != ACCENT_COLOR
 
         assert route("Shinjuku", "Shibuya") == "Shinjuku → Shibuya"
         assert route(" ", "Shibuya") == "Shibuya" and route(None, None) is None

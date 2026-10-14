@@ -25,6 +25,7 @@ from prescripts.common import (
 )
 from prescripts.data.activities import is_konbini
 from prescripts.data.meal_receipts import (
+    ALL_SPENDING,
     BAG_ITEM,
     BAG_ITEM_EN,
     PERIODS,
@@ -125,12 +126,14 @@ def file_text(path):
 with st.sidebar:
     st.header("Settings")
     # Each category has its own budget, set one at a time here: an amount
-    # (0 = none) for a day, week or month. Budgets are soft -- going over
+    # (0 = none) for a day, week or month. All spending, first, is one
+    # budget over every category together. Budgets are soft -- going over
     # just shows as over.
     st.subheader("Budgets")
+    budget_names = [ALL_SPENDING, *category_names]
     editing = st.selectbox(
-        "Category", options=category_names, key="budget_editing",
-        index=category_names.index(budgeted) if budgeted in category_names else 0,
+        "Category", options=budget_names, key="budget_editing",
+        index=budget_names.index(budgeted) if budgeted in budget_names else 0,
     )
     # In its colour, like the form's Category box.
     st.markdown(
@@ -964,8 +967,10 @@ with st.container(key="main_body"):
             st.bar_chart(by_category[order], x_label="", y_label="Total (¥)", sort=False,
                          color=[colors.get(name, ACCENT_COLOR) for name in order])
             # All spending side by side, or one category against its budget.
-            shown = st.selectbox("Show", options=["All spending", *history_categories], key="month_by_month_shown")
-            if shown == "All spending":
+            # Either one is compared with its budget's allowance, if it has one.
+            shown = st.selectbox("Show", options=[ALL_SPENDING, *history_categories], key="month_by_month_shown")
+            if shown == ALL_SPENDING:
+                spent = history["total_yen"].to_numpy()
                 table = pd.DataFrame({
                     "Month": history["month"],
                     "Total": history["total_yen"].map(yen),
@@ -974,7 +979,6 @@ with st.container(key="main_body"):
                 if len(history_categories) > 1:
                     for name in history_categories:
                         table[name] = by_category[name].map(yen).to_numpy()
-                st.dataframe(table, hide_index=True, width="stretch")
             else:
                 spent = by_category[shown].to_numpy()
                 table = pd.DataFrame({
@@ -982,22 +986,22 @@ with st.container(key="main_body"):
                     shown: [yen(amount) for amount in spent],
                     "Per day": [yen(amount / days) for amount, days in zip(spent, history["days"])],
                 })
-                shown_budget = budget_for(settings, shown)
-                if shown_budget["amount"] > 0:
-                    allowance = [allowance_for_days(shown_budget["amount"], shown_budget["period"], days, month_days)
-                                 for days, month_days in zip(history["days"], history["month_days"])]
-                    table["Allowance"] = [yen(amount) for amount in allowance]
-                    table["Difference"] = [signed_yen(amount - allowed) for amount, allowed in zip(spent, allowance)]
-                st.dataframe(table, hide_index=True, width="stretch")
-                if shown_budget["amount"] > 0:
-                    st.caption(
-                        f"Allowance is your {shown.lower()} budget spread over each month's days"
-                        + {"weekly": " (a weekly allowance counts as a seventh per day).",
-                           "monthly": " (a monthly one is spread evenly over the month)."}.get(shown_budget["period"], ".")
-                        + " Under budget shows as a minus."
-                    )
-                else:
-                    st.caption(f"No {shown.lower()} budget set, so there's no allowance to compare with.")
+            shown_budget = budget_for(settings, shown)
+            if shown_budget["amount"] > 0:
+                allowance = [allowance_for_days(shown_budget["amount"], shown_budget["period"], days, month_days)
+                             for days, month_days in zip(history["days"], history["month_days"])]
+                table["Allowance"] = [yen(amount) for amount in allowance]
+                table["Difference"] = [signed_yen(amount - allowed) for amount, allowed in zip(spent, allowance)]
+            st.dataframe(table, hide_index=True, width="stretch")
+            if shown_budget["amount"] > 0:
+                st.caption(
+                    f"Allowance is your {shown.lower()} budget spread over each month's days"
+                    + {"weekly": " (a weekly allowance counts as a seventh per day).",
+                       "monthly": " (a monthly one is spread evenly over the month)."}.get(shown_budget["period"], ".")
+                    + " Under budget shows as a minus."
+                )
+            elif shown != ALL_SPENDING:
+                st.caption(f"No {shown.lower()} budget set, so there's no allowance to compare with.")
 
 # Streamlit reruns this whole script on every widget interaction (picking an
 # item, typing a store, nudging the cost), and typewriter() blocks for

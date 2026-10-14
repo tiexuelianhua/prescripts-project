@@ -63,6 +63,7 @@ from prescripts.data.japanese.deck import (
     random_card as japanese_random_card,
 )
 from prescripts.data.meal_receipts import (
+    ALL_SPENDING,
     budget_for as meal_receipts_budget_for,
     categories as meal_receipts_categories,
     load_settings as meal_receipts_load_settings,
@@ -458,9 +459,10 @@ BUDGET_TILE_BASE, BUDGET_TILE_PER_LINE = 19, 8
 
 
 def _budget_height() -> int:
-    # A line per budget set, plus the heading, totals and link.
+    # A line per budget set (All spending's too), plus the heading, totals and link.
     settings = meal_receipts_load_settings()
-    budgets = sum(meal_receipts_budget_for(settings, name)["amount"] > 0 for name in meal_receipts_categories(settings))
+    budgets = sum(meal_receipts_budget_for(settings, name)["amount"] > 0
+                  for name in [ALL_SPENDING, *meal_receipts_categories(settings)])
     return BUDGET_TILE_BASE + BUDGET_TILE_PER_LINE * max(budgets, 1)
 
 

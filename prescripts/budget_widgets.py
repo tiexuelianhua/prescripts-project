@@ -6,8 +6,11 @@ import html
 
 import streamlit as st
 
-# Colours for categories besides the food one (which takes the accent
-# colour): soft enough to sit beside it in both light and dark mode. Shared
+from prescripts.common import ACCENT_COLOR_LIGHT, OTHER_ACCENT_COLOR, OTHER_ACCENT_COLOR_LIGHT
+from prescripts.data.meal_receipts import ALL_SPENDING
+
+# Colours for categories besides the food one (which takes the other look's
+# accent colour): soft enough to sit beside it in both light and dark mode. Shared
 # with the This month chart, so a category is the same colour everywhere.
 CATEGORY_COLORS = ["#e0a37a", "#7fbf9b", "#c99ad1", "#c4b86a", "#7fb3c9"]
 
@@ -21,11 +24,14 @@ _PERIOD_WORDS = {
 
 
 def category_colors(names: list[str], food: str, accent: str) -> dict[str, str]:
-    # Food the accent; the rest in turn, by their place in the list, so a
-    # category keeps its colour from day to day.
+    # All spending the accent, Food the other look's accent (the private
+    # look's blue in the public one, and the other way round); the rest in
+    # turn, by their place in the list, so a category keeps its colour from
+    # day to day.
     others = [name for name in names if name != food]
     colors = {name: CATEGORY_COLORS[index % len(CATEGORY_COLORS)] for index, name in enumerate(others)}
-    colors[food] = accent
+    colors[food] = OTHER_ACCENT_COLOR_LIGHT if accent == ACCENT_COLOR_LIGHT else OTHER_ACCENT_COLOR
+    colors[ALL_SPENDING] = accent
     return colors
 
 
