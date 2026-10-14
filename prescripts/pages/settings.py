@@ -3,6 +3,7 @@
 # app_settings.json beside the other app-wide settings (see page_shown and
 # tile_shown in common.py, which every page list reads). Hiding only hides:
 # a page's data stays where it is.
+import sys
 import urllib.error
 from datetime import date
 
@@ -77,9 +78,11 @@ def render_updates() -> None:
     st.subheader("Updates")
     local = local_version()
     if local is None:
+        # The README's update steps are under a different heading off Windows.
+        readme_part = "\"Handy to know\"" if sys.platform == "win32" else "\"To update\" under \"Mac and Linux\""
         st.caption(
             "This copy was installed from the ZIP, so it can't update itself. To update, download the ZIP "
-            "again (see \"Handy to know\" in the README), or reinstall with git to update from here."
+            f"again (see {readme_part} in the README), or reinstall with git to update from here."
         )
         return
     try:
