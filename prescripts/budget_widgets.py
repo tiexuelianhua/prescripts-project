@@ -1,7 +1,7 @@
 # The Budget page's per-category bars, used by both the Budget page and its
 # Overview tile (same idea as spotify_widgets.py): one coloured line per
-# budget filling toward it, like a fitness tracker's goals, and the totals
-# under them.
+# budget, full at the start of the period and emptying as money is spent
+# (an emptying bar reads as loss, which nudges toward saving; #53).
 import html
 
 import streamlit as st
@@ -10,6 +10,9 @@ import streamlit as st
 # colour): soft enough to sit beside it in both light and dark mode. Shared
 # with the This month chart, so a category is the same colour everywhere.
 CATEGORY_COLORS = ["#e0a37a", "#7fbf9b", "#c99ad1", "#c4b86a", "#7fb3c9"]
+
+# How far over a budget is. Readable on both the light and dark backgrounds.
+OVER_COLOR = "#d9534f"
 
 _PERIOD_WORDS = {
     True: {"daily": "today", "weekly": "this week", "monthly": "this month"},
@@ -29,22 +32,26 @@ def category_colors(names: list[str], food: str, accent: str) -> dict[str, str]:
 def render_budget_bars(
     status: list[dict], colors: dict[str, str], is_today: bool = True, compact: bool = False,
 ) -> None:
-    # One line per budget: name and period, spent of budget, a bar, and
-    # what's left (or how far over -- the budgets are soft, so that's said
-    # plainly rather than in alarm red). Compact (the Overview tile, half as
-    # wide) moves the amounts under the bar, so nothing wraps.
+    # One line per budget: name and period, what's left of the budget, a bar
+    # of what's left, and what's been spent. Over budget, the bar is empty and
+    # the amount over shows in red. Compact (the Overview tile, half as wide)
+    # moves the amounts under the bar, so nothing wraps.
     lines = []
     for budget in status:
         spent, allowed = budget["spent"], budget["budget"]
-        share = min(spent / allowed, 1.0) if allowed > 0 else 1.0
         left = allowed - spent
-        note = f"¥{left:,} left" if left >= 0 else f"¥{-left:,} over"
+        share = max(left, 0) / allowed if allowed > 0 else 0.0
+        if left >= 0:
+            amounts, note = f"¥{left:,} left of ¥{allowed:,}", f"¥{spent:,} spent"
+        else:
+            amounts = f"<span style='color: {OVER_COLOR}'>¥{-left:,} over</span>"
+            note = f"¥{spent:,} spent of ¥{allowed:,}"
         if compact:
-            note = f"¥{spent:,} of ¥{allowed:,} · {note}"
+            note = f"{amounts} · {note}"
         if budget["carried"]:
             note += f" · {'+' if budget['carried'] > 0 else '-'}¥{abs(budget['carried']):,} carried over"
         color = colors.get(budget["category"], CATEGORY_COLORS[0])
-        amounts = "" if compact else f"<span>¥{spent:,} / ¥{allowed:,}</span>"
+        amounts = "" if compact else f"<span>{amounts}</span>"
         lines.append(
             "<div class='budget-line'>"
             f"<div class='budget-line-head'><span>{html.escape(budget['category'])} · "
@@ -59,7 +66,7 @@ def render_budget_bars(
         ".budget-line-track { height: 0.5rem; border-radius: 0.25rem; margin: 0.3rem 0 0.2rem;"
         " background: rgba(128, 128, 128, 0.25); overflow: hidden; }"
         ".budget-line-track > div { height: 100%; border-radius: 0.25rem; }"
-        ".budget-line-note { font-size: 0.85rem; opacity: 0.7; }"
+        ".budget-line-note { font-size: 0.85rem; color: color-mix(in srgb, currentColor 70%, transparent); }"
         "</style>" + "".join(lines),
         unsafe_allow_html=True,
     )

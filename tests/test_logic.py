@@ -659,6 +659,17 @@ def test_budget_per_category(app_copy):
         past = {line["category"]: line for line in budget_status(settings, date(2026, 9, 7), today)}
         assert (past["Food"]["spent"], past["Food"]["budget"], past["Food"]["carried"]) == (800, 1000, 0)
 
+        # The bars show what's left, full at the start; over budget, the bar
+        # is empty and the amount over is red.
+        import prescripts.budget_widgets as widgets
+        drawn = []
+        widgets.st.markdown = lambda body, **_: drawn.append(body)
+        over = dict(status["Food"], spent=2500)
+        widgets.render_budget_bars([status["Shopping"], over], {})
+        assert "¥7,300 left of ¥10,000" in drawn[0] and "width: 73.0%" in drawn[0] and "¥2,700 spent" in drawn[0]
+        assert f"color: {widgets.OVER_COLOR}'>¥300 over</span>" in drawn[0]
+        assert "width: 0.0%" in drawn[0] and "¥2,500 spent of ¥2,200 · +¥1,200 carried over" in drawn[0]
+
         assert route("Shinjuku", "Shibuya") == "Shinjuku → Shibuya"
         assert route(" ", "Shibuya") == "Shibuya" and route(None, None) is None
         assert split_route("Shinjuku → Shibuya") == ("Shinjuku", "Shibuya")

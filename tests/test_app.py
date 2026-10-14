@@ -210,10 +210,10 @@ def test_setting_todays_budget(app_copy):
         at.run()
         assert not at.exception, at.exception
         assert any("Today's budget set to ¥2,000" in caption.value for caption in at.sidebar.caption)
-        assert budget_line("¥0 / ¥2,000") and budget_line("+¥1,000 carried over")
+        assert budget_line("¥2,000 left of ¥2,000") and budget_line("+¥1,000 carried over")
         next(button for button in at.sidebar.button if button.label == "Start fresh from today").click()
         at.run()
-        assert budget_line("¥0 / ¥1,000")
+        assert budget_line("¥1,000 left of ¥1,000")
         assert at.number_input(key="meal_set_today_budget_Food").value == 1000  # follows the fresh start
     """)
     assert result.returncode == 0, result.stdout + result.stderr
@@ -341,8 +341,8 @@ def test_logging_other_spending(app_copy):
             ("Suica top-up", "Shinjuku", "Transport")], entries
         assert at.selectbox(key="add_entry_category").value == "Food"  # back to Food for the next one
         [bars] = [block.value for block in at.markdown if "budget-line" in block.value]
-        assert "Food · today" in bars and "¥0 / ¥1,000" in bars, bars
-        assert "Transport · this month" in bars and "¥3,000 / ¥10,000" in bars and "¥7,000 left" in bars, bars
+        assert "Food · today" in bars and "¥1,000 left of ¥1,000" in bars, bars
+        assert "Transport · this month" in bars and "¥7,000 left of ¥10,000" in bars and "¥3,000 spent" in bars, bars
         assert any("Today: ¥3,000" in block.value for block in at.markdown)
 
         # A fare needs no item: left blank, it's a transit fee.
@@ -879,7 +879,7 @@ def test_overview_tiles_with_no_data_yet(app_copy):
                          "Not connected yet -- connect your account on the Spotify page."):
             assert expected in captions, (expected, captions)
         budget = [block.value for block in at.markdown if "budget-line" in block.value]
-        assert budget and "Food · today" in budget[0] and "¥0 of ¥1,500" in budget[0], budget
+        assert budget and "Food · today" in budget[0] and "¥1,500 left of ¥1,500" in budget[0], budget
         assert any("Spent today: ¥0" in block.value for block in at.markdown)
     """)
     assert result.returncode == 0, result.stdout + result.stderr
