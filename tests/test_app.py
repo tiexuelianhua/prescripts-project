@@ -1124,7 +1124,7 @@ def test_month_by_month_by_category(app_copy):
         assert not [button for button in at.sidebar.button if button.key == "budget_add_button_Food"]  # nothing to add to yet
         at.sidebar.number_input(key="budget_left_Food").set_value(5000).run()
         assert not at.exception, at.exception
-        assert food_bar().startswith("Food · so far") and "¥5,000 left of ¥5,150" in food_bar(), food_bar()
+        assert food_bar().startswith("Food · today") and "¥5,000 left of ¥5,150" in food_bar(), food_bar()
         assert "¥150 spent" in food_bar() and at.sidebar.number_input(key="budget_left_Food").value == 5000
         assert not any("carried" in toggle.label.lower() for toggle in at.sidebar.toggle)
         at.sidebar.number_input(key="budget_add_Food").set_value(1000)

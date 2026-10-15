@@ -18,8 +18,8 @@ CATEGORY_COLORS = ["#e0a37a", "#7fbf9b", "#c99ad1", "#c4b86a", "#7fb3c9"]
 OVER_COLOR = "#d9534f"
 
 _PERIOD_WORDS = {
-    True: {"daily": "today", "weekly": "this week", "monthly": "this month", "none": "so far"},
-    False: {"daily": "that day", "weekly": "that week", "monthly": "that month", "none": "so far"},
+    True: {"daily": "today", "weekly": "this week", "monthly": "this month", "none": "today"},
+    False: {"daily": "that day", "weekly": "that week", "monthly": "that month", "none": "that day"},
 }
 
 

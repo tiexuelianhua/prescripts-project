@@ -561,7 +561,8 @@ def _counted_category(category: str) -> str | None:
 _OLD_BUDGET_KEYS = ("daily_budget", "budget_amount", "budget_period", "carry_over", "carry_over_since", "carry_over_set")
 # "none": no period, just the money there is to spend. It counts spending
 # from the start of the day it was set ("since"), plus anything added since;
-# see start_no_period. No carry-over switch: what's left simply stays.
+# see start_no_period. No carry-over switch: what's left simply stays, and
+# each day's bar starts from it (see budget_status).
 NO_PERIOD = "none"
 PERIODS = ["daily", "weekly", "monthly", NO_PERIOD]
 PERIOD_NAMES = {"daily": "Daily", "weekly": "Weekly", "monthly": "Monthly", NO_PERIOD: "No period"}
@@ -661,9 +662,14 @@ def budget_status(settings: dict, day: date, today: date) -> list[dict]:
             continue
         counted = _counted_category(category)
         if budget["period"] == NO_PERIOD:
-            spent = no_period_spent({"since": today.isoformat(), **budget}, category, day)
+            # Shown a day at a time: the bar is what was left at the start
+            # of `day` (plus anything added), and spent is that day's alone.
+            # Tomorrow starts from whatever's left tonight.
+            counting = {"since": today.isoformat(), **budget}
+            before = no_period_spent(counting, category, day - timedelta(days=1))
+            spent = no_period_spent(counting, category, day) - before
             status.append({"category": category, "period": NO_PERIOD, "spent": spent,
-                           "budget": budget["amount"] + budget.get("added", 0), "carried": 0})
+                           "budget": budget["amount"] + budget.get("added", 0) - before, "carried": 0})
             continue
         if budget["period"] == "weekly":
             spent = week_total_so_far(day, counted)
