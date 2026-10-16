@@ -41,7 +41,8 @@ def reading_in_word(kanji_card: dict, word: str, word_reading: str) -> dict | No
     # Which of a kanji's readings a word uses: {"kind": "on"/"kun",
     # "reading", "sure"}, or None if none of them fit. Only a best guess:
     # "sure" is False when the reading had to change to fit, or when an
-    # on'yomi and a kun'yomi both fit (the rules of thumb pick then).
+    # on'yomi and a kun'yomi both fit (the rules of thumb pick then). The
+    # reading comes without KANJIDIC's affix dashes (-ども is just ども here).
     position = word.find(kanji_card["front"])
     reading = normalize_kana(word_reading or "")
     if position < 0 or not reading:
@@ -57,7 +58,7 @@ def reading_in_word(kanji_card: dict, word: str, word_reading: str) -> dict | No
                 else:
                     fits = form in reading[1:]
                 if fits:
-                    candidates.append({"kind": kind, "reading": listed, "length": len(form), "changed": changed})
+                    candidates.append({"kind": kind, "reading": listed.strip("-"), "length": len(form), "changed": changed})
     if not candidates:
         return None
     longest = max(candidate["length"] for candidate in candidates)

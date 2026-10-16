@@ -366,6 +366,7 @@ def test_which_reading_a_word_uses(app_copy):
         school = {"front": "校", "onyomi": "コウ", "kunyomi": ""}
         hand = {"front": "手", "onyomi": "シュ", "kunyomi": "て、-て、て-"}
         paper = {"front": "紙", "onyomi": "シ", "kunyomi": "かみ"}
+        offer = {"front": "供", "onyomi": "キョウ、ク、クウ、グ", "kunyomi": "そな.える、とも、-ども"}
 
         def uses(kanji, word, reading):
             found = reading_in_word(kanji, word, reading)
@@ -377,6 +378,7 @@ def test_which_reading_a_word_uses(app_copy):
         assert uses(school, "学校", "がっこう") == ("on", "コウ", True)
         assert uses(paper, "手紙", "てがみ") == ("kun", "かみ", False)  # か voiced to が
         assert uses(hand, "手紙", "てがみ") == ("kun", "て", True)
+        assert uses(offer, "子供", "こども") == ("kun", "ども", True)  # without KANJIDIC's dash
         assert uses(study, "学生", "") is None  # no reading to go on
         assert uses(school, "食べる", "たべる") is None  # not in the word
 
