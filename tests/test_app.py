@@ -881,6 +881,11 @@ def test_overview_tiles_with_no_data_yet(app_copy):
         budget = [block.value for block in at.markdown if "budget-line" in block.value]
         assert budget and "Food · today" in budget[0] and "¥1,500 left of ¥1,500" in budget[0], budget
         assert any("Spent today: ¥0" in block.value for block in at.markdown)
+
+        # The slow-load log isn't Spotify's, so it doesn't make a Spotify folder.
+        from prescripts.data.spotify_log import LOG_PATH, log_event
+        log_event("slow: test")
+        assert LOG_PATH.exists() and not (SCRIPTS_DIR.parent / "Spotify").exists()
     """)
     assert result.returncode == 0, result.stdout + result.stderr
 

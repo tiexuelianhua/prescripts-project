@@ -1,11 +1,12 @@
-# A small diagnostic log for the Spotify page and the Overview tile: slow
-# refreshes, failed or slow Spotify/LRCLIB requests, lyrics lookups, and how
-# long each track played before the song changed. Nothing here affects
-# behavior -- it exists so "it lagged just now" can be answered by reading a
-# file instead of guessing.
+# A small diagnostic log, mostly for the Spotify page and the Overview tile:
+# slow refreshes, failed or slow Spotify/LRCLIB requests, lyrics lookups, and
+# how long each track played before the song changed, plus slow Overview
+# loads. Nothing here affects behavior -- it exists so "it lagged just now"
+# can be answered by reading a file instead of guessing.
 #
-# Lives next to the Spotify credentials in Spotify/ (outside the git repo),
-# and trims itself so it can't grow without bound.
+# Lives beside app_settings.json (outside the git repo), not in Spotify/, so
+# that folder only appears for people who connect Spotify. Trims itself so it
+# can't grow without bound.
 import contextlib
 import functools
 import threading
@@ -13,7 +14,7 @@ import time
 
 from prescripts.common import SCRIPTS_DIR
 
-LOG_PATH = SCRIPTS_DIR.parent / "Spotify" / "page_log.txt"
+LOG_PATH = SCRIPTS_DIR.parent / "page_log.txt"
 # Once the file passes MAX_BYTES, only the newest KEEP_BYTES are kept.
 MAX_BYTES = 256_000
 KEEP_BYTES = 128_000

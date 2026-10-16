@@ -175,9 +175,10 @@ Prescripts\
 ├── Japanese\             ← your flashcards
 ├── Weather\              ← your chosen forecast area (default: Tokyo)
 ├── Activities\           ← your saved area and walking distance, events you've added, plus recent searches
-├── Spotify\              ← your Spotify keys + connection, plus a log of slow page loads
+├── Spotify\              ← your Spotify keys + connection
 ├── quotes.json           ← quotes you add on Home
-└── app_settings.json     ← app-wide preferences: zoom level, English only, which pages and tiles are on
+├── app_settings.json     ← app-wide preferences: zoom level, English only, which pages and tiles are on
+└── page_log.txt          ← a log of slow page loads
 ```
 
 Back up the `Prescripts` folder to back up everything.
