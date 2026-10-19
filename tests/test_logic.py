@@ -520,6 +520,32 @@ def test_editing_a_date_moves_the_entry(app_copy):
     """)
 
 
+def test_past_item_fill(app_copy):
+    # The 2026-10-19 note: a name typed in plain, with a store already
+    # chosen, swapped in the store it was bought at before. It now keeps
+    # the store, taking a price only from that store's own past buys.
+    _check(app_copy, """
+        from datetime import date
+        from prescripts.data.meal_receipts import append_entry, day_folder_for, past_item_fill
+
+        folder = day_folder_for(date(2026, 8, 1))
+        folder.mkdir(parents=True)
+        append_entry(folder / "receipts.csv", "2026-08-01 08:00:00", "McDonald's", "Fries", 330)
+        append_entry(folder / "receipts.csv", "2026-08-01 09:00:00", "Mos Burger", "Fries", 290)
+        append_entry(folder / "receipts.csv", "2026-08-01 10:00:00", None, "Tea", 100)
+
+        # Picked with a store: that store and its price, whatever was chosen.
+        assert past_item_fill("Fries", "McDonald's", "Mos Burger") == {"cost": 330, "store": "McDonald's"}
+        # Typed in plain with a store chosen: the store stays.
+        assert past_item_fill("Fries", None, "Mos Burger") == {"cost": 290}
+        assert past_item_fill("Fries", None, "Lotteria") == {}
+        # With no store yet: where it was bought last, blank if left blank.
+        assert past_item_fill("Fries", None, None) == {"cost": 290, "store": "Mos Burger"}
+        assert past_item_fill("Tea", None, None) == {"cost": 100, "store": None}
+        assert past_item_fill("Fries", None, None, category="Transport") == {}
+    """)
+
+
 def test_budget_settings(app_copy):
     _check(app_copy, """
         from prescripts.data.meal_receipts import allowance_for_days, budget_settings

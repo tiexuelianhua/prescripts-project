@@ -123,10 +123,10 @@ def test_konbini_bag_and_tax_get_rows_of_their_own(app_copy):
 
         at = AppTest.from_file(str(SCRIPTS_DIR / "prescripts/pages/meal_receipts.py"), default_timeout=60)
         at.run()
-        at.selectbox(key="add_entry_item").set_value("Bread")
+        at.selectbox(key="add_entry_item").set_value("Bread (Olympic)")
         at.run()
         assert at.checkbox(key="add_entry_bag").value is False  # Olympic isn't a konbini
-        at.selectbox(key="add_entry_item").set_value("Onigiri")
+        at.selectbox(key="add_entry_item").set_value("Onigiri (Lawson)")
         at.run()
         assert at.checkbox(key="add_entry_bag").value is True
         assert at.number_input(key="add_entry_bag_yen").value == 5  # Lawson's last bag
@@ -161,7 +161,7 @@ def test_bag_choice_holds_until_logged(app_copy):
 
         at = AppTest.from_file(str(SCRIPTS_DIR / "prescripts/pages/meal_receipts.py"), default_timeout=60)
         at.run()
-        at.selectbox(key="add_entry_item").set_value("Onigiri")
+        at.selectbox(key="add_entry_item").set_value("Onigiri (Lawson)")
         at.run()
         assert at.checkbox(key="add_entry_bag").value is True  # Lawson is a konbini
         at.checkbox(key="add_entry_bag").uncheck()  # brought my own
@@ -230,7 +230,9 @@ def test_logging_a_meal(app_copy):
         from datetime import date
         from streamlit.testing.v1 import AppTest
         from prescripts.common import SCRIPTS_DIR
-        from prescripts.data.meal_receipts import TAX_ITEM, append_entry, day_folder_for, get_today_folder, load_entries
+        from prescripts.data.meal_receipts import (
+            TAX_ITEM, append_entry, day_folder_for, get_today_folder, item_choice_label, load_entries,
+        )
 
         folder = day_folder_for(date(2026, 8, 1))
         folder.mkdir(parents=True)
@@ -240,7 +242,7 @@ def test_logging_a_meal(app_copy):
         at = AppTest.from_file(str(SCRIPTS_DIR / "prescripts/pages/meal_receipts.py"), default_timeout=60)
         at.run()
         def add(item):
-            at.selectbox(key="add_entry_item").set_value(item)
+            at.selectbox(key="add_entry_item").set_value(f"{item} (Olympic)")
             at.run()
             next(button for button in at.button if button.label == "+ Add item").click()
             at.run()
@@ -259,7 +261,7 @@ def test_logging_a_meal(app_copy):
         edits = [button for button in at.button if (button.key or "").startswith("meal_edit_")]
         edits[1].click()  # the karaage cost more than last time
         at.run()
-        assert at.selectbox(key="add_entry_item").value == "Karaage"
+        assert item_choice_label(at.selectbox(key="add_entry_item").value) == "Karaage (Olympic)"
         assert at.text_input(key="add_entry_item_note").value == "extra crispy"
         assert "¥500" in total() and "3 items" in total(), total()  # still counted while it's in the boxes
         at.number_input(key="add_entry_cost").set_value(280)
@@ -319,14 +321,14 @@ def test_logging_other_spending(app_copy):
         at = AppTest.from_file(str(SCRIPTS_DIR / "prescripts/pages/meal_receipts.py"), default_timeout=60)
         at.run()
         assert at.selectbox(key="add_entry_category").value == "Food"
-        assert at.selectbox(key="add_entry_item").options == ["Onigiri"]
+        assert at.selectbox(key="add_entry_item").options == ["Onigiri (Lawson)"]
         at.selectbox(key="add_entry_category").set_value("Transport")
         at.run()
-        assert at.selectbox(key="add_entry_item").options == ["Suica top-up"]
+        assert at.selectbox(key="add_entry_item").options == ["Suica top-up (Shinjuku → Shibuya)"]
         assert not [box for box in at.selectbox if box.key == "add_entry_store"]
         assert not [box for box in at.checkbox if box.key == "add_entry_bag"]
         assert not [box for box in at.number_input if box.key == "add_entry_tax"]
-        at.selectbox(key="add_entry_item").set_value("Suica top-up")
+        at.selectbox(key="add_entry_item").set_value("Suica top-up (Shinjuku → Shibuya)")
         at.run()
         assert (at.selectbox(key="add_entry_from").value, at.selectbox(key="add_entry_to").value) == ("Shinjuku", "Shibuya")
         assert at.number_input(key="add_entry_cost").value == 3000
@@ -381,12 +383,12 @@ def test_logging_a_whole_day_at_once(app_copy):
         def add():
             next(button for button in at.button if button.label == "+ Add item").click()
             at.run()
-        at.selectbox(key="add_entry_item").set_value("Onigiri")
+        at.selectbox(key="add_entry_item").set_value("Onigiri (Lawson)")
         at.run()
         add()
         at.selectbox(key="add_entry_category").set_value("Transport")
         at.run()
-        at.selectbox(key="add_entry_item").set_value("Transit fee")
+        at.selectbox(key="add_entry_item").set_value("Transit fee (Shinjuku → Shibuya)")
         at.run()
         assert (at.selectbox(key="add_entry_from").value, at.selectbox(key="add_entry_to").value) == ("Shinjuku", "Shibuya")
         add()
@@ -466,10 +468,10 @@ def test_item_bought_at_two_stores_is_offered_per_store(app_copy):
 
         choices = item_choices()
         labels = [item_choice_label(choice) for choice in choices]
-        assert labels == ["Onigiri (FamilyMart)", "Onigiri (Lawson)", "Tea"], labels
-        # A hidden store's variant goes, leaving the plain item.
+        assert labels == ["Onigiri (FamilyMart)", "Onigiri (Lawson)", "Tea (Lawson)"], labels
+        # A hidden store's variant goes, leaving the other.
         hidden = [item_choice_label(choice) for choice in item_choices(exclude_stores={"FamilyMart"})]
-        assert hidden == ["Onigiri", "Tea"], hidden
+        assert hidden == ["Onigiri (Lawson)", "Tea (Lawson)"], hidden
 
         at = AppTest.from_file(str(SCRIPTS_DIR / "prescripts/pages/meal_receipts.py"), default_timeout=60)
         at.run()
@@ -490,6 +492,38 @@ def test_item_bought_at_two_stores_is_offered_per_store(app_copy):
         assert not at.exception, at.exception
         entries = load_entries(get_today_folder() / "receipts.csv")
         assert list(entries["item"]) == ["Onigiri"] and list(entries["store"]) == ["FamilyMart"], entries
+    """)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_later_item_picked_brings_its_store(app_copy):
+    # Partway through a meal, an item picked from the list (with its store)
+    # still brings that store and price, not the meal's store so far.
+    result = run_in(app_copy, """
+        from datetime import date
+        from streamlit.testing.v1 import AppTest
+        from prescripts.common import SCRIPTS_DIR
+        from prescripts.data.meal_receipts import append_entry, day_folder_for, item_choice_label, item_choices
+
+        folder = day_folder_for(date(2026, 8, 1))
+        folder.mkdir(parents=True)
+        append_entry(folder / "receipts.csv", "2026-08-01 08:00:00", "McDonald's", "Fries", 330)
+        append_entry(folder / "receipts.csv", "2026-08-01 12:00:00", "Lawson", "Tea", 100)
+        choices = item_choices()
+        labels = [item_choice_label(choice) for choice in choices]
+
+        at = AppTest.from_file(str(SCRIPTS_DIR / "prescripts/pages/meal_receipts.py"), default_timeout=60)
+        at.run()
+        at.selectbox(key="add_entry_item").set_value(choices[labels.index("Fries (McDonald's)")])
+        at.run()
+        assert at.selectbox(key="add_entry_store").value == "McDonald's"
+        next(button for button in at.button if button.label == "+ Add item").click()
+        at.run()
+        at.selectbox(key="add_entry_item").set_value(choices[labels.index("Tea (Lawson)")])
+        at.run()
+        assert at.selectbox(key="add_entry_store").value == "Lawson"
+        assert at.number_input(key="add_entry_cost").value == 100
+        assert not at.exception, at.exception
     """)
     assert result.returncode == 0, result.stdout + result.stderr
 

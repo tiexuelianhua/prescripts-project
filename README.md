@@ -202,7 +202,7 @@ The project has automated tests. They load every page and check the rules undern
 .venv\Scripts\python -m pytest
 ```
 
-It takes about four minutes and should finish with `74 passed`. Close the app first if it's running: installing packages while it's open can fail, because Windows locks files the app is using.
+It takes about four minutes and should finish with `76 passed`. Close the app first if it's running: installing packages while it's open can fail, because Windows locks files the app is using.
 
 To check the code for mistakes like unused or undefined names, and for import order, run `.venv\Scripts\ruff check .` (add `--fix` to sort the imports for you). The settings are in `pyproject.toml`.
 
@@ -309,7 +309,7 @@ To update by hand instead, quit the app, then run `git pull` in the `prescripts-
 .venv/bin/python -m pytest
 ```
 
-They usually finish with `70 passed, 4 skipped`: three of the skipped tests check PowerShell scripts and only run if PowerShell is installed, and one checks the Windows-only app window.
+They usually finish with `72 passed, 4 skipped`: three of the skipped tests check PowerShell scripts and only run if PowerShell is installed, and one checks the Windows-only app window.
 
 These steps run automatically on GitHub's Mac and Linux machines with Python 3.12, 3.13 and 3.14 after every change.
 

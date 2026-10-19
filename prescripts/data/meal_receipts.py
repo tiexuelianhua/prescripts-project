@@ -355,11 +355,14 @@ def known_values(column: str, exclude: set[str] | None = None, category: str | N
     return sorted(values)
 
 
-# An item bought at more than one store is offered once per store in the Item
-# picker ("Onigiri (Lawson)", "Onigiri (FamilyMart)"), so picking one fills in
-# that store's own last price. Each of those choices is the item and store
-# joined by this separator -- a character nobody types -- and only the item
-# part is ever saved, so no "Onigiri (Lawson)" item gets created.
+# The Item picker offers an item once per store it was bought at ("Onigiri
+# (Lawson)", "Onigiri (FamilyMart)"), so picking one fills in that store and
+# its own last price. Even an item from just one store shows it: a pick from
+# the list then always says where from, while a name typed in plain
+# ("Onigiri") is told apart from it and leaves a store already chosen alone.
+# Each of those choices is the item and store joined by this separator -- a
+# character nobody types -- and only the item part is ever saved, so no
+# "Onigiri (Lawson)" item gets created.
 _ITEM_STORE_SEPARATOR = "\x1f"
 
 
@@ -371,9 +374,10 @@ def item_choices(
     for item in known_values("item", exclude=exclude_items, category=category):
         stores = entries.loc[entries["item"] == item, "store"]
         # A blank store counts as its own variant ("" here), shown as the
-        # plain item name next to the named ones.
+        # plain item name next to the named ones -- or alone, if it was
+        # never bought anywhere named.
         variants = sorted({"" if pd.isna(store) else str(store) for store in stores} - (exclude_stores or set()))
-        if len(variants) > 1:
+        if variants and variants != [""]:
             choices += [item + _ITEM_STORE_SEPARATOR + store for store in variants]
         else:
             choices.append(item)
@@ -409,6 +413,26 @@ def last_entry_for_item(item: str, store: str | None = None, category: str | Non
     if matches.empty:
         return None
     return matches.sort_values("timestamp").iloc[-1]
+
+
+def past_item_fill(item: str, choice_store: str | None, store_so_far: str | None,
+                   category: str | None = None) -> dict:
+    # What choosing an item in the add form fills in: {"cost", "store"}, with
+    # no "store" when the one already chosen stays, and {} for an item never
+    # bought. choice_store is the store it was picked with from the list
+    # ("Onigiri (Lawson)"), or None for a name typed in plain. Picked with
+    # one, it brings that store and its price there, whatever store was
+    # chosen. Typed in plain with a store chosen, it's that store's: its
+    # price there if bought there before, but the store stays -- a new item
+    # at a new store can share a name with an old one. With no store yet,
+    # it's where it was bought last (a blank store if that was left blank).
+    if store_so_far and not choice_store:
+        last = last_entry_for_item(item, store_so_far, category)
+        return {} if last is None else {"cost": int(last["cost_yen"])}
+    last = last_entry_for_item(item, choice_store, category)
+    if last is None:
+        return {}
+    return {"cost": int(last["cost_yen"]), "store": None if pd.isna(last["store"]) else str(last["store"])}
 
 
 def last_fare(from_station: str | None, to_station: str | None, category: str) -> int | None:

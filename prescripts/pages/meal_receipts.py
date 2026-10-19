@@ -48,7 +48,6 @@ from prescripts.data.meal_receipts import (
     known_exclusion_reasons,
     known_stations,
     known_values,
-    last_entry_for_item,
     last_fare,
     load_entries,
     load_settings,
@@ -58,6 +57,7 @@ from prescripts.data.meal_receipts import (
     month_summary,
     monthly_history,
     no_period_spent,
+    past_item_fill,
     relocate_edited_entries,
     rename_value,
     route,
@@ -448,7 +448,6 @@ with st.container(key="main_body"):
     # Just the item and its cost, after "+ Add item" puts them in the meal.
     if st.session_state.get("_reset_add_item"):
         st.session_state["add_entry_item"] = None
-        st.session_state["_last_autofilled_item"] = None
         st.session_state["add_entry_cost"] = 0
         st.session_state["add_entry_item_note"] = ""
         # _last_fare_route is kept: refilling the fare just added would make
@@ -504,34 +503,60 @@ with st.container(key="main_body"):
         from_column, swap_column, to_column = st.columns([6, 1, 6], vertical_alignment="bottom")
     item_column, cost_column, note_column, add_column = st.columns([4, 2, 3, 2], vertical_alignment="bottom")
     choices = item_choices(excluded_items, excluded_stores, category)
-    item_choice = item_column.selectbox(
+
+    # A per-store choice typed out in full ("Onigiri (Lawson)") and entered
+    # as new text still means that choice, not a new item with that name.
+    def as_choice(value):
+        if value in choices:
+            return value
+        return {item_choice_label(choice): choice for choice in choices}.get(value, value)
+
+    # What a past item fills in (see past_item_fill) is worked out in the
+    # item's on_change, first thing in the run its choice starts, along with
+    # what the boxes held at that moment. Each box is then filled in only if
+    # it still holds that: a price typed straight after picking, before a
+    # slow run's done, stays (it used to be filled over with the old one),
+    # while the store that wasn't touched still fills in. Just suggestions --
+    # still ordinary editable boxes.
+    def fill_from_past_item():
+        st.session_state.pop("_past_item_fill", None)
+        choice = as_choice(st.session_state.get("add_entry_item"))
+        if not choice:
+            return
+        # Only the boxes on show: a food store mustn't turn up as a station
+        # after switching to Transport.
+        if is_transport:
+            store_so_far = route(st.session_state.get("add_entry_from"), st.session_state.get("add_entry_to"))
+        else:
+            store_so_far = st.session_state.get("add_entry_store")
+        suggested = past_item_fill(*split_item_choice(choice), store_so_far, category)
+        if not suggested:
+            return
+        fill = {"add_entry_cost": suggested["cost"]}
+        if "store" in suggested:
+            if is_transport:
+                fill["add_entry_from"], fill["add_entry_to"] = split_route(suggested["store"])
+            else:
+                fill["add_entry_store"] = suggested["store"]
+        st.session_state["_past_item_fill"] = {
+            "fill": fill, "before": {key: st.session_state.get(key) for key in fill},
+        }
+
+    item_choice = as_choice(item_column.selectbox(
         "Item", options=choices, format_func=item_choice_label, index=None,
         accept_new_options=True,
         # Transport needs no item: left blank, it's logged as a transit fee.
         placeholder=f"{TRANSIT_FEE_ITEM} -- or type or pick another" if is_transport else "Type or pick an item",
-        key="add_entry_item",
-    )
-    # A per-store choice typed out in full ("Onigiri (Lawson)") and entered
-    # as new text still means that choice, not a new item with that name.
-    if item_choice not in choices:
-        item_choice = {item_choice_label(choice): choice for choice in choices}.get(item_choice, item_choice)
+        key="add_entry_item", on_change=fill_from_past_item,
+    ))
     item, choice_store = split_item_choice(item_choice) if item_choice else (None, None)
-    if item and st.session_state.get("_last_autofilled_item") != item_choice:
-        last_entry = last_entry_for_item(item, choice_store, category)
-        if last_entry is not None:
-            st.session_state["add_entry_cost"] = int(last_entry["cost_yen"])
-            # Just a suggestion -- still an ordinary editable selectbox. Only
-            # for this category's first item: after that the store is the
-            # meal's. Left blank if the store was left blank last time too.
-            last_store = last_entry["store"]
-            if not any(line["category"] == category for line in basket):
-                # Only the boxes on show: a food store mustn't turn up as a
-                # station after switching to Transport.
-                if is_transport:
-                    st.session_state["add_entry_from"], st.session_state["add_entry_to"] = split_route(last_store)
-                else:
-                    st.session_state["add_entry_store"] = str(last_store) if pd.notna(last_store) else None
-        st.session_state["_last_autofilled_item"] = item_choice
+    # Kept until the boxes have been drawn with it (just below): a run cut
+    # short before then would otherwise leave them as they were.
+    pending_fill = st.session_state.get("_past_item_fill")
+    if pending_fill:
+        for key, value in pending_fill["fill"].items():
+            if st.session_state.get(key) == pending_fill["before"][key]:
+                st.session_state[key] = value
 
     if is_transport:
         # Both optional. Saved as the receipt's store, "From → To".
@@ -571,6 +596,7 @@ with st.container(key="main_body"):
             key="add_entry_store",
         )
     cost_yen = cost_column.number_input("Cost (¥)", min_value=0, step=1, key="add_entry_cost")
+    st.session_state.pop("_past_item_fill", None)
     # This item's own note; the Notes box further down is for the whole meal.
     item_note = note_column.text_input(
         "Note", placeholder="Optional", key="add_entry_item_note",
@@ -607,9 +633,11 @@ with st.container(key="main_body"):
         line = basket.pop(index)
         st.session_state["_meal_edit_index"] = index
         st.session_state["add_entry_category"] = line["category"]
-        st.session_state["add_entry_item"] = line["item"]
-        # So the item's last price and store don't fill in over these.
-        st.session_state["_last_autofilled_item"] = line["item"]
+        # As the list shows it, with its store, if it's there.
+        st.session_state["add_entry_item"] = next(
+            (choice for choice in choices if split_item_choice(choice) == (line["item"], line["store"] or "")),
+            line["item"],
+        )
         st.session_state["add_entry_cost"] = line["cost"]
         st.session_state["add_entry_item_note"] = line.get("note") or ""
         if line["category"] == transport:
