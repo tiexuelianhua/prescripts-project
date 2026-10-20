@@ -37,6 +37,8 @@ jobs:
         os: [macos-latest, ubuntu-latest]
         python: ["3.12", "3.13", "3.14"]
     runs-on: ${{ matrix.os }}
+    # Headless Chrome has hung here before and held the run for six hours.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
@@ -57,7 +59,8 @@ jobs:
           for i in $(seq 60); do curl -sf http://127.0.0.1:8501/_stcore/health && break; sleep 1; done
           if [ "$RUNNER_OS" = macOS ]; then chrome="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"; else chrome=google-chrome; fi
           for page in "" overview meal_receipts weather activities settings; do
-            "$chrome" --headless=new --disable-gpu --virtual-time-budget=20000 --dump-dom "http://127.0.0.1:8501/$page" > /dev/null 2>&1 || true
+            # perl's alarm stops Chrome after 90s if it hangs (Mac has no timeout command).
+            perl -e 'alarm shift; exec @ARGV' 90 "$chrome" --headless=new --disable-gpu --virtual-time-budget=20000 --dump-dom "http://127.0.0.1:8501/$page" > /dev/null 2>&1 || true
           done
           sleep 5
           cat ../streamlit.log
