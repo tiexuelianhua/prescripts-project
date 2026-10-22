@@ -46,7 +46,7 @@ Personal portfolio project developed with the help of PeaceWorks K.K. and ORBWEV
 
 The author directed the project and how it was implemented. The code itself was written by [Claude Code](https://claude.com/claude-code), Anthropic's AI coding assistant.
 
-It started as one hand-written PowerShell script that makes a folder for each day's meal receipts. That script, the original project idea, and a comparison of it with the AI-assisted version (`addDay_cV.ps1`) are kept in [`docs/origins`](docs/origins). They aren't used by the app.
+It started as one hand-written PowerShell script that makes a folder for each day's meal receipts. That script, the original project idea, and a comparison of it with the AI-assisted version (`addDay_cV.ps1`) are kept in [`foundations`](foundations), along with a list of what Phase 1 covered. They aren't used by the app.
 
 ---
 
